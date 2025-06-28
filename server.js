@@ -330,11 +330,18 @@ BUSINESS INFO:
 - ${ageInfo}
 - ${maxGroupSize ? `Max group size: ${maxGroupSize}. ` : ''}
 
-PRICING:
+${bookingLink ? 
+`PRICING & BOOKING:
+- For pricing and reservations, direct customers to: ${bookingLink}
+- Do not provide specific prices - always refer to booking system for current rates
+- Say "For current pricing and availability, please check our booking system" for pricing questions
+` : 
+`PRICING:
 - Adults: ${adultPrice}
 - Children: ${childPrice}
 - ${groupDiscount ? `Group rates: ${groupDiscount}. ` : ''}
-- ${offersInfo}
+- ${offersInfo}`
+}
 
 PRACTICAL INFO:
 - What to bring: ${whatToBring}
@@ -353,6 +360,8 @@ ${expertiseLevel === "Educational focus" ? "Focus on educational aspects and lea
 ${expertiseLevel === "Detailed expert knowledge" ? "Provide detailed, expert-level information when asked. " : ""}
 
 IMPORTANT: ${personalityInstructions}Never say "undefined" or "null". Always provide helpful information.
+
+For cancellation requests, explain the policy but tell customers to "speak to someone from our team" to process actual cancellations. Never assume you know booking details or timing.
 
 If someone needs complex help or wants to make special requests, suggest they can "speak to someone from our team" for personalized assistance. Our team responds within ${responseTime} via ${contactMethods}.`;
 
@@ -421,19 +430,36 @@ app.post('/api/chat', async function(req, res) {
         // Mark this conversation as already handed off
         conversations[handoffKey] = true;
         
-        // Try to send handoff email
+        // Check if we have customer contact info
         const customerContact = customerContacts[sessionKey];
-        const emailSent = await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-        
         const responseTime = currentConfig.responseTime || "30 minutes";
-        const contactMethods = currentConfig.contactMethods || "email and phone";
+        const operatorContactMethods = currentConfig.contactMethods || "email and phone";
         
         let botResponse;
-        if (emailSent) {
-            botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within ${responseTime} via ${contactMethods}. How would you prefer to be contacted?`;
+        
+        if (customerContact && (customerContact.email || customerContact.phone)) {
+            // We have contact info - can send email and promise contact
+            const emailSent = await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+            
+            if (emailSent) {
+                botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within ${responseTime}. How would you prefer to be contacted?`;
+            } else {
+                botResponse = `I'm notifying our team about your request! 👥 Someone will reach out within ${responseTime}. What's the best way to contact you?`;
+            }
         } else {
-            const fallbackEmail = process.env.OPERATOR_EMAIL || currentConfig.phoneNumber || 'your-email@example.com';
-            botResponse = `I'd love to connect you with our team! 👥 Please contact us directly at ${fallbackEmail}${currentConfig.phoneNumber ? ` or ${currentConfig.phoneNumber}` : ''}, and we'll help you right away. Include "URGENT" for fastest response.`;
+            // No contact info - provide direct contact methods
+            const directContact = [];
+            if (currentConfig.phoneNumber) directContact.push(`call ${currentConfig.phoneNumber}`);
+            if (process.env.OPERATOR_EMAIL || currentConfig.websiteUrl) {
+                const email = process.env.OPERATOR_EMAIL || 'contact us through our website';
+                directContact.push(`email ${email}`);
+            }
+            
+            if (directContact.length > 0) {
+                botResponse = `I'd love to connect you with our team! 👥 Please ${directContact.join(' or ')} and mention "URGENT" for fastest response within ${responseTime}.`;
+            } else {
+                botResponse = `I'd love to connect you with our team! 👥 Please contact us during our business hours (${currentConfig.operatingHours || 'regular hours'}) for immediate assistance.`;
+            }
         }
         
         conversations[sessionKey].push({ role: 'assistant', content: botResponse });
@@ -459,6 +485,15 @@ app.post('/api/chat', async function(req, res) {
         const botResponse = `Here's your waiver: <a href='${waiverLink}' target='_blank' style='color: ${currentConfig.brandColor || '#8B5CF6'};'>Click here to sign</a>`;
         conversations[sessionKey].push({ role: 'assistant', content: botResponse });
         return res.json({ response: botResponse });
+    }
+
+    // Check for pricing questions - defer to booking system if available
+    if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('pricing')) {
+        if (currentConfig.bookingLink) {
+            const botResponse = `For current pricing and availability, please check our booking system: <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || '#8B5CF6'};'>View prices and book here</a>. Our team can also help with pricing questions if you need assistance!`;
+            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+            return res.json({ response: botResponse });
+        }
     }
 
     // Check for booking requests
@@ -526,9 +561,13 @@ app.post('/api/chat', async function(req, res) {
                 }
             }
         } else if (lowerMessage.includes('price') || lowerMessage.includes('cost')) {
-            const adult = currentConfig.adultPrice || "contact us for pricing";
-            const child = currentConfig.childPrice || "contact us for pricing";
-            fallbackResponse = `Adults: ${adult}, Children: ${child}. ${currentConfig.specialOffers ? `Special offer: ${currentConfig.specialOffers}. ` : ''}Contact us for the latest rates!`;
+            if (currentConfig.bookingLink) {
+                fallbackResponse = `For current pricing and availability, please check our booking system: ${currentConfig.bookingLink}`;
+            } else {
+                const adult = currentConfig.adultPrice || "contact us for pricing";
+                const child = currentConfig.childPrice || "contact us for pricing";
+                fallbackResponse = `Adults: ${adult}, Children: ${child}. ${currentConfig.specialOffers ? `Special offer: ${currentConfig.specialOffers}. ` : ''}Contact us for the latest rates!`;
+            }
         } else if (lowerMessage.includes('location') || lowerMessage.includes('meet') || lowerMessage.includes('where')) {
             const meetLocation = currentConfig.location || "our location";
             fallbackResponse = `We meet at ${meetLocation}. ${currentConfig.phoneNumber ? `Call ${currentConfig.phoneNumber} for` : 'Contact us for'} exact directions!`;
