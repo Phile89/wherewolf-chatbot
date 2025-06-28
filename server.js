@@ -238,19 +238,45 @@ app.post('/api/chat', async function(req, res) {
     const lowerMessage = message.toLowerCase();
     const waiverLink = currentConfig.waiverLink || "No waiver link provided.";
 
-    // NEW: Check for agent/human requests FIRST
-    if (
-        lowerMessage.includes('agent') ||
-        lowerMessage.includes('human') ||
-        lowerMessage.includes('speak to someone') ||
-        lowerMessage.includes('talk to someone') ||
-        lowerMessage.includes('representative') ||
-        lowerMessage.includes('person') ||
-        lowerMessage.includes('staff') ||
-        lowerMessage.includes('manager') ||
-        lowerMessage.includes('urgent') ||
-        lowerMessage.includes('call me') ||
-        lowerMessage.includes('phone call')
+// NEW: Check for agent/human requests FIRST (but only once per conversation)
+const agentKeywords = [
+    'agent', 'human', 'speak to someone', 'talk to someone', 
+    'representative', 'person', 'staff', 'manager', 'urgent'
+];
+
+const isAgentRequest = agentKeywords.some(keyword => lowerMessage.includes(keyword)) ||
+    lowerMessage.includes('call me') ||
+    (lowerMessage.includes('phone') && lowerMessage.includes('call') && lowerMessage.length < 20);
+
+// Track if agent handoff already happened for this session
+const handoffKey = `handoff_${sessionKey}`;
+const alreadyHandedOff = conversations[handoffKey] || false;
+
+if (isAgentRequest && !alreadyHandedOff) {
+    // Mark this conversation as already handed off
+    conversations[handoffKey] = true;
+    
+    // Try to send handoff email
+    const customerContact = customerContacts[sessionKey];
+    const emailSent = await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+    
+    let botResponse;
+    if (emailSent) {
+        botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within 30 minutes. How would you prefer to be contacted?`;
+    } else {
+        botResponse = `I'd love to connect you with our team! 👥 Please email us directly at ${process.env.OPERATOR_EMAIL || 'your-email@example.com'} or call us, and we'll help you right away. Include "URGENT" in your subject line for fastest response.`;
+    }
+    
+    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+    return res.json({ response: botResponse });
+}
+
+// If agent already requested, handle follow-up responses about contact preferences
+if (alreadyHandedOff && (lowerMessage.includes('phone') || lowerMessage.includes('email') || lowerMessage.includes('call'))) {
+    const botResponse = `Perfect! Our team has been notified and will contact you via ${lowerMessage.includes('phone') || lowerMessage.includes('call') ? 'phone' : 'email'} within 30 minutes. Is there anything else I can help you with while you wait?`;
+    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+    return res.json({ response: botResponse });
+}
     ) {
         // Try to send handoff email
         const customerContact = customerContacts[sessionKey];
