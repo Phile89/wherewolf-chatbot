@@ -82,7 +82,7 @@
         .form-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 15px;
+            gap: 20px;
             margin-bottom: 20px;
         }
 
@@ -94,10 +94,50 @@
         }
 
         label {
-            display: block;
+            display: flex;
+            align-items: center;
             margin-bottom: 8px;
             font-weight: 600;
             color: #374151;
+        }
+
+        .info-icon {
+            margin-left: 8px;
+            width: 16px;
+            height: 16px;
+            background: #6b7280;
+            border-radius: 50%;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            cursor: help;
+            position: relative;
+        }
+
+        .tooltip {
+            position: absolute;
+            top: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1f2937;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 1000;
+            max-width: 250px;
+            white-space: normal;
+            width: max-content;
+        }
+
+        .info-icon:hover .tooltip {
+            opacity: 1;
         }
 
         input, textarea, select {
@@ -114,7 +154,68 @@
             border-color: #8B5CF6;
         }
 
-        /* Multi-select activity types */
+        /* Conditional pricing section */
+        .conditional-section {
+            position: relative;
+        }
+
+        .conditional-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.8);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: #6b7280;
+            z-index: 10;
+        }
+
+        /* Enhanced time slots - every 30 minutes */
+        .time-slots {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .time-slot {
+            display: flex;
+            align-items: center;
+            padding: 8px 10px;
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 12px;
+        }
+
+        .time-slot:hover {
+            border-color: #8B5CF6;
+        }
+
+        .time-slot.selected {
+            border-color: #8B5CF6;
+            background-color: #f3f0ff;
+        }
+
+        .time-slot input {
+            width: auto !important;
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        /* Activity types */
         .activity-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -143,40 +244,6 @@
         }
 
         .activity-option input {
-            width: auto !important;
-            margin-right: 10px;
-            cursor: pointer;
-        }
-
-        /* Time slots styling */
-        .time-slots {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .time-slot {
-            display: flex;
-            align-items: center;
-            padding: 12px;
-            background: white;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .time-slot:hover {
-            border-color: #8B5CF6;
-        }
-
-        .time-slot.selected {
-            border-color: #8B5CF6;
-            background-color: #f3f0ff;
-        }
-
-        .time-slot input {
             width: auto !important;
             margin-right: 10px;
             cursor: pointer;
@@ -441,7 +508,12 @@
 
                     <div class="form-row-three">
                         <div class="form-group">
-                            <label for="difficultyLevel">Difficulty Level</label>
+                            <label for="difficultyLevel">
+                                Difficulty Level
+                                <span class="info-icon">i
+                                    <div class="tooltip">How challenging your activity is for participants</div>
+                                </span>
+                            </label>
                             <select id="difficultyLevel">
                                 <option>Beginner</option>
                                 <option>Intermediate</option>
@@ -461,7 +533,12 @@
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="durationOptions">Duration Options</label>
+                            <label for="durationOptions">
+                                Duration Options
+                                <span class="info-icon">i
+                                    <div class="tooltip">Category of how long your tours typically last</div>
+                                </span>
+                            </label>
                             <select id="durationOptions">
                                 <option>Half-day (2-4 hours)</option>
                                 <option>Full-day (6-8 hours)</option>
@@ -470,7 +547,12 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="seasonalAvailability">Seasonal Availability</label>
+                            <label for="seasonalAvailability">
+                                Seasonal Availability
+                                <span class="info-icon">i
+                                    <div class="tooltip">When during the year your tours operate</div>
+                                </span>
+                            </label>
                             <select id="seasonalAvailability">
                                 <option>Year-round</option>
                                 <option>Seasonal (specify dates)</option>
@@ -492,31 +574,8 @@
                     
                     <div class="form-group">
                         <label>Standard Tour Times (select all that apply)</label>
-                        <div class="time-slots">
-                            <label class="time-slot">
-                                <input type="checkbox" value="7:00 AM" onchange="updateTimeSlot(this)">
-                                <span>7:00 AM</span>
-                            </label>
-                            <label class="time-slot">
-                                <input type="checkbox" value="9:00 AM" onchange="updateTimeSlot(this)" checked>
-                                <span>9:00 AM</span>
-                            </label>
-                            <label class="time-slot">
-                                <input type="checkbox" value="11:00 AM" onchange="updateTimeSlot(this)">
-                                <span>11:00 AM</span>
-                            </label>
-                            <label class="time-slot">
-                                <input type="checkbox" value="1:00 PM" onchange="updateTimeSlot(this)">
-                                <span>1:00 PM</span>
-                            </label>
-                            <label class="time-slot">
-                                <input type="checkbox" value="2:00 PM" onchange="updateTimeSlot(this)" checked>
-                                <span>2:00 PM</span>
-                            </label>
-                            <label class="time-slot">
-                                <input type="checkbox" value="5:00 PM" onchange="updateTimeSlot(this)" checked>
-                                <span>5:00 PM (Sunset)</span>
-                            </label>
+                        <div class="time-slots" id="timeSlots">
+                            <!-- Time slots will be generated by JavaScript -->
                         </div>
                     </div>
 
@@ -527,8 +586,40 @@
                 </div>
             </div>
 
-            <!-- Pricing -->
+            <!-- Advanced Features -->
             <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>⚡ Advanced Features</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">Enhanced functionality and integrations</div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="bookingLink">
+                                Booking System Link
+                                <span class="info-icon">i
+                                    <div class="tooltip">If provided, pricing questions will be deferred to your booking system</div>
+                                </span>
+                            </label>
+                            <input type="url" id="bookingLink" placeholder="https://your-booking-system.com" onchange="togglePricingSection()">
+                        </div>
+                        <div class="form-group">
+                            <label for="socialMedia">Social Media Links</label>
+                            <input type="text" id="socialMedia" placeholder="Instagram: @yourbusiness, Facebook: /yourbusiness">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="certifications">Safety Certifications & Licenses</label>
+                        <textarea id="certifications" placeholder="Coast Guard licensed, First Aid certified, Insured with..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pricing (conditional) -->
+            <div class="form-section conditional-section" id="pricingSection">
                 <div class="section-header" onclick="toggleSection(this)">
                     <h3>💰 Pricing</h3>
                     <span class="section-toggle">▼</span>
@@ -598,7 +689,12 @@
                     
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="chatbotTone">Communication Tone</label>
+                            <label for="chatbotTone">
+                                Communication Tone
+                                <span class="info-icon">i
+                                    <div class="tooltip">Friendly: Warm & welcoming | Professional: Courteous & formal | Casual: Relaxed & informal | Enthusiastic: Energetic with emojis</div>
+                                </span>
+                            </label>
                             <select id="chatbotTone">
                                 <option>Friendly</option>
                                 <option>Professional</option>
@@ -607,7 +703,12 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="languageStyle">Language Style</label>
+                            <label for="languageStyle">
+                                Language Style
+                                <span class="info-icon">i
+                                    <div class="tooltip">How formal or casual the language should be</div>
+                                </span>
+                            </label>
                             <select id="languageStyle">
                                 <option>Conversational</option>
                                 <option>Formal</option>
@@ -618,7 +719,12 @@
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="expertiseLevel">Information Level</label>
+                            <label for="expertiseLevel">
+                                Information Level
+                                <span class="info-icon">i
+                                    <div class="tooltip">Basic: Simple answers | Detailed expert: In-depth technical info | Educational: Focus on learning opportunities</div>
+                                </span>
+                            </label>
                             <select id="expertiseLevel">
                                 <option>Basic information</option>
                                 <option>Detailed expert knowledge</option>
@@ -638,33 +744,6 @@
                     <div class="form-group">
                         <label for="customGreeting">Custom Welcome Message</label>
                         <textarea id="customGreeting" placeholder="Hi! Welcome to [Business Name]. I'm here to help you plan your perfect adventure!"></textarea>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Advanced Features -->
-            <div class="form-section">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h3>⚡ Advanced Features</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content">
-                    <div class="section-description">Enhanced functionality and integrations</div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="bookingLink">Booking System Link</label>
-                            <input type="url" id="bookingLink" placeholder="https://your-booking-system.com">
-                        </div>
-                        <div class="form-group">
-                            <label for="socialMedia">Social Media Links</label>
-                            <input type="text" id="socialMedia" placeholder="Instagram: @yourbusiness, Facebook: /yourbusiness">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="certifications">Safety Certifications & Licenses</label>
-                        <textarea id="certifications" placeholder="Coast Guard licensed, First Aid certified, Insured with..."></textarea>
                     </div>
                 </div>
             </div>
@@ -787,14 +866,41 @@
     </div>
 
     <script>
+        // Generate time slots every 30 minutes
+        function generateTimeSlots() {
+            const timeSlotsContainer = document.getElementById('timeSlots');
+            const times = [];
+            
+            for (let hour = 0; hour < 24; hour++) {
+                for (let minute = 0; minute < 60; minute += 30) {
+                    const time = new Date(2000, 0, 1, hour, minute);
+                    const timeStr = time.toLocaleTimeString('en-US', { 
+                        hour: 'numeric', 
+                        minute: '2-digit',
+                        hour12: true 
+                    });
+                    times.push(timeStr);
+                }
+            }
+            
+            // Pre-select some popular times
+            const popularTimes = ['9:00 AM', '2:00 PM', '5:00 PM'];
+            
+            times.forEach(time => {
+                const isPopular = popularTimes.includes(time);
+                const label = document.createElement('label');
+                label.className = 'time-slot' + (isPopular ? ' selected' : '');
+                label.innerHTML = `
+                    <input type="checkbox" value="${time}" onchange="updateTimeSlot(this)" ${isPopular ? 'checked' : ''}>
+                    <span>${time}</span>
+                `;
+                timeSlotsContainer.appendChild(label);
+            });
+        }
+
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
-            // Set initial selected states
-            document.querySelectorAll('.time-slot input:checked').forEach(updateTimeSlot);
-            document.querySelectorAll('.activity-option input:checked').forEach(updateActivityOption);
-            document.querySelectorAll('.color-option input:checked').forEach(updateColorOption);
-            
-            // Update progress as user scrolls through sections
+            generateTimeSlots();
             updateProgress();
         });
 
@@ -832,6 +938,26 @@
                 option.classList.remove('selected');
             });
             radio.closest('.color-option').classList.add('selected');
+        }
+
+        // Toggle pricing section based on booking link
+        function togglePricingSection() {
+            const bookingLink = document.getElementById('bookingLink').value;
+            const pricingSection = document.getElementById('pricingSection');
+            
+            if (bookingLink) {
+                if (!pricingSection.querySelector('.conditional-overlay')) {
+                    const overlay = document.createElement('div');
+                    overlay.className = 'conditional-overlay';
+                    overlay.textContent = 'Pricing questions will be deferred to your booking system';
+                    pricingSection.appendChild(overlay);
+                }
+            } else {
+                const overlay = pricingSection.querySelector('.conditional-overlay');
+                if (overlay) {
+                    overlay.remove();
+                }
+            }
         }
 
         // Update progress bar
