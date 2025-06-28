@@ -1,453 +1,961 @@
-const express = require('express');
-const cors = require('cors');
-const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-const nodemailer = require('nodemailer');
-require('dotenv').config();
-
-console.log('CLAUDE_API_KEY:', process.env.CLAUDE_API_KEY ? 'Loaded' : 'Missing');
-console.log('GMAIL_USER:', process.env.GMAIL_USER ? 'Loaded' : 'Missing');
-console.log('PORT:', process.env.PORT || 3000);
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-// Serve static files from the root directory
-app.use(express.static(__dirname));
-
-// Create configs directory if it doesn't exist
-const configsDir = path.join(__dirname, 'configs');
-if (!fs.existsSync(configsDir)) {
-    fs.mkdirSync(configsDir);
-}
-
-// Conversation history storage
-const conversations = {};
-
-// Email transporter setup
-let emailTransporter = null;
-if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
-    emailTransporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.GMAIL_USER,
-            pass: process.env.GMAIL_PASS
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Setup - Enhanced</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+            line-height: 1.6;
         }
-    });
-    console.log('Email service configured');
-} else {
-    console.log('Email service not configured (missing credentials)');
-}
 
-// Function to send handoff email
-async function sendHandoffEmail(config, conversationHistory, customerContact, operatorId) {
-    if (!emailTransporter) {
-        console.log('Email service not available');
-        return false;
-    }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 40px;
+        }
 
-    try {
-        const businessName = config.businessName || 'Your Business';
-        const customerEmail = customerContact?.email || 'Not provided';
-        const customerPhone = customerContact?.phone || 'Not provided';
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        /* Collapsible sections */
+        .form-section {
+            margin-bottom: 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            background: #f8f9fa;
+            padding: 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e9ecef;
+            user-select: none;
+        }
+
+        .section-header:hover {
+            background: #e9ecef;
+        }
+
+        .section-header h3 {
+            margin: 0;
+            color: #495057;
+            font-size: 18px;
+        }
+
+        .section-toggle {
+            font-size: 20px;
+            color: #6c757d;
+            transition: transform 0.3s ease;
+        }
+
+        .section-content {
+            padding: 25px;
+            display: none;
+        }
+
+        .section-content.open {
+            display: block;
+        }
+
+        .section-header.open .section-toggle {
+            transform: rotate(180deg);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .form-row-three {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ced4da;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #8B5CF6;
+        }
+
+        /* Multi-select activity types */
+        .activity-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .activity-option {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .activity-option:hover {
+            border-color: #8B5CF6;
+        }
+
+        .activity-option.selected {
+            border-color: #8B5CF6;
+            background-color: #f3f0ff;
+        }
+
+        .activity-option input {
+            width: auto !important;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        /* Time slots styling */
+        .time-slots {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .time-slot {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .time-slot:hover {
+            border-color: #8B5CF6;
+        }
+
+        .time-slot.selected {
+            border-color: #8B5CF6;
+            background-color: #f3f0ff;
+        }
+
+        .time-slot input {
+            width: auto !important;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        /* Color picker options */
+        .color-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .color-option {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .color-option:hover {
+            border-color: #8B5CF6;
+        }
+
+        .color-option.selected {
+            border-color: #8B5CF6;
+            background-color: #f3f0ff;
+        }
+
+        .color-swatch {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            margin-right: 8px;
+        }
+
+        .color-option input {
+            width: auto !important;
+            margin: 0;
+        }
+
+        .generate-btn {
+            background: #8B5CF6;
+            color: white;
+            padding: 16px 35px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.2em;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 30px;
+            transition: background 0.3s ease;
+        }
+
+        .generate-btn:hover {
+            background: #7C3AED;
+        }
+
+        .embed-code {
+            background: #1e293b;
+            color: #94a3b8;
+            padding: 25px;
+            border-radius: 10px;
+            margin-top: 25px;
+            font-family: 'Courier New', monospace;
+            position: relative;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #475569;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .help-text {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 8px;
+        }
+
+        .section-description {
+            color: #6c757d;
+            font-size: 14px;
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+
+        /* Progress indicator */
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #e9ecef;
+            border-radius: 2px;
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #8B5CF6;
+            width: 20%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚤 Enhanced Chatbot Setup</h1>
         
-        // Format conversation history
-        let conversationText = '';
-        conversationHistory.forEach((msg, index) => {
-            const role = msg.role === 'user' ? 'Customer' : 'Chatbot';
-            conversationText += `${role}: ${msg.content}\n\n`;
-        });
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
 
-        const emailContent = `
-🚨 AGENT HANDOFF REQUEST
-
-Business: ${businessName}
-Operator ID: ${operatorId}
-Time: ${new Date().toLocaleString()}
-
-📞 CUSTOMER CONTACT:
-Email: ${customerEmail}
-Phone: ${customerPhone}
-
-💬 CONVERSATION HISTORY:
-${conversationText}
-
----
-The customer has requested to speak with a human agent. Please reach out to them as soon as possible.
-
-Best regards,
-Wherewolf Chatbot System
-        `;
-
-        const mailOptions = {
-            from: process.env.GMAIL_USER,
-            to: process.env.OPERATOR_EMAIL || process.env.GMAIL_USER,
-            subject: `🚨 Agent Request: ${businessName} - ${customerEmail}`,
-            text: emailContent,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background: #8B5CF6; color: white; padding: 20px; text-align: center;">
-                        <h2>🚨 Agent Handoff Request</h2>
+        <form id="chatbotForm">
+            <!-- Basic Information -->
+            <div class="form-section">
+                <div class="section-header open" onclick="toggleSection(this)">
+                    <h3>📋 Basic Information</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content open">
+                    <div class="section-description">Core details about your business and tour offerings</div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="businessName">Business Name *</label>
+                            <input type="text" id="businessName" required placeholder="Key West Boat Tours">
+                        </div>
+                        <div class="form-group">
+                            <label for="businessType">Primary Activity *</label>
+                            <select id="businessType">
+                                <option>Boat Tours</option>
+                                <option>Jet Ski Rentals</option>
+                                <option>Fishing Charters</option>
+                                <option>Kayak Tours</option>
+                                <option>Hiking Tours</option>
+                                <option>City Tours</option>
+                                <option>Food Tours</option>
+                                <option>Wine Tasting</option>
+                                <option>Adventure Sports</option>
+                                <option>Cultural Experiences</option>
+                                <option>Other</option>
+                            </select>
+                        </div>
                     </div>
-                    <div style="padding: 20px; background: #f9f9f9;">
-                        <h3>Business Details</h3>
-                        <p><strong>Business:</strong> ${businessName}</p>
-                        <p><strong>Operator ID:</strong> ${operatorId}</p>
-                        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
-                    </div>
-                    <div style="padding: 20px;">
-                        <h3>📞 Customer Contact</h3>
-                        <p><strong>Email:</strong> <a href="mailto:${customerEmail}">${customerEmail}</a></p>
-                        <p><strong>Phone:</strong> <a href="tel:${customerPhone}">${customerPhone}</a></p>
-                    </div>
-                    <div style="padding: 20px; background: #f9f9f9;">
-                        <h3>💬 Conversation History</h3>
-                        <pre style="white-space: pre-wrap; background: white; padding: 15px; border-radius: 5px;">${conversationText}</pre>
-                    </div>
-                    <div style="padding: 20px; text-align: center; background: #8B5CF6; color: white;">
-                        <p>Please reach out to the customer as soon as possible!</p>
+
+                    <div class="form-group">
+                        <label for="location">Location / Meeting Point *</label>
+                        <input type="text" id="location" placeholder="Marina Bay, Dock 5" required>
                     </div>
                 </div>
-            `
-        };
+            </div>
 
-        await emailTransporter.sendMail(mailOptions);
-        console.log('Handoff email sent successfully');
-        return true;
-    } catch (error) {
-        console.error('Error sending handoff email:', error);
-        return false;
-    }
-}
+            <!-- Business Details -->
+            <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>🏢 Business Details</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">Additional business information for better customer service</div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="websiteUrl">Website URL</label>
+                            <input type="url" id="websiteUrl" placeholder="https://www.yourbusiness.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="phoneNumber">Phone Number</label>
+                            <input type="tel" id="phoneNumber" placeholder="+1 (555) 123-4567">
+                        </div>
+                    </div>
 
-// Root route redirect
-app.get('/', (req, res) => {
-    res.redirect('/setup');
-});
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="businessHours">Business Hours</label>
+                            <input type="text" id="businessHours" placeholder="8 AM - 6 PM daily">
+                        </div>
+                        <div class="form-group">
+                            <label for="peakSeason">Peak Season</label>
+                            <input type="text" id="peakSeason" placeholder="December - April">
+                        </div>
+                    </div>
 
-// Serve setup page
-app.get('/setup', (req, res) => {
-    res.sendFile(path.join(__dirname, 'setup.html'));
-});
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="maxGroupSize">Maximum Group Size</label>
+                            <input type="number" id="maxGroupSize" placeholder="12" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label for="companyTagline">Company Tagline</label>
+                            <input type="text" id="companyTagline" placeholder="Creating unforgettable adventures">
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-// Serve chat page
-app.get('/chat.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'chat.html'));
-});
+            <!-- Activity Customization -->
+            <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>🎯 Activity Customization</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">Detailed information about your activities and requirements</div>
+                    
+                    <div class="form-group">
+                        <label>Activity Types (select all that apply)</label>
+                        <div class="activity-grid">
+                            <label class="activity-option">
+                                <input type="checkbox" value="Boat Tours" onchange="updateActivityOption(this)">
+                                <span>🚤 Boat Tours</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Fishing" onchange="updateActivityOption(this)">
+                                <span>🎣 Fishing</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Snorkeling" onchange="updateActivityOption(this)">
+                                <span>🤿 Snorkeling</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Kayaking" onchange="updateActivityOption(this)">
+                                <span>🛶 Kayaking</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Hiking" onchange="updateActivityOption(this)">
+                                <span>🥾 Hiking</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="City Tours" onchange="updateActivityOption(this)">
+                                <span>🏛️ City Tours</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Food Tours" onchange="updateActivityOption(this)">
+                                <span>🍽️ Food Tours</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Wine Tasting" onchange="updateActivityOption(this)">
+                                <span>🍷 Wine Tasting</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Adventure Sports" onchange="updateActivityOption(this)">
+                                <span>🏄 Adventure Sports</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Cultural Experiences" onchange="updateActivityOption(this)">
+                                <span>🎭 Cultural</span>
+                            </label>
+                        </div>
+                    </div>
 
-// Endpoint to save operator config
-app.post('/api/save-config', (req, res) => {
-    console.log('Received config save request:', req.body);
-    
-    const config = req.body;
-    const operatorId = Math.random().toString(36).substring(2, 9); 
+                    <div class="form-row-three">
+                        <div class="form-group">
+                            <label for="difficultyLevel">Difficulty Level</label>
+                            <select id="difficultyLevel">
+                                <option>Beginner</option>
+                                <option>Intermediate</option>
+                                <option>Advanced</option>
+                                <option>All Levels</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="minAge">Minimum Age</label>
+                            <input type="number" id="minAge" placeholder="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="maxAge">Maximum Age (0 = no limit)</label>
+                            <input type="number" id="maxAge" placeholder="0" min="0">
+                        </div>
+                    </div>
 
-    const configFilePath = path.join(configsDir, `${operatorId}.json`);
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="durationOptions">Duration Options</label>
+                            <select id="durationOptions">
+                                <option>Half-day (2-4 hours)</option>
+                                <option>Full-day (6-8 hours)</option>
+                                <option>Multi-day</option>
+                                <option>Custom duration</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="seasonalAvailability">Seasonal Availability</label>
+                            <select id="seasonalAvailability">
+                                <option>Year-round</option>
+                                <option>Seasonal (specify dates)</option>
+                                <option>Weather dependent</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-    try {
-        // Save config to file
-        fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2), 'utf8');
-        console.log(`Config saved successfully for operator ${operatorId}`);
+            <!-- Tour Schedule -->
+            <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>⏰ Tour Schedule</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">When your tours run and how long they last</div>
+                    
+                    <div class="form-group">
+                        <label>Standard Tour Times (select all that apply)</label>
+                        <div class="time-slots">
+                            <label class="time-slot">
+                                <input type="checkbox" value="7:00 AM" onchange="updateTimeSlot(this)">
+                                <span>7:00 AM</span>
+                            </label>
+                            <label class="time-slot">
+                                <input type="checkbox" value="9:00 AM" onchange="updateTimeSlot(this)" checked>
+                                <span>9:00 AM</span>
+                            </label>
+                            <label class="time-slot">
+                                <input type="checkbox" value="11:00 AM" onchange="updateTimeSlot(this)">
+                                <span>11:00 AM</span>
+                            </label>
+                            <label class="time-slot">
+                                <input type="checkbox" value="1:00 PM" onchange="updateTimeSlot(this)">
+                                <span>1:00 PM</span>
+                            </label>
+                            <label class="time-slot">
+                                <input type="checkbox" value="2:00 PM" onchange="updateTimeSlot(this)" checked>
+                                <span>2:00 PM</span>
+                            </label>
+                            <label class="time-slot">
+                                <input type="checkbox" value="5:00 PM" onchange="updateTimeSlot(this)" checked>
+                                <span>5:00 PM (Sunset)</span>
+                            </label>
+                        </div>
+                    </div>
 
-        // Dynamic URL generation
-        const isProduction = process.env.NODE_ENV === 'production';
-        const host = isProduction 
-            ? (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RENDER_EXTERNAL_HOSTNAME || req.get('host'))
-            : `localhost:${process.env.PORT || 3000}`;
-        const protocol = isProduction ? 'https' : 'http';
-        const baseUrl = `${protocol}://${host}`;
+                    <div class="form-group">
+                        <label for="duration">Typical Tour Duration</label>
+                        <input type="text" id="duration" placeholder="2.5 hours">
+                    </div>
+                </div>
+            </div>
 
-        const embedCode = `<script>
-  window.wherewolfChatbot = {
-    operatorId: '${operatorId}'
-  };
-</script>
-<script src="${baseUrl}/widget.js"></script>`;
+            <!-- Pricing -->
+            <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>💰 Pricing</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">Your pricing structure and special offers</div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="adultPrice">Adult Price</label>
+                            <input type="text" id="adultPrice" placeholder="$95 USD">
+                        </div>
+                        <div class="form-group">
+                            <label for="childPrice">Child Price</label>
+                            <input type="text" id="childPrice" placeholder="$65 USD (ages 4-12)">
+                        </div>
+                    </div>
 
-        res.json({
-            success: true,
-            operatorId,
-            embedCode,
-            baseUrl
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="groupDiscount">Group Discount</label>
+                            <input type="text" id="groupDiscount" placeholder="15% off for 6+ people">
+                        </div>
+                        <div class="form-group">
+                            <label for="specialOffers">Current Special Offers</label>
+                            <input type="text" id="specialOffers" placeholder="Book 2 tours, get 10% off">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Policies -->
+            <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>📋 Policies</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">Important policies and what customers should know</div>
+                    
+                    <div class="form-group">
+                        <label for="whatToBring">What to Bring</label>
+                        <textarea id="whatToBring" placeholder="Sunscreen, sunglasses, camera">Sunscreen, sunglasses, camera, light jacket for evening tours</textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cancellationPolicy">Cancellation Policy</label>
+                            <textarea id="cancellationPolicy" placeholder="Full refund if cancelled 24 hours before tour">Full refund if cancelled 24 hours before tour</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="weatherPolicy">Weather Policy</label>
+                            <input type="text" id="weatherPolicy" placeholder="Tours run in light rain, full refund for storms">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chatbot Personality -->
+            <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>🤖 Chatbot Personality</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">Customize how your chatbot communicates with customers</div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="chatbotTone">Communication Tone</label>
+                            <select id="chatbotTone">
+                                <option>Friendly</option>
+                                <option>Professional</option>
+                                <option>Casual</option>
+                                <option>Enthusiastic</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="languageStyle">Language Style</label>
+                            <select id="languageStyle">
+                                <option>Conversational</option>
+                                <option>Formal</option>
+                                <option>Local/Regional</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="expertiseLevel">Information Level</label>
+                            <select id="expertiseLevel">
+                                <option>Basic information</option>
+                                <option>Detailed expert knowledge</option>
+                                <option>Educational focus</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="responseLength">Response Length</label>
+                            <select id="responseLength">
+                                <option>Brief (1-2 sentences)</option>
+                                <option>Moderate (2-3 sentences)</option>
+                                <option>Detailed (3-4 sentences)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customGreeting">Custom Welcome Message</label>
+                        <textarea id="customGreeting" placeholder="Hi! Welcome to [Business Name]. I'm here to help you plan your perfect adventure!"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advanced Features -->
+            <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>⚡ Advanced Features</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">Enhanced functionality and integrations</div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="bookingLink">Booking System Link</label>
+                            <input type="url" id="bookingLink" placeholder="https://your-booking-system.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="socialMedia">Social Media Links</label>
+                            <input type="text" id="socialMedia" placeholder="Instagram: @yourbusiness, Facebook: /yourbusiness">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="certifications">Safety Certifications & Licenses</label>
+                        <textarea id="certifications" placeholder="Coast Guard licensed, First Aid certified, Insured with..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contact Preferences -->
+            <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>📞 Contact Preferences</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">How and when customers can reach your team</div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="responseTime">Expected Response Time</label>
+                            <select id="responseTime">
+                                <option>15 minutes</option>
+                                <option>30 minutes</option>
+                                <option>1 hour</option>
+                                <option>2 hours</option>
+                                <option>Same day</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="contactMethods">Preferred Contact Methods</label>
+                            <input type="text" id="contactMethods" placeholder="Email, Phone, WhatsApp">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="operatingHours">Human Support Hours</label>
+                            <input type="text" id="operatingHours" placeholder="9 AM - 5 PM EST, Monday-Friday">
+                        </div>
+                        <div class="form-group">
+                            <label for="handoffTriggers">Agent Handoff Keywords</label>
+                            <input type="text" id="handoffTriggers" placeholder="urgent, emergency, complaint, refund">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Branding -->
+            <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>🎨 Branding</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">Customize the look and feel of your chat widget</div>
+                    
+                    <div class="form-group">
+                        <label>Chat Widget Color Theme</label>
+                        <div class="color-options">
+                            <label class="color-option selected">
+                                <input type="radio" name="brandColor" value="#8B5CF6" checked onchange="updateColorOption(this)">
+                                <div class="color-swatch" style="background: #8B5CF6;"></div>
+                                <span>Purple</span>
+                            </label>
+                            <label class="color-option">
+                                <input type="radio" name="brandColor" value="#3B82F6" onchange="updateColorOption(this)">
+                                <div class="color-swatch" style="background: #3B82F6;"></div>
+                                <span>Blue</span>
+                            </label>
+                            <label class="color-option">
+                                <input type="radio" name="brandColor" value="#10B981" onchange="updateColorOption(this)">
+                                <div class="color-swatch" style="background: #10B981;"></div>
+                                <span>Green</span>
+                            </label>
+                            <label class="color-option">
+                                <input type="radio" name="brandColor" value="#F59E0B" onchange="updateColorOption(this)">
+                                <div class="color-swatch" style="background: #F59E0B;"></div>
+                                <span>Orange</span>
+                            </label>
+                            <label class="color-option">
+                                <input type="radio" name="brandColor" value="#EF4444" onchange="updateColorOption(this)">
+                                <div class="color-swatch" style="background: #EF4444;"></div>
+                                <span>Red</span>
+                            </label>
+                            <label class="color-option">
+                                <input type="radio" name="brandColor" value="#6366F1" onchange="updateColorOption(this)">
+                                <div class="color-swatch" style="background: #6366F1;"></div>
+                                <span>Indigo</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Waiver Integration -->
+            <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>📝 Waiver Integration</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">Connect your Wherewolf waiver system</div>
+                    
+                    <div class="form-group">
+                        <label for="waiverLink">Your Wherewolf Waiver Link</label>
+                        <input type="url" id="waiverLink" placeholder="https://mono.wherewolf.co.nz/your-waiver-id">
+                        <p class="help-text">Customers will be able to ask for the waiver and get this link automatically</p>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="generate-btn">🚀 Generate My Enhanced Chatbot</button>
+        </form>
+
+        <div id="embedSection" style="display: none;">
+            <h3 style="margin-top: 40px;">🎉 Your Enhanced Chatbot is Ready!</h3>
+            <p style="margin-bottom: 20px;">Copy this code and paste it into your website:</p>
+            
+            <div class="embed-code">
+                <button class="copy-btn" onclick="copyCode()">Copy Code</button>
+                <pre id="embedCode"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set initial selected states
+            document.querySelectorAll('.time-slot input:checked').forEach(updateTimeSlot);
+            document.querySelectorAll('.activity-option input:checked').forEach(updateActivityOption);
+            document.querySelectorAll('.color-option input:checked').forEach(updateColorOption);
+            
+            // Update progress as user scrolls through sections
+            updateProgress();
         });
-    } catch (error) {
-        console.error('Error saving config file:', error);
-        res.status(500).json({ success: false, error: 'Failed to save configuration.' });
-    }
-});
 
-// Endpoint to get operator config
-app.get('/api/config/:operatorId', (req, res) => {
-    const { operatorId } = req.params;
-    const configPath = path.join(configsDir, `${operatorId}.json`);
-
-    console.log(`Looking for config at: ${configPath}`);
-
-    if (fs.existsSync(configPath)) {
-        try {
-            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-            res.json(config);
-        } catch (error) {
-            console.error(`Error reading config for ${operatorId}:`, error);
-            res.status(500).json({ error: 'Failed to read configuration.' });
-        }
-    } else {
-        console.log(`Config not found for operator: ${operatorId}`);
-        res.status(404).json({ error: 'Config not found' });
-    }
-});
-
-// Store customer contact info globally
-const customerContacts = {};
-
-// Main Chat endpoint with agent handoff
-app.post('/api/chat', async function(req, res) {
-    const { message, sessionId = 'default', operatorId } = req.body;
-
-    if (!message) {
-        return res.status(400).json({ error: "Message is required" });
-    }
-    if (!operatorId) {
-        return res.status(400).json({ error: "operatorId is required for chat" });
-    }
-
-    // Load this operator's config
-    let currentConfig;
-    try {
-        const configPath = path.join(configsDir, `${operatorId}.json`);
-        if (!fs.existsSync(configPath)) {
-            return res.status(404).json({ error: 'Operator config not found.' });
-        }
-        currentConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    } catch (error) {
-        console.error(`Error loading config for operatorId ${operatorId}:`, error);
-        return res.status(500).json({ error: 'Failed to load operator configuration.' });
-    }
-
-    // Create unique session ID per operator
-    const sessionKey = `${operatorId}_${sessionId}`;
-    
-    // Initialize conversation history
-    if (!conversations[sessionKey]) {
-        conversations[sessionKey] = [];
-    }
-    conversations[sessionKey].push({ role: 'user', content: message });
-
-    const lowerMessage = message.toLowerCase();
-    const waiverLink = currentConfig.waiverLink || "No waiver link provided.";
-
-    // Check for agent/human requests FIRST (but only once per conversation)
-    const agentKeywords = [
-        'agent', 'human', 'speak to someone', 'talk to someone', 
-        'representative', 'person', 'staff', 'manager', 'urgent'
-    ];
-
-    const isAgentRequest = agentKeywords.some(keyword => lowerMessage.includes(keyword)) ||
-        lowerMessage.includes('call me') ||
-        (lowerMessage.includes('phone') && lowerMessage.includes('call') && lowerMessage.length < 20);
-
-    // Track if agent handoff already happened for this session
-    const handoffKey = `handoff_${sessionKey}`;
-    const alreadyHandedOff = conversations[handoffKey] || false;
-
-    if (isAgentRequest && !alreadyHandedOff) {
-        // Mark this conversation as already handed off
-        conversations[handoffKey] = true;
-        
-        // Try to send handoff email
-        const customerContact = customerContacts[sessionKey];
-        const emailSent = await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-        
-        let botResponse;
-        if (emailSent) {
-            botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within 30 minutes. How would you prefer to be contacted?`;
-        } else {
-            botResponse = `I'd love to connect you with our team! 👥 Please email us directly at ${process.env.OPERATOR_EMAIL || 'your-email@example.com'} or call us, and we'll help you right away. Include "URGENT" in your subject line for fastest response.`;
-        }
-        
-        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-        return res.json({ response: botResponse });
-    }
-
-    // If agent already requested, handle follow-up responses about contact preferences
-    if (alreadyHandedOff && (lowerMessage.includes('phone') || lowerMessage.includes('email') || lowerMessage.includes('call'))) {
-        const botResponse = `Perfect! Our team has been notified and will contact you via ${lowerMessage.includes('phone') || lowerMessage.includes('call') ? 'phone' : 'email'} within 30 minutes. Is there anything else I can help you with while you wait?`;
-        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-        return res.json({ response: botResponse });
-    }
-
-    // Check for waiver/form related keywords
-    if (
-        lowerMessage.includes('waiver') ||
-        lowerMessage.includes('form') ||
-        lowerMessage.includes('sign') ||
-        lowerMessage.includes('release')
-    ) {
-        const botResponse = `Here's your waiver: <a href='${waiverLink}' target='_blank' style='color: #8B5CF6;'>Click here to sign</a>`;
-        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-        return res.json({ response: botResponse });
-    }
-
-    // Create dynamic system prompt with better data handling
-    const businessName = currentConfig.businessName || "our tour company";
-    const businessType = currentConfig.businessType || "tours";
-    const location = currentConfig.location || "our meeting location";
-    const duration = currentConfig.duration || "several hours";
-    const adultPrice = currentConfig.adultPrice || "contact us for pricing";
-    const childPrice = currentConfig.childPrice || "contact us for pricing";
-    const groupDiscount = currentConfig.groupDiscount || "ask about group discounts";
-    const whatToBring = currentConfig.whatToBring || "sunscreen, camera, and comfortable clothes";
-    const cancellationPolicy = currentConfig.cancellationPolicy || "contact us about cancellations";
-    const weatherPolicy = currentConfig.weatherPolicy || "contact us about weather policies";
-    
-    // Handle tour times more carefully
-    let tourTimes = "contact us for available times";
-    if (currentConfig.times && Array.isArray(currentConfig.times) && currentConfig.times.length > 0) {
-        const validTimes = currentConfig.times.filter(time => time && time.trim() !== '');
-        if (validTimes.length > 0) {
-            tourTimes = validTimes.join(', ');
-        }
-    }
-
-    const SYSTEM_PROMPT = `You are a friendly chatbot for ${businessName}.
-    Give helpful answers in 2-3 SHORT sentences.
-
-    Tour info:
-    - Type: ${businessType}
-    - Location/Meeting: ${location}
-    - Times: ${tourTimes}
-    - Duration: ${duration}
-    - Price: Adults ${adultPrice}, Kids ${childPrice}
-    - Group Discount: ${groupDiscount}
-    - What to Bring: ${whatToBring}
-    - Cancellation Policy: ${cancellationPolicy}
-    - Weather Policy: ${weatherPolicy}
-
-    IMPORTANT: Keep responses to 2-3 short sentences. Be friendly and helpful but concise. Never say "undefined" or "null" - always provide helpful information.
-
-    If someone needs complex help or wants to make a special request, suggest they can "speak to someone from our team" for personalized assistance.`;
-
-    try {
-        // Call Claude API
-        const response = await axios.post('https://api.anthropic.com/v1/messages', {
-            model: 'claude-3-haiku-20240307',
-            max_tokens: 100,
-            temperature: 0.5,
-            system: SYSTEM_PROMPT,
-            messages: conversations[sessionKey]
-        }, {
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': process.env.CLAUDE_API_KEY,
-                'anthropic-version': '2023-06-01'
-            }
-        });
-
-        const botResponse = response.data.content[0].text;
-        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-
-        // Trim conversation history
-        if (conversations[sessionKey].length > 20) {
-            conversations[sessionKey] = conversations[sessionKey].slice(-20);
-        }
-
-        res.json({ response: botResponse });
-
-    } catch (error) {
-        console.error('Error with Claude API:', error.response?.data || error.message);
-
-        // Improved fallback responses
-        let fallbackResponse = "Sorry, I'm having connection issues. For immediate help, please speak to someone from our team!";
-
-        if (lowerMessage.includes('time') || lowerMessage.includes('schedule')) {
-            if (currentConfig.times && Array.isArray(currentConfig.times) && currentConfig.times.length > 0) {
-                const validTimes = currentConfig.times.filter(time => time && time.trim() !== '');
-                if (validTimes.length > 0) {
-                    fallbackResponse = `Our tours run at ${validTimes.join(', ')}. Contact us to book!`;
-                } else {
-                    fallbackResponse = `We offer tours throughout the day. Contact us for current availability!`;
-                }
+        // Section toggle functionality
+        function toggleSection(header) {
+            const content = header.nextElementSibling;
+            const isOpen = content.classList.contains('open');
+            
+            if (isOpen) {
+                content.classList.remove('open');
+                header.classList.remove('open');
             } else {
-                fallbackResponse = `We offer tours throughout the day. Contact us for current availability!`;
+                content.classList.add('open');
+                header.classList.add('open');
             }
-        } else if (lowerMessage.includes('price') || lowerMessage.includes('cost')) {
-            const adult = currentConfig.adultPrice || "contact us for pricing";
-            const child = currentConfig.childPrice || "contact us for pricing";
-            fallbackResponse = `Adults: ${adult}, Children: ${child}. Contact us for the latest rates!`;
-        } else if (lowerMessage.includes('location') || lowerMessage.includes('meet') || lowerMessage.includes('where')) {
-            const meetLocation = currentConfig.location || "our marina location";
-            fallbackResponse = `We meet at ${meetLocation}. Contact us for exact directions!`;
-        } else if (lowerMessage.includes('bring') || lowerMessage.includes('pack')) {
-            const toBring = currentConfig.whatToBring || "sunscreen, camera, and comfortable clothes";
-            fallbackResponse = `Please bring: ${toBring}. We'll have everything else ready!`;
+            
+            updateProgress();
         }
 
-        res.json({ response: fallbackResponse });
-    }
-});
+        // Update time slot selection
+        function updateTimeSlot(checkbox) {
+            const slotElement = checkbox.closest('.time-slot');
+            slotElement.classList.toggle('selected', checkbox.checked);
+        }
 
-// Contact info capture with session storage
-app.post('/contact-info', (req, res) => {
-    const { email, phone, operatorId, sessionId = 'default' } = req.body;
-    const sessionKey = `${operatorId}_${sessionId}`;
-    
-    // Store customer contact for this session
-    customerContacts[sessionKey] = { email, phone };
-    
-    console.log('📬 Received contact info:', {
-        email: email || 'N/A',
-        phone: phone || 'N/A',
-        session: sessionKey
-    });
-    res.sendStatus(200);
-});
+        // Update activity selection
+        function updateActivityOption(checkbox) {
+            const optionElement = checkbox.closest('.activity-option');
+            optionElement.classList.toggle('selected', checkbox.checked);
+        }
 
-// Test endpoint
-app.get('/api/test', (req, res) => {
-    res.json({ 
-        success: true, 
-        message: 'Server is working!',
-        timestamp: new Date().toISOString(),
-        emailConfigured: !!emailTransporter
-    });
-});
-
-// Debug endpoint
-app.get('/api/debug/:operatorId', (req, res) => {
-    const { operatorId } = req.params;
-    const configPath = path.join(configsDir, `${operatorId}.json`);
-
-    if (fs.existsSync(configPath)) {
-        try {
-            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-            res.json({
-                success: true,
-                operatorId,
-                config,
-                emailConfigured: !!emailTransporter,
-                timesData: {
-                    raw: config.times,
-                    isArray: Array.isArray(config.times),
-                    length: config.times ? config.times.length : 0,
-                    filtered: config.times ? config.times.filter(time => time && time.trim() !== '') : []
-                }
+        // Update color selection
+        function updateColorOption(radio) {
+            document.querySelectorAll('.color-option').forEach(option => {
+                option.classList.remove('selected');
             });
-        } catch (error) {
-            res.status(500).json({ error: 'Failed to read config', details: error.message });
+            radio.closest('.color-option').classList.add('selected');
         }
-    } else {
-        res.status(404).json({ error: 'Config not found' });
-    }
-});
 
-// Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`\n🚀 Chatbot server running on port ${PORT}`);
-    console.log('📝 Setup page: /setup');
-    console.log('💬 Chat interface: /chat.html');
-    console.log('🔧 API test: /api/test');
-    console.log('📧 Email service:', emailTransporter ? 'Ready' : 'Not configured');
-});
+        // Update progress bar
+        function updateProgress() {
+            const totalSections = document.querySelectorAll('.form-section').length;
+            const openSections = document.querySelectorAll('.section-content.open').length;
+            const progress = (openSections / totalSections) * 100;
+            document.getElementById('progressFill').style.width = progress + '%';
+        }
+
+        // Form submission
+        document.getElementById('chatbotForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            // Collect all form data
+            const selectedTimes = Array.from(document.querySelectorAll('.time-slot input:checked')).map(cb => cb.value);
+            const selectedActivities = Array.from(document.querySelectorAll('.activity-option input:checked')).map(cb => cb.value);
+            const selectedColor = document.querySelector('input[name="brandColor"]:checked').value;
+
+            const config = {
+                // Basic Information
+                businessName: document.getElementById('businessName').value,
+                businessType: document.getElementById('businessType').value,
+                location: document.getElementById('location').value,
+                
+                // Business Details
+                websiteUrl: document.getElementById('websiteUrl').value,
+                phoneNumber: document.getElementById('phoneNumber').value,
+                businessHours: document.getElementById('businessHours').value,
+                peakSeason: document.getElementById('peakSeason').value,
+                maxGroupSize: document.getElementById('maxGroupSize').value,
+                companyTagline: document.getElementById('companyTagline').value,
+                
+                // Activity Customization
+                activityTypes: selectedActivities,
+                difficultyLevel: document.getElementById('difficultyLevel').value,
+                minAge: document.getElementById('minAge').value,
+                maxAge: document.getElementById('maxAge').value,
+                durationOptions: document.getElementById('durationOptions').value,
+                seasonalAvailability: document.getElementById('seasonalAvailability').value,
+                
+                // Schedule & Pricing
+                times: selectedTimes,
+                duration: document.getElementById('duration').value,
+                adultPrice: document.getElementById('adultPrice').value,
+                childPrice: document.getElementById('childPrice').value,
+                groupDiscount: document.getElementById('groupDiscount').value,
+                specialOffers: document.getElementById('specialOffers').value,
+                
+                // Policies
+                whatToBring: document.getElementById('whatToBring').value,
+                cancellationPolicy: document.getElementById('cancellationPolicy').value,
+                weatherPolicy: document.getElementById('weatherPolicy').value,
+                
+                // Chatbot Personality
+                chatbotTone: document.getElementById('chatbotTone').value,
+                languageStyle: document.getElementById('languageStyle').value,
+                expertiseLevel: document.getElementById('expertiseLevel').value,
+                responseLength: document.getElementById('responseLength').value,
+                customGreeting: document.getElementById('customGreeting').value,
+                
+                // Advanced Features
+                bookingLink: document.getElementById('bookingLink').value,
+                socialMedia: document.getElementById('socialMedia').value,
+                certifications: document.getElementById('certifications').value,
+                
+                // Contact Preferences
+                responseTime: document.getElementById('responseTime').value,
+                contactMethods: document.getElementById('contactMethods').value,
+                operatingHours: document.getElementById('operatingHours').value,
+                handoffTriggers: document.getElementById('handoffTriggers').value,
+                
+                // Branding
+                brandColor: selectedColor,
+                
+                // Waiver
+                waiverLink: document.getElementById('waiverLink').value
+            };
+
+            console.log('Submitting enhanced config:', config);
+
+            try {
+                const response = await fetch('/api/save-config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(config)
+                });
+
+                const result = await response.json();
+                console.log('Server response:', result);
+
+                if (result.success && result.embedCode) {
+                    document.getElementById('embedCode').textContent = result.embedCode;
+                    document.getElementById('embedSection').style.display = 'block';
+                    document.getElementById('embedSection').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    alert('Failed to generate chatbot: ' + JSON.stringify(result));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error saving configuration: ' + error.message);
+            }
+        });
+
+        function copyCode() {
+            const embedCodeElement = document.getElementById('embedCode');
+            const textToCopy = embedCodeElement.textContent;
+
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    alert('Embed code copied to clipboard!');
+                });
+            } else {
+                const textArea = document.createElement("textarea");
+                textArea.value = textToCopy;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('Embed code copied to clipboard!');
+            }
+        }
+    </script>
+</body>
+</html>
