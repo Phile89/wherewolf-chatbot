@@ -438,36 +438,28 @@ app.post('/api/chat', async function(req, res) {
         // Mark this conversation as already handed off
         conversations[handoffKey] = true;
         
-        // Always try to send handoff email if email service is configured
+        // Check if we have customer contact info
         const customerContact = customerContacts[sessionKey];
         const responseTime = currentConfig.responseTime || "30 minutes";
         
         let botResponse;
         let emailSent = false;
         
-        // Try to send handoff email regardless of whether we have customer contact info
-        if (emailTransporter) {
-            emailSent = await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-        }
-        
-        if (emailSent) {
-            // Email sent successfully - promise human contact
-            if (customerContact && (customerContact.email || customerContact.phone)) {
+        // Only try to send email if we have customer contact info
+        if (customerContact && (customerContact.email || customerContact.phone)) {
+            // We have contact info - can send email and promise contact
+            if (emailTransporter) {
+                emailSent = await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+            }
+            
+            if (emailSent) {
                 botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within ${responseTime}. How would you prefer to be contacted?`;
             } else {
-                botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within ${responseTime}. What's the best way to contact you?`;
+                botResponse = `I'm notifying our team about your request! 👥 Someone will reach out within ${responseTime}. How would you prefer to be contacted?`;
             }
         } else {
-            // Email failed or not configured - provide direct contact methods
-            const directContact = [];
-            if (currentConfig.phoneNumber) directContact.push(`call ${currentConfig.phoneNumber}`);
-            if (process.env.OPERATOR_EMAIL) directContact.push(`email ${process.env.OPERATOR_EMAIL}`);
-            
-            if (directContact.length > 0) {
-                botResponse = `I'd love to connect you with our team! 👥 Please ${directContact.join(' or ')} and mention "URGENT" for fastest response within ${responseTime}.`;
-            } else {
-                botResponse = `I'd love to connect you with our team! 👥 Please contact us during our business hours (${currentConfig.operatingHours || 'regular hours'}) for immediate assistance.`;
-            }
+            // No contact info - need to collect it first
+            botResponse = `I'd love to connect you with our team! 👥 First, I'll need your contact information. What's your email address so our team can reach out within ${responseTime}?`;
         }
         
         conversations[sessionKey].push({ role: 'assistant', content: botResponse });
@@ -476,15 +468,63 @@ app.post('/api/chat', async function(req, res) {
 
     // If agent already requested, handle follow-up responses
     if (alreadyHandedOff) {
-        if (lowerMessage.includes('phone') || lowerMessage.includes('email') || lowerMessage.includes('call')) {
-            const responseTime = currentConfig.responseTime || "30 minutes";
-            const preferredMethod = lowerMessage.includes('phone') || lowerMessage.includes('call') ? 'phone' : 'email';
-            const botResponse = `Perfect! Our team has been notified and will contact you via ${preferredMethod} within ${responseTime}. Is there anything else I can help you with while you wait?`;
+        const customerContact = customerContacts[sessionKey];
+        const responseTime = currentConfig.responseTime || "30 minutes";
+        
+        // Check if they're providing contact info after handoff request
+        const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
+        const phoneRegex = /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b|\b\(\d{3}\)\s?\d{3}[-.]?\d{4}\b/;
+        
+        if (emailRegex.test(message)) {
+            // They provided an email
+            const email = message.match(emailRegex)[0];
+            customerContacts[sessionKey] = { ...customerContacts[sessionKey], email };
+            
+            // Now send the handoff email with their contact info
+            if (emailTransporter) {
+                await sendHandoffEmail(currentConfig, conversations[sessionKey], { email }, operatorId);
+            }
+            
+            const botResponse = `Perfect! I've saved your email (${email}) and our team has been notified. They'll reach out within ${responseTime}. Is there anything else I can help you with while you wait?`;
             conversations[sessionKey].push({ role: 'assistant', content: botResponse });
             return res.json({ response: botResponse });
+        } else if (phoneRegex.test(message)) {
+            // They provided a phone number
+            const phone = message.match(phoneRegex)[0];
+            customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
+            
+            // Now send the handoff email with their contact info
+            if (emailTransporter) {
+                await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
+            }
+            
+            const botResponse = `Perfect! I've saved your phone number (${phone}) and our team has been notified. They'll call you within ${responseTime}. Is there anything else I can help you with while you wait?`;
+            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+            return res.json({ response: botResponse });
+        } else if (lowerMessage.includes('phone') || lowerMessage.includes('call')) {
+            // They said they want phone contact but didn't provide number
+            if (customerContact && customerContact.phone) {
+                const botResponse = `Perfect! Our team will call you at ${customerContact.phone} within ${responseTime}. Is there anything else I can help you with while you wait?`;
+                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+                return res.json({ response: botResponse });
+            } else {
+                const botResponse = `Perfect! What's your phone number so our team can call you within ${responseTime}?`;
+                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+                return res.json({ response: botResponse });
+            }
+        } else if (lowerMessage.includes('email')) {
+            // They said they want email contact but didn't provide email
+            if (customerContact && customerContact.email) {
+                const botResponse = `Perfect! Our team will email you at ${customerContact.email} within ${responseTime}. Is there anything else I can help you with while you wait?`;
+                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+                return res.json({ response: botResponse });
+            } else {
+                const botResponse = `Perfect! What's your email address so our team can reach out within ${responseTime}?`;
+                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+                return res.json({ response: botResponse });
+            }
         } else if (isAgentRequest) {
             // They're asking for agent again - reassure them
-            const responseTime = currentConfig.responseTime || "30 minutes";
             const botResponse = `Our team has already been notified and will reach out within ${responseTime}! Is there anything else I can help you with while you wait, or would you like me to provide our direct contact information?`;
             conversations[sessionKey].push({ role: 'assistant', content: botResponse });
             return res.json({ response: botResponse });
