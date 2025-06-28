@@ -3,7 +3,7 @@ const cors = require('cors');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const nodemailer = require('nodemailer'); // NEW: Email service
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 console.log('CLAUDE_API_KEY:', process.env.CLAUDE_API_KEY ? 'Loaded' : 'Missing');
@@ -26,10 +26,10 @@ if (!fs.existsSync(configsDir)) {
 // Conversation history storage
 const conversations = {};
 
-// NEW: Email transporter setup
+// Email transporter setup
 let emailTransporter = null;
 if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
-    emailTransporter = nodemailer.createTransport({  // FIXED: was createTransporter
+    emailTransporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
             user: process.env.GMAIL_USER,
@@ -41,7 +41,7 @@ if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
     console.log('Email service not configured (missing credentials)');
 }
 
-// NEW: Function to send handoff email
+// Function to send handoff email
 async function sendHandoffEmail(config, conversationHistory, customerContact, operatorId) {
     if (!emailTransporter) {
         console.log('Email service not available');
@@ -137,7 +137,7 @@ app.get('/chat.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'chat.html'));
 });
 
-// Endpoint to save operator config with dynamic URL
+// Endpoint to save operator config
 app.post('/api/save-config', (req, res) => {
     console.log('Received config save request:', req.body);
     
@@ -151,7 +151,7 @@ app.post('/api/save-config', (req, res) => {
         fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2), 'utf8');
         console.log(`Config saved successfully for operator ${operatorId}`);
 
-        // Dynamic URL generation for different hosting platforms
+        // Dynamic URL generation
         const isProduction = process.env.NODE_ENV === 'production';
         const host = isProduction 
             ? (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RENDER_EXTERNAL_HOSTNAME || req.get('host'))
@@ -170,7 +170,7 @@ app.post('/api/save-config', (req, res) => {
             success: true,
             operatorId,
             embedCode,
-            baseUrl // For debugging
+            baseUrl
         });
     } catch (error) {
         console.error('Error saving config file:', error);
@@ -199,7 +199,7 @@ app.get('/api/config/:operatorId', (req, res) => {
     }
 });
 
-// NEW: Store customer contact info globally
+// Store customer contact info globally
 const customerContacts = {};
 
 // Main Chat endpoint with agent handoff
@@ -238,57 +238,42 @@ app.post('/api/chat', async function(req, res) {
     const lowerMessage = message.toLowerCase();
     const waiverLink = currentConfig.waiverLink || "No waiver link provided.";
 
-// NEW: Check for agent/human requests FIRST (but only once per conversation)
-const agentKeywords = [
-    'agent', 'human', 'speak to someone', 'talk to someone', 
-    'representative', 'person', 'staff', 'manager', 'urgent'
-];
+    // Check for agent/human requests FIRST (but only once per conversation)
+    const agentKeywords = [
+        'agent', 'human', 'speak to someone', 'talk to someone', 
+        'representative', 'person', 'staff', 'manager', 'urgent'
+    ];
 
-const isAgentRequest = agentKeywords.some(keyword => lowerMessage.includes(keyword)) ||
-    lowerMessage.includes('call me') ||
-    (lowerMessage.includes('phone') && lowerMessage.includes('call') && lowerMessage.length < 20);
+    const isAgentRequest = agentKeywords.some(keyword => lowerMessage.includes(keyword)) ||
+        lowerMessage.includes('call me') ||
+        (lowerMessage.includes('phone') && lowerMessage.includes('call') && lowerMessage.length < 20);
 
-// Track if agent handoff already happened for this session
-const handoffKey = `handoff_${sessionKey}`;
-const alreadyHandedOff = conversations[handoffKey] || false;
+    // Track if agent handoff already happened for this session
+    const handoffKey = `handoff_${sessionKey}`;
+    const alreadyHandedOff = conversations[handoffKey] || false;
 
-if (isAgentRequest && !alreadyHandedOff) {
-    // Mark this conversation as already handed off
-    conversations[handoffKey] = true;
-    
-    // Try to send handoff email
-    const customerContact = customerContacts[sessionKey];
-    const emailSent = await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-    
-    let botResponse;
-    if (emailSent) {
-        botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within 30 minutes. How would you prefer to be contacted?`;
-    } else {
-        botResponse = `I'd love to connect you with our team! 👥 Please email us directly at ${process.env.OPERATOR_EMAIL || 'your-email@example.com'} or call us, and we'll help you right away. Include "URGENT" in your subject line for fastest response.`;
-    }
-    
-    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-    return res.json({ response: botResponse });
-}
-
-// If agent already requested, handle follow-up responses about contact preferences
-if (alreadyHandedOff && (lowerMessage.includes('phone') || lowerMessage.includes('email') || lowerMessage.includes('call'))) {
-    const botResponse = `Perfect! Our team has been notified and will contact you via ${lowerMessage.includes('phone') || lowerMessage.includes('call') ? 'phone' : 'email'} within 30 minutes. Is there anything else I can help you with while you wait?`;
-    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-    return res.json({ response: botResponse });
-}
-    ) {
+    if (isAgentRequest && !alreadyHandedOff) {
+        // Mark this conversation as already handed off
+        conversations[handoffKey] = true;
+        
         // Try to send handoff email
         const customerContact = customerContacts[sessionKey];
         const emailSent = await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
         
         let botResponse;
         if (emailSent) {
-            botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within 30 minutes. In the meantime, what's the best way to contact you - the email you provided earlier, or would you prefer a phone call?`;
+            botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within 30 minutes. How would you prefer to be contacted?`;
         } else {
             botResponse = `I'd love to connect you with our team! 👥 Please email us directly at ${process.env.OPERATOR_EMAIL || 'your-email@example.com'} or call us, and we'll help you right away. Include "URGENT" in your subject line for fastest response.`;
         }
         
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        return res.json({ response: botResponse });
+    }
+
+    // If agent already requested, handle follow-up responses about contact preferences
+    if (alreadyHandedOff && (lowerMessage.includes('phone') || lowerMessage.includes('email') || lowerMessage.includes('call'))) {
+        const botResponse = `Perfect! Our team has been notified and will contact you via ${lowerMessage.includes('phone') || lowerMessage.includes('call') ? 'phone' : 'email'} within 30 minutes. Is there anything else I can help you with while you wait?`;
         conversations[sessionKey].push({ role: 'assistant', content: botResponse });
         return res.json({ response: botResponse });
     }
@@ -403,7 +388,7 @@ if (alreadyHandedOff && (lowerMessage.includes('phone') || lowerMessage.includes
     }
 });
 
-// UPDATED: Contact info capture with session storage
+// Contact info capture with session storage
 app.post('/contact-info', (req, res) => {
     const { email, phone, operatorId, sessionId = 'default' } = req.body;
     const sessionKey = `${operatorId}_${sessionId}`;
