@@ -28,19 +28,17 @@ const conversations = {};
 app.get('/', (req, res) => {
     res.redirect('/setup');
 });
-// Root route redirect
-app.get('/', (req, res) => {
-    res.redirect('/setup');
-});
 
-// ADD THESE ROUTES:
+// Serve setup page
 app.get('/setup', (req, res) => {
     res.sendFile(path.join(__dirname, 'setup.html'));
 });
 
+// Serve chat page
 app.get('/chat.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'chat.html'));
 });
+
 // Endpoint to save operator config with dynamic URL
 app.post('/api/save-config', (req, res) => {
     console.log('Received config save request:', req.body);
