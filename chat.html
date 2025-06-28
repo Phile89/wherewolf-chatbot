@@ -493,44 +493,8 @@
                     companyTagline.trim() !== businessName) {
                     businessDisplayName = `${businessName} - ${companyTagline}`;
                 }
-            const messagesContainer = document.getElementById('chatMessages');
-            messagesContainer.innerHTML = '';
-
-            // Add business info card if we have extra details
-            if (businessConfig.websiteUrl || businessConfig.phoneNumber || businessConfig.businessHours) {
-                const businessInfoHtml = `
-                    <div class="message bot-message">
-                        <div class="business-info">
-                            <h4>${businessName}</h4>
-                            <p>${companyTagline && companyTagline !== businessName ? companyTagline : `Your trusted ${businessType} provider`}</p>
-                        </div>
-                    </div>
-                `;
-                messagesContainer.insertAdjacentHTML('beforeend', businessInfoHtml);
-            }
-
-            // Add main welcome message
-            const welcomeHtml = `
-                <div class="message bot-message">
-                    <div>${welcomeMessage}</div>
-                    <div class="quick-replies">
-                        <button class="quick-reply" onclick="sendQuickReply('What are your tour times?')">🕒 Tour Times</button>
-                        <button class="quick-reply" onclick="sendQuickReply('How much does it cost?')">💰 Pricing</button>
-                        <button class="quick-reply" onclick="sendQuickReply('Where do I meet you?')">📍 Location</button>
-                        <button class="quick-reply" onclick="sendQuickReply('What should I bring?')">🎒 What to Bring</button>
-                    </div>
-                </div>
-            `;
-            messagesContainer.insertAdjacentHTML('beforeend', welcomeHtml);
-
-            // Enable input
-            const chatInput = document.getElementById('chatInput');
-            const sendButton = document.getElementById('sendButton');
-            chatInput.disabled = false;
-            sendButton.disabled = false;
-            chatInput.placeholder = "Type your question...";
-            chatInput.focus();
-        } `👋 Hi! Welcome to ${businessName}${companyTagline ? ` - ${companyTagline}` : ''}. I'm here to help with your ${businessType} questions. What would you like to know?`;
+                
+                welcomeMessage = `👋 Hi! Welcome to ${businessDisplayName}. I'm here to help with your ${businessType} questions. What would you like to know?`;
             }
             
             const messagesContainer = document.getElementById('chatMessages');
@@ -542,7 +506,7 @@
                     <div class="message bot-message">
                         <div class="business-info">
                             <h4>${businessName}</h4>
-                            <p>${companyTagline || `Your trusted ${businessType} provider`}</p>
+                            <p>${companyTagline && companyTagline !== businessName ? companyTagline : `Your trusted ${businessType} provider`}</p>
                         </div>
                     </div>
                 `;
