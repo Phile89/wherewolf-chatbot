@@ -44,7 +44,7 @@ if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
 // Enhanced function to send handoff email
 async function sendHandoffEmail(config, conversationHistory, customerContact, operatorId) {
     if (!emailTransporter) {
-        console.log('Email service not available');
+        console.log('Email service not available - no transporter configured');
         return false;
     }
 
@@ -54,6 +54,9 @@ async function sendHandoffEmail(config, conversationHistory, customerContact, op
         const customerPhone = customerContact?.phone || 'Not provided';
         const responseTime = config.responseTime || '30 minutes';
         const contactMethods = config.contactMethods || 'Email, Phone';
+        
+        console.log(`🚨 Sending handoff email for ${businessName} (${operatorId})`);
+        console.log(`📧 Customer contact: ${customerEmail} / ${customerPhone}`);
         
         // Format conversation history
         let conversationText = '';
@@ -122,11 +125,16 @@ Wherewolf Enhanced Chatbot System
             `
         };
 
-        await emailTransporter.sendMail(mailOptions);
-        console.log('Enhanced handoff email sent successfully');
+        const info = await emailTransporter.sendMail(mailOptions);
+        console.log('✅ Enhanced handoff email sent successfully:', info.messageId);
+        console.log(`📬 Sent to: ${process.env.OPERATOR_EMAIL || process.env.GMAIL_USER}`);
         return true;
     } catch (error) {
-        console.error('Error sending handoff email:', error);
+        console.error('❌ Error sending handoff email:', error);
+        console.error('Email config check:');
+        console.error('- GMAIL_USER:', process.env.GMAIL_USER ? 'Set' : 'Missing');
+        console.error('- GMAIL_PASS:', process.env.GMAIL_PASS ? 'Set' : 'Missing');
+        console.error('- OPERATOR_EMAIL:', process.env.OPERATOR_EMAIL ? 'Set' : 'Using GMAIL_USER');
         return false;
     }
 }
@@ -430,30 +438,30 @@ app.post('/api/chat', async function(req, res) {
         // Mark this conversation as already handed off
         conversations[handoffKey] = true;
         
-        // Check if we have customer contact info
+        // Always try to send handoff email if email service is configured
         const customerContact = customerContacts[sessionKey];
         const responseTime = currentConfig.responseTime || "30 minutes";
-        const operatorContactMethods = currentConfig.contactMethods || "email and phone";
         
         let botResponse;
+        let emailSent = false;
         
-        if (customerContact && (customerContact.email || customerContact.phone)) {
-            // We have contact info - can send email and promise contact
-            const emailSent = await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-            
-            if (emailSent) {
+        // Try to send handoff email regardless of whether we have customer contact info
+        if (emailTransporter) {
+            emailSent = await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+        }
+        
+        if (emailSent) {
+            // Email sent successfully - promise human contact
+            if (customerContact && (customerContact.email || customerContact.phone)) {
                 botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within ${responseTime}. How would you prefer to be contacted?`;
             } else {
-                botResponse = `I'm notifying our team about your request! 👥 Someone will reach out within ${responseTime}. What's the best way to contact you?`;
+                botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within ${responseTime}. What's the best way to contact you?`;
             }
         } else {
-            // No contact info - provide direct contact methods
+            // Email failed or not configured - provide direct contact methods
             const directContact = [];
             if (currentConfig.phoneNumber) directContact.push(`call ${currentConfig.phoneNumber}`);
-            if (process.env.OPERATOR_EMAIL || currentConfig.websiteUrl) {
-                const email = process.env.OPERATOR_EMAIL || 'contact us through our website';
-                directContact.push(`email ${email}`);
-            }
+            if (process.env.OPERATOR_EMAIL) directContact.push(`email ${process.env.OPERATOR_EMAIL}`);
             
             if (directContact.length > 0) {
                 botResponse = `I'd love to connect you with our team! 👥 Please ${directContact.join(' or ')} and mention "URGENT" for fastest response within ${responseTime}.`;
@@ -466,13 +474,21 @@ app.post('/api/chat', async function(req, res) {
         return res.json({ response: botResponse });
     }
 
-    // If agent already requested, handle follow-up responses about contact preferences
-    if (alreadyHandedOff && (lowerMessage.includes('phone') || lowerMessage.includes('email') || lowerMessage.includes('call'))) {
-        const responseTime = currentConfig.responseTime || "30 minutes";
-        const preferredMethod = lowerMessage.includes('phone') || lowerMessage.includes('call') ? 'phone' : 'email';
-        const botResponse = `Perfect! Our team has been notified and will contact you via ${preferredMethod} within ${responseTime}. Is there anything else I can help you with while you wait?`;
-        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-        return res.json({ response: botResponse });
+    // If agent already requested, handle follow-up responses
+    if (alreadyHandedOff) {
+        if (lowerMessage.includes('phone') || lowerMessage.includes('email') || lowerMessage.includes('call')) {
+            const responseTime = currentConfig.responseTime || "30 minutes";
+            const preferredMethod = lowerMessage.includes('phone') || lowerMessage.includes('call') ? 'phone' : 'email';
+            const botResponse = `Perfect! Our team has been notified and will contact you via ${preferredMethod} within ${responseTime}. Is there anything else I can help you with while you wait?`;
+            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+            return res.json({ response: botResponse });
+        } else if (isAgentRequest) {
+            // They're asking for agent again - reassure them
+            const responseTime = currentConfig.responseTime || "30 minutes";
+            const botResponse = `Our team has already been notified and will reach out within ${responseTime}! Is there anything else I can help you with while you wait, or would you like me to provide our direct contact information?`;
+            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+            return res.json({ response: botResponse });
+        }
     }
 
     // Check for waiver/form related keywords
