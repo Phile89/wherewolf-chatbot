@@ -12,6 +12,20 @@
 
     console.log('Loading widget for operator:', operatorId);
 
+    // FIXED: Get server URL from config or detect from script source
+    let serverUrl = window.wherewolfChatbot?.serverUrl;
+    
+    if (!serverUrl) {
+        const currentScript = document.currentScript;
+        if (currentScript) {
+            serverUrl = currentScript.src.replace('/widget.js', '');
+        } else {
+            serverUrl = 'https://wherewolf-chatbot.onrender.com'; // Fallback
+        }
+    }
+
+    console.log('Server URL:', serverUrl);
+
     // Create chat button
     const chatButton = document.createElement('div');
     chatButton.innerHTML = '💬';
@@ -21,7 +35,7 @@
         right: 20px;
         width: 60px;
         height: 60px;
-        background: #8B5CF6;
+        background: ${window.wherewolfChatbot?.buttonColor || '#8B5CF6'};
         border-radius: 50%;
         display: flex;
         align-items: center;
@@ -61,7 +75,7 @@
 
     // Load the chat interface
     chatWidget.innerHTML = `
-        <div style="background: #8B5CF6; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center;">
+        <div style="background: ${window.wherewolfChatbot?.buttonColor || '#8B5CF6'}; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center;">
             <h3 style="margin: 0; font-size: 16px;">Chat with us!</h3>
             <button id="closeChat" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer;">×</button>
         </div>
@@ -73,9 +87,11 @@
     // When clicked, toggle chat widget
     chatButton.onclick = function() {
         if (!isOpen) {
-            // Load the chat page with operator ID
+            // FIXED: Load the chat page with absolute URL
             const iframe = chatWidget.querySelector('#chatFrame');
-            iframe.src = `/chat.html?operator=${operatorId}`;
+            iframe.src = `${serverUrl}/chat.html?operator=${operatorId}`;
+            
+            console.log('Loading chat iframe from:', iframe.src);
             
             chatWidget.style.display = 'flex';
             chatButton.innerHTML = '✕';
