@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat</title>
+    <title>Enhanced Chat</title>
     <style>
         * {
             margin: 0;
@@ -25,90 +25,141 @@
             padding: 15px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
+            scroll-behavior: smooth;
         }
 
         .message {
-            max-width: 80%;
-            padding: 10px 15px;
-            border-radius: 12px;
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 16px;
             word-wrap: break-word;
             font-size: 14px;
             line-height: 1.4;
+            animation: messageSlide 0.3s ease-out;
+        }
+
+        @keyframes messageSlide {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .bot-message {
             background: #f3f4f6;
             align-self: flex-start;
+            border-bottom-left-radius: 6px;
+            border: 1px solid #e5e7eb;
         }
 
         .user-message {
-            background: #8B5CF6;
+            background: var(--brand-color, #8B5CF6);
             color: white;
             align-self: flex-end;
+            border-bottom-right-radius: 6px;
+        }
+
+        .system-message {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            color: #92400e;
+            align-self: center;
+            max-width: 90%;
+            text-align: center;
+            font-size: 12px;
+            border-radius: 20px;
+            padding: 8px 12px;
         }
 
         .quick-replies {
             display: flex;
             flex-wrap: wrap;
-            gap: 5px;
-            margin-top: 8px;
+            gap: 6px;
+            margin-top: 10px;
         }
 
         .quick-reply {
-            padding: 6px 12px;
-            border: 1px solid #8B5CF6;
-            border-radius: 15px;
+            padding: 8px 14px;
+            border: 1px solid var(--brand-color, #8B5CF6);
+            border-radius: 18px;
             background: white;
-            color: #8B5CF6;
+            color: var(--brand-color, #8B5CF6);
             cursor: pointer;
             font-size: 12px;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
+            font-weight: 500;
         }
 
         .quick-reply:hover {
-            background: #8B5CF6;
+            background: var(--brand-color, #8B5CF6);
             color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .chat-input-container {
-            padding: 15px;
+            padding: 16px;
             border-top: 1px solid #e9ecef;
             display: flex;
-            gap: 8px;
+            gap: 10px;
             background: white;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
         }
 
         .chat-input {
             flex: 1;
-            padding: 10px 15px;
-            border: 1px solid #ddd;
-            border-radius: 20px;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 24px;
             outline: none;
             font-size: 14px;
+            transition: border-color 0.3s ease;
+            font-family: inherit;
+        }
+
+        .chat-input:focus {
+            border-color: var(--brand-color, #8B5CF6);
         }
 
         .send-button {
-            padding: 10px 20px;
-            background: #8B5CF6;
+            padding: 12px 20px;
+            background: var(--brand-color, #8B5CF6);
             color: white;
             border: none;
-            border-radius: 20px;
+            border-radius: 24px;
             cursor: pointer;
             font-size: 14px;
-            transition: background 0.3s;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            min-width: 60px;
         }
 
         .send-button:hover {
-            background: #7C3AED;
+            background: var(--brand-color-dark, #7C3AED);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        .send-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
         .typing-indicator {
             display: none;
             align-self: flex-start;
-            padding: 10px 15px;
+            padding: 12px 16px;
             background: #f3f4f6;
-            border-radius: 12px;
+            border-radius: 16px;
+            border-bottom-left-radius: 6px;
+            border: 1px solid #e5e7eb;
         }
 
         .typing-indicator span {
@@ -116,7 +167,7 @@
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background: #999;
+            background: #9ca3af;
             margin: 0 1px;
             animation: typing 1.4s infinite;
         }
@@ -132,107 +183,205 @@
         @keyframes typing {
             0%, 60%, 100% {
                 opacity: 0.3;
+                transform: translateY(0);
             }
             30% {
                 opacity: 1;
+                transform: translateY(-4px);
             }
         }
 
         .loading-message {
             text-align: center;
-            color: #666;
-            padding: 20px;
+            color: #6b7280;
+            padding: 40px 20px;
             font-style: italic;
         }
 
-        /* Contact form styles */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid var(--brand-color, #8B5CF6);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Enhanced Contact Form */
         .contact-form {
-            background: #f8f9fa;
-            border: 2px solid #8B5CF6;
-            border-radius: 12px;
-            padding: 20px;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 2px solid var(--brand-color, #8B5CF6);
+            border-radius: 16px;
+            padding: 24px;
             margin: 10px 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
 
         .contact-form h4 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 16px;
+            color: #1f2937;
+            margin-bottom: 12px;
+            font-size: 18px;
+            font-weight: 600;
         }
 
         .contact-form p {
-            color: #666;
+            color: #6b7280;
             font-size: 14px;
-            margin-bottom: 15px;
+            margin-bottom: 18px;
+            line-height: 1.5;
         }
 
         .form-row {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            margin-bottom: 15px;
+            gap: 12px;
+            margin-bottom: 18px;
         }
 
         .contact-form input {
-            padding: 10px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
             font-size: 14px;
             outline: none;
-            transition: border-color 0.3s;
+            transition: all 0.3s ease;
+            font-family: inherit;
         }
 
         .contact-form input:focus {
-            border-color: #8B5CF6;
+            border-color: var(--brand-color, #8B5CF6);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
         }
 
         .form-buttons {
             display: flex;
-            gap: 10px;
+            gap: 12px;
         }
 
         .form-buttons button {
             flex: 1;
-            padding: 10px 16px;
+            padding: 12px 20px;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             cursor: pointer;
             font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            font-family: inherit;
         }
 
         .submit-btn {
-            background: #8B5CF6;
+            background: var(--brand-color, #8B5CF6);
             color: white;
         }
 
         .submit-btn:hover {
-            background: #7C3AED;
+            background: var(--brand-color-dark, #7C3AED);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
         }
 
         .skip-btn {
             background: transparent;
-            color: #6B7280;
-            border: 2px solid #E5E7EB;
+            color: #6b7280;
+            border: 2px solid #e5e7eb;
         }
 
         .skip-btn:hover {
-            border-color: #D1D5DB;
-            color: #4B5563;
+            border-color: #d1d5db;
+            color: #4b5563;
+            background: #f9fafb;
         }
 
         .help-text {
             font-size: 12px;
-            color: #6B7280;
+            color: #6b7280;
             text-align: center;
-            margin-top: 10px;
+            margin-top: 12px;
+            line-height: 1.4;
+        }
+
+        /* Business info display */
+        .business-info {
+            background: linear-gradient(135deg, var(--brand-color, #8B5CF6), var(--brand-color-dark, #7C3AED));
+            color: white;
+            padding: 16px;
+            border-radius: 12px;
+            margin: 10px 0;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        .business-info h4 {
+            margin: 0 0 8px 0;
+            font-size: 16px;
+        }
+
+        .business-info p {
+            margin: 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .message {
+                max-width: 95%;
+                font-size: 16px;
+            }
+            
+            .chat-input-container {
+                padding: 12px;
+            }
+            
+            .quick-replies {
+                gap: 4px;
+            }
+            
+            .quick-reply {
+                font-size: 14px;
+                padding: 10px 16px;
+            }
+        }
+
+        /* Accessibility improvements */
+        .message a {
+            color: inherit;
+            text-decoration: underline;
+            text-decoration-color: rgba(255,255,255,0.5);
+        }
+
+        .bot-message a {
+            color: var(--brand-color, #8B5CF6);
+            text-decoration-color: var(--brand-color, #8B5CF6);
+        }
+
+        /* Error states */
+        .error-message {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin: 10px 0;
+            text-align: center;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
     <div class="chat-messages" id="chatMessages">
-        <div class="loading-message">Loading chat...</div>
+        <div class="loading-message">
+            <div class="loading-spinner"></div>
+            Loading chat...
+        </div>
     </div>
 
     <div class="typing-indicator" id="typingIndicator">
@@ -248,8 +397,9 @@
             id="chatInput" 
             placeholder="Type your question..."
             onkeypress="handleKeyPress(event)"
+            disabled
         >
-        <button class="send-button" onclick="sendMessage()">Send</button>
+        <button class="send-button" id="sendButton" onclick="sendMessage()" disabled>Send</button>
     </div>
 
     <script>
@@ -264,60 +414,135 @@
         const urlParams = new URLSearchParams(window.location.search);
         operatorId = urlParams.get('operator');
 
-        console.log('Chat loading with operator ID:', operatorId);
+        console.log('Enhanced chat loading with operator ID:', operatorId);
 
         if (!operatorId) {
-            document.getElementById('chatMessages').innerHTML = '<div class="loading-message">Error: No operator ID provided</div>';
+            showError('Error: No operator ID provided');
         } else {
             loadOperatorConfig();
         }
 
-        // Load operator configuration
+        // Load operator configuration and apply branding
         async function loadOperatorConfig() {
             try {
-                console.log('Loading config for operator:', operatorId);
+                console.log('Loading enhanced config for operator:', operatorId);
                 const response = await fetch(`${serverUrl}/api/config/${operatorId}`);
                 if (!response.ok) {
                     throw new Error(`Config not found (${response.status})`);
                 }
                 
                 businessConfig = await response.json();
-                console.log('Loaded config:', businessConfig);
+                console.log('Loaded enhanced config:', businessConfig);
                 
-                // Initialize chat with welcome message
-                initializeChat();
+                // Apply branding
+                applyBranding(businessConfig);
+                
+                // Initialize chat with enhanced welcome message
+                initializeEnhancedChat();
                 
             } catch (error) {
                 console.error('Error loading config:', error);
-                document.getElementById('chatMessages').innerHTML = 
-                    `<div class="loading-message">Error loading chat: ${error.message}</div>`;
+                showError(`Error loading chat: ${error.message}`);
             }
         }
 
-        // Initialize chat interface
-        function initializeChat() {
+        // Apply branding from config
+        function applyBranding(config) {
+            const brandColor = config.brandColor || '#8B5CF6';
+            const brandColorDark = darkenColor(brandColor, 15);
+            
+            // Set CSS custom properties
+            document.documentElement.style.setProperty('--brand-color', brandColor);
+            document.documentElement.style.setProperty('--brand-color-dark', brandColorDark);
+            
+            console.log('Applied branding:', brandColor);
+        }
+
+        // Helper function to darken colors
+        function darkenColor(hex, percent = 15) {
+            const num = parseInt(hex.replace("#", ""), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = (num >> 16) - amt;
+            const G = (num >> 8 & 0x00FF) - amt;
+            const B = (num & 0x0000FF) - amt;
+            return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+                (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+                (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
+        }
+
+        // Initialize enhanced chat interface
+        function initializeEnhancedChat() {
             const businessName = businessConfig.businessName || 'our business';
             const businessType = businessConfig.businessType || 'tours';
+            const companyTagline = businessConfig.companyTagline || '';
+            const customGreeting = businessConfig.customGreeting || '';
+            
+            // Use custom greeting if provided, otherwise use default
+            let welcomeMessage;
+            if (customGreeting) {
+                welcomeMessage = customGreeting.replace(/\[Business Name\]/g, businessName);
+            } else {
+                welcomeMessage = `👋 Hi! Welcome to ${businessName}${companyTagline ? ` - ${companyTagline}` : ''}. I'm here to help with your ${businessType} questions. What would you like to know?`;
+            }
             
             const messagesContainer = document.getElementById('chatMessages');
-            messagesContainer.innerHTML = `
-                <div class="message bot-message">
-                    <div>👋 Hi! I'm here to help with ${businessName} questions. What would you like to know?</div>
-                    <div class="quick-replies">
-                        <button class="quick-reply" onclick="sendQuickReply('What are your tour times?')">Tour Times</button>
-                        <button class="quick-reply" onclick="sendQuickReply('How much does it cost?')">Pricing</button>
-                        <button class="quick-reply" onclick="sendQuickReply('Where do I meet you?')">Location</button>
-                        <button class="quick-reply" onclick="sendQuickReply('What should I bring?')">What to Bring</button>
+            messagesContainer.innerHTML = '';
+
+            // Add business info card if we have extra details
+            if (businessConfig.websiteUrl || businessConfig.phoneNumber || businessConfig.businessHours) {
+                const businessInfoHtml = `
+                    <div class="message bot-message">
+                        <div class="business-info">
+                            <h4>${businessName}</h4>
+                            <p>${companyTagline || `Your trusted ${businessType} provider`}</p>
+                        </div>
                     </div>
+                `;
+                messagesContainer.insertAdjacentHTML('beforeend', businessInfoHtml);
+            }
+
+            // Add main welcome message
+            const welcomeHtml = `
+                <div class="message bot-message">
+                    <div>${welcomeMessage}</div>
+                    <div class="quick-replies">
+                        <button class="quick-reply" onclick="sendQuickReply('What are your tour times?')">🕒 Tour Times</button>
+                        <button class="quick-reply" onclick="sendQuickReply('How much does it cost?')">💰 Pricing</button>
+                        <button class="quick-reply" onclick="sendQuickReply('Where do I meet you?')">📍 Location</button>
+                        <button class="quick-reply" onclick="sendQuickReply('What should I bring?')">🎒 What to Bring</button>
+                    </div>
+                </div>
+            `;
+            messagesContainer.insertAdjacentHTML('beforeend', welcomeHtml);
+
+            // Enable input
+            const chatInput = document.getElementById('chatInput');
+            const sendButton = document.getElementById('sendButton');
+            chatInput.disabled = false;
+            sendButton.disabled = false;
+            chatInput.placeholder = "Type your question...";
+            chatInput.focus();
+        }
+
+        function showError(message) {
+            const messagesContainer = document.getElementById('chatMessages');
+            messagesContainer.innerHTML = `
+                <div class="error-message">
+                    ${message}
                 </div>
             `;
         }
 
         async function sendMessage() {
             const input = document.getElementById('chatInput');
+            const sendButton = document.getElementById('sendButton');
             const message = input.value.trim();
             
             if (!message) return;
+            
+            // Disable input while processing
+            input.disabled = true;
+            sendButton.disabled = true;
             
             // Display user message
             displayMessage(message, 'user');
@@ -330,17 +555,25 @@
                 showContactForm(); // Show contact form first
             } else {
                 // Normal message flow - send directly to server
-                sendMessageToServer(message);
+                await sendMessageToServer(message);
             }
+            
+            // Re-enable input
+            input.disabled = false;
+            sendButton.disabled = false;
+            input.focus();
         }
 
-        // Show contact form
+        // Enhanced contact form
         function showContactForm() {
+            const businessName = businessConfig.businessName || 'our business';
+            const responseTime = businessConfig.responseTime || '30 minutes';
+            
             const contactFormHtml = `
                 <div class="message bot-message">
                     <div class="contact-form">
                         <h4>👋 Quick question first!</h4>
-                        <p>Could we get your email so we can send you tour info and follow up if needed?</p>
+                        <p>Could we get your email so we can send you ${businessConfig.businessType || 'tour'} info and follow up if needed? We typically respond within ${responseTime}.</p>
                         <div class="form-row">
                             <input 
                                 type="email" 
@@ -357,9 +590,9 @@
                         </div>
                         <div class="form-buttons">
                             <button class="submit-btn" onclick="submitContact()">Continue →</button>
-                            <button class="skip-btn" onclick="skipContact()">Skip</button>
+                            <button class="skip-btn" onclick="skipContact()">Skip for now</button>
                         </div>
-                        <p class="help-text">We'll use this to send you tour details and follow up if you go offline</p>
+                        <p class="help-text">We'll use this to send you ${businessConfig.businessType || 'tour'} details and follow up if you have questions later</p>
                     </div>
                 </div>
             `;
@@ -382,16 +615,18 @@
             // Validate email
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!email || !emailRegex.test(email)) {
-                document.getElementById('contactEmail').style.borderColor = '#EF4444';
-                document.getElementById('contactEmail').placeholder = 'Please enter a valid email';
-                document.getElementById('contactEmail').value = '';
+                const emailInput = document.getElementById('contactEmail');
+                emailInput.style.borderColor = '#EF4444';
+                emailInput.placeholder = 'Please enter a valid email';
+                emailInput.value = '';
+                emailInput.focus();
                 return;
             }
             
             hasProvidedContact = true;
             
             try {
-                // Send contact info to server with operator and session info
+                // Send contact info to server
                 await fetch(`${serverUrl}/contact-info`, {
                     method: 'POST',
                     headers: {
@@ -401,27 +636,36 @@
                         email, 
                         phone, 
                         operatorId: operatorId,
-                        sessionId: 'default' // You could make this dynamic if needed
+                        sessionId: 'default'
                     })
                 });
                 
-                console.log('Contact info saved:', { email, phone, operatorId });
+                console.log('Enhanced contact info saved:', { email, phone, operatorId });
                 
                 // Replace contact form with success message
                 const lastMessage = document.querySelector('.message:last-child');
                 lastMessage.innerHTML = `
-                    <div style="color: #333333; font-weight: 500; font-size: 14px;">
+                    <div style="
+                        color: #059669; 
+                        font-weight: 600; 
+                        font-size: 14px;
+                        text-align: center;
+                        padding: 16px;
+                        background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+                        border-radius: 12px;
+                        border: 1px solid #a7f3d0;
+                    ">
                         ✨ Perfect! Now let me help you with your question...
                     </div>
                 `;
                 
-                // Now send the original message to get the response
-                setTimeout(() => {
+                // Send the original message after a brief delay
+                setTimeout(async () => {
                     if (pendingMessage) {
-                        sendMessageToServer(pendingMessage);
+                        await sendMessageToServer(pendingMessage);
                         pendingMessage = null;
                     }
-                }, 1000);
+                }, 1500);
                 
             } catch (error) {
                 console.error('Error saving contact:', error);
@@ -468,9 +712,9 @@
                 displayMessage(data.response, 'bot');
                 
             } catch (error) {
-                console.error('Chat error:', error);
+                console.error('Enhanced chat error:', error);
                 hideTyping();
-                displayMessage('Sorry, I\'m having connection issues. Please try again.', 'bot');
+                displayMessage('Sorry, I\'m having connection issues. Please try again or contact us directly.', 'bot');
             }
         }
 
@@ -485,12 +729,19 @@
             messageDiv.className = `message ${sender}-message`;
             messageDiv.innerHTML = text;
             messagesContainer.appendChild(messageDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            // Smooth scroll to bottom
+            setTimeout(() => {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }, 100);
         }
 
         function showTyping() {
             document.getElementById('typingIndicator').style.display = 'block';
-            document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+            const messagesContainer = document.getElementById('chatMessages');
+            setTimeout(() => {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }, 100);
         }
 
         function hideTyping() {
@@ -498,10 +749,19 @@
         }
 
         function handleKeyPress(event) {
-            if (event.key === 'Enter') {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
                 sendMessage();
             }
         }
+
+        // Auto-resize input on mobile
+        window.addEventListener('resize', function() {
+            const chatInput = document.getElementById('chatInput');
+            if (window.innerWidth <= 768) {
+                chatInput.style.fontSize = '16px'; // Prevent zoom on iOS
+            }
+        });
     </script>
 </body>
 </html>
