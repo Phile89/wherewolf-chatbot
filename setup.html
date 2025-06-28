@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Setup</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 40px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+
+        .form-section {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .form-section h3 {
+            color: #495057;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ced4da;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #8B5CF6;
+        }
+
+        /* FIXED: Simple time slot styling */
+        .time-slots {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .time-slot {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .time-slot:hover {
+            border-color: #8B5CF6;
+        }
+
+        .time-slot.selected {
+            border-color: #8B5CF6;
+            background-color: #f3f0ff;
+        }
+
+        .time-slot input {
+            width: auto !important;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .generate-btn {
+            background: #8B5CF6;
+            color: white;
+            padding: 16px 35px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.2em;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 30px;
+        }
+
+        .generate-btn:hover {
+            background: #7C3AED;
+        }
+
+        .embed-code {
+            background: #1e293b;
+            color: #94a3b8;
+            padding: 25px;
+            border-radius: 10px;
+            margin-top: 25px;
+            font-family: 'Courier New', monospace;
+            position: relative;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #475569;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .help-text {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚤 Set Up Your Chatbot</h1>
+        
+        <form id="chatbotForm">
+            <div class="form-section">
+                <h3>Basic Information</h3>
+                
+                <div class="form-group">
+                    <label for="businessName">Business Name</label>
+                    <input type="text" id="businessName" required placeholder="Key West Boat Tours">
+                </div>
+
+                <div class="form-group">
+                    <label for="businessType">Type of Tours / Activity</label>
+                    <select id="businessType">
+                        <option>Boat Tours</option>
+                        <option>Jet Ski Rentals</option>
+                        <option>Fishing Charters</option>
+                        <option>Kayak Tours</option>
+                        <option>Other</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="location">Location / Meeting Point</label>
+                    <input type="text" id="location" placeholder="Marina Bay, Dock 5">
+                </div>
+            </div>
+
+        <!-- FIXED: Time slots with proper click handling -->
+        <div class="form-section">
+            <h3>Tour Schedule</h3>
+            
+            <div class="form-group">
+                <label>Standard Tour Times (click to select)</label>
+                <div class="time-slots">
+                    <label class="time-slot">
+                        <input type="checkbox" value="7:00 AM" onchange="updateTimeSlot(this)">
+                        <span>7:00 AM</span>
+                    </label>
+                    <label class="time-slot">
+                        <input type="checkbox" value="9:00 AM" onchange="updateTimeSlot(this)" checked>
+                        <span>9:00 AM</span>
+                    </label>
+                    <label class="time-slot">
+                        <input type="checkbox" value="11:00 AM" onchange="updateTimeSlot(this)">
+                        <span>11:00 AM</span>
+                    </label>
+                    <label class="time-slot">
+                        <input type="checkbox" value="1:00 PM" onchange="updateTimeSlot(this)">
+                        <span>1:00 PM</span>
+                    </label>
+                    <label class="time-slot">
+                        <input type="checkbox" value="2:00 PM" onchange="updateTimeSlot(this)" checked>
+                        <span>2:00 PM</span>
+                    </label>
+                    <label class="time-slot">
+                        <input type="checkbox" value="5:00 PM" onchange="updateTimeSlot(this)" checked>
+                        <span>5:00 PM (Sunset)</span>
+                    </label>
+                </div>
+                <p class="help-text">Click on time slots to select them.</p>
+            </div>
+
+                <div class="form-group">
+                    <label for="duration">Typical Tour Duration</label>
+                    <input type="text" id="duration" placeholder="2.5 hours">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Pricing</h3>
+                
+                <div class="form-group">
+                    <label for="adultPrice">Adult Price</label>
+                    <input type="text" id="adultPrice" placeholder="$95 USD">
+                </div>
+                
+                <div class="form-group">
+                    <label for="childPrice">Child Price</label>
+                    <input type="text" id="childPrice" placeholder="$65 USD (ages 4-12)">
+                </div>
+
+                <div class="form-group">
+                    <label for="groupDiscount">Group Discount (optional)</label>
+                    <input type="text" id="groupDiscount" placeholder="15% off for 6+ people">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Important Information</h3>
+                
+                <div class="form-group">
+                    <label for="whatToBring">What to Bring</label>
+                    <textarea id="whatToBring" placeholder="Sunscreen, sunglasses, camera">Sunscreen, sunglasses, camera, light jacket for evening tours</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="cancellationPolicy">Cancellation Policy</label>
+                    <textarea id="cancellationPolicy" placeholder="Full refund if cancelled 24 hours before tour">Full refund if cancelled 24 hours before tour</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="weatherPolicy">Weather Policy</label>
+                    <input type="text" id="weatherPolicy" placeholder="Tours run in light rain, full refund for storms">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Waiver Integration</h3>
+                
+                <div class="form-group">
+                    <label for="waiverLink">Your Wherewolf Waiver Link</label>
+                    <input type="url" id="waiverLink" placeholder="https://mono.wherewolf.co.nz/your-waiver-id">
+                </div>
+            </div>
+
+            <button type="submit" class="generate-btn">Generate My Chatbot</button>
+        </form>
+
+        <div id="embedSection" style="display: none;">
+            <h3 style="margin-top: 40px;">🎉 Your Chatbot is Ready!</h3>
+            <p style="margin-bottom: 20px;">Copy this code and paste it into your website:</p>
+            
+            <div class="embed-code">
+                <button class="copy-btn" onclick="copyCode()">Copy Code</button>
+                <pre id="embedCode"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize selected time slots on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set initial selected state for checked checkboxes
+            document.querySelectorAll('.time-slot input:checked').forEach(function(checkbox) {
+                updateTimeSlot(checkbox);
+            });
+        });
+
+        // FIXED: Simple time slot update function
+        function updateTimeSlot(checkbox) {
+            const slotElement = checkbox.closest('.time-slot');
+            
+            if (checkbox.checked) {
+                slotElement.classList.add('selected');
+            } else {
+                slotElement.classList.remove('selected');
+            }
+        }
+
+        // Handle form submission
+        document.getElementById('chatbotForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            // Collect selected times - FIXED
+            const selectedTimes = Array.from(document.querySelectorAll('.time-slot input:checked'))
+                .map(cb => cb.value);
+
+            console.log('Selected times:', selectedTimes); // Debug log
+
+            const config = {
+                businessName: document.getElementById('businessName').value,
+                businessType: document.getElementById('businessType').value,
+                location: document.getElementById('location').value,
+                times: selectedTimes,
+                duration: document.getElementById('duration').value,
+                adultPrice: document.getElementById('adultPrice').value,
+                childPrice: document.getElementById('childPrice').value,
+                groupDiscount: document.getElementById('groupDiscount').value,
+                whatToBring: document.getElementById('whatToBring').value,
+                cancellationPolicy: document.getElementById('cancellationPolicy').value,
+                weatherPolicy: document.getElementById('weatherPolicy').value,
+                waiverLink: document.getElementById('waiverLink').value
+            };
+
+            console.log('Submitting config:', config);
+
+            try {
+                const response = await fetch('/api/save-config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(config)
+                });
+
+                const result = await response.json();
+                console.log('Server response:', result);
+
+                if (result.success && result.embedCode) {
+                    document.getElementById('embedCode').textContent = result.embedCode;
+                    document.getElementById('embedSection').style.display = 'block';
+                    document.getElementById('embedSection').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    alert('Failed to generate chatbot: ' + JSON.stringify(result));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error saving configuration: ' + error.message);
+            }
+        });
+
+        function copyCode() {
+            const embedCodeElement = document.getElementById('embedCode');
+            const textToCopy = embedCodeElement.textContent;
+
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    alert('Embed code copied to clipboard!');
+                });
+            } else {
+                // Fallback
+                const textArea = document.createElement("textarea");
+                textArea.value = textToCopy;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('Embed code copied to clipboard!');
+            }
+        }
+    </script>
+</body>
+</html>
