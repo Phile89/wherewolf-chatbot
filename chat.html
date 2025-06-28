@@ -171,6 +171,7 @@
     <script>
         let operatorId = null;
         let businessConfig = null;
+        let serverUrl = 'https://wherewolf-chatbot.onrender.com'; // FIXED: Use absolute URL
 
         // Get operator ID from URL
         const urlParams = new URLSearchParams(window.location.search);
@@ -188,7 +189,8 @@
         async function loadOperatorConfig() {
             try {
                 console.log('Loading config for operator:', operatorId);
-                const response = await fetch(`/api/config/${operatorId}`);
+                // FIXED: Use absolute URL for API calls
+                const response = await fetch(`${serverUrl}/api/config/${operatorId}`);
                 if (!response.ok) {
                     throw new Error(`Config not found (${response.status})`);
                 }
@@ -244,7 +246,8 @@
             
             try {
                 console.log('Sending message:', message, 'with operator:', operatorId);
-                const response = await fetch('/api/chat', {
+                // FIXED: Use absolute URL for API calls
+                const response = await fetch(`${serverUrl}/api/chat`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
