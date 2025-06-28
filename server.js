@@ -3,9 +3,11 @@ const cors = require('cors');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const nodemailer = require('nodemailer'); // NEW: Email service
 require('dotenv').config();
 
 console.log('CLAUDE_API_KEY:', process.env.CLAUDE_API_KEY ? 'Loaded' : 'Missing');
+console.log('GMAIL_USER:', process.env.GMAIL_USER ? 'Loaded' : 'Missing');
 console.log('PORT:', process.env.PORT || 3000);
 
 const app = express();
@@ -23,6 +25,102 @@ if (!fs.existsSync(configsDir)) {
 
 // Conversation history storage
 const conversations = {};
+
+// NEW: Email transporter setup
+let emailTransporter = null;
+if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
+    emailTransporter = nodemailer.createTransporter({
+        service: 'gmail',
+        auth: {
+            user: process.env.GMAIL_USER,
+            pass: process.env.GMAIL_PASS
+        }
+    });
+    console.log('Email service configured');
+} else {
+    console.log('Email service not configured (missing credentials)');
+}
+
+// NEW: Function to send handoff email
+async function sendHandoffEmail(config, conversationHistory, customerContact, operatorId) {
+    if (!emailTransporter) {
+        console.log('Email service not available');
+        return false;
+    }
+
+    try {
+        const businessName = config.businessName || 'Your Business';
+        const customerEmail = customerContact?.email || 'Not provided';
+        const customerPhone = customerContact?.phone || 'Not provided';
+        
+        // Format conversation history
+        let conversationText = '';
+        conversationHistory.forEach((msg, index) => {
+            const role = msg.role === 'user' ? 'Customer' : 'Chatbot';
+            conversationText += `${role}: ${msg.content}\n\n`;
+        });
+
+        const emailContent = `
+🚨 AGENT HANDOFF REQUEST
+
+Business: ${businessName}
+Operator ID: ${operatorId}
+Time: ${new Date().toLocaleString()}
+
+📞 CUSTOMER CONTACT:
+Email: ${customerEmail}
+Phone: ${customerPhone}
+
+💬 CONVERSATION HISTORY:
+${conversationText}
+
+---
+The customer has requested to speak with a human agent. Please reach out to them as soon as possible.
+
+Best regards,
+Wherewolf Chatbot System
+        `;
+
+        const mailOptions = {
+            from: process.env.GMAIL_USER,
+            to: process.env.OPERATOR_EMAIL || process.env.GMAIL_USER,
+            subject: `🚨 Agent Request: ${businessName} - ${customerEmail}`,
+            text: emailContent,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background: #8B5CF6; color: white; padding: 20px; text-align: center;">
+                        <h2>🚨 Agent Handoff Request</h2>
+                    </div>
+                    <div style="padding: 20px; background: #f9f9f9;">
+                        <h3>Business Details</h3>
+                        <p><strong>Business:</strong> ${businessName}</p>
+                        <p><strong>Operator ID:</strong> ${operatorId}</p>
+                        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+                    </div>
+                    <div style="padding: 20px;">
+                        <h3>📞 Customer Contact</h3>
+                        <p><strong>Email:</strong> <a href="mailto:${customerEmail}">${customerEmail}</a></p>
+                        <p><strong>Phone:</strong> <a href="tel:${customerPhone}">${customerPhone}</a></p>
+                    </div>
+                    <div style="padding: 20px; background: #f9f9f9;">
+                        <h3>💬 Conversation History</h3>
+                        <pre style="white-space: pre-wrap; background: white; padding: 15px; border-radius: 5px;">${conversationText}</pre>
+                    </div>
+                    <div style="padding: 20px; text-align: center; background: #8B5CF6; color: white;">
+                        <p>Please reach out to the customer as soon as possible!</p>
+                    </div>
+                </div>
+            `
+        };
+
+        await emailTransporter.sendMail(mailOptions);
+        console.log('Handoff email sent successfully');
+        return true;
+    } catch (error) {
+        console.error('Error sending handoff email:', error);
+        return false;
+    }
+}
 
 // Root route redirect
 app.get('/', (req, res) => {
@@ -101,7 +199,10 @@ app.get('/api/config/:operatorId', (req, res) => {
     }
 });
 
-// Main Chat endpoint
+// NEW: Store customer contact info globally
+const customerContacts = {};
+
+// Main Chat endpoint with agent handoff
 app.post('/api/chat', async function(req, res) {
     const { message, sessionId = 'default', operatorId } = req.body;
 
@@ -137,7 +238,36 @@ app.post('/api/chat', async function(req, res) {
     const lowerMessage = message.toLowerCase();
     const waiverLink = currentConfig.waiverLink || "No waiver link provided.";
 
-    // Check for waiver/form related keywords first
+    // NEW: Check for agent/human requests FIRST
+    if (
+        lowerMessage.includes('agent') ||
+        lowerMessage.includes('human') ||
+        lowerMessage.includes('speak to someone') ||
+        lowerMessage.includes('talk to someone') ||
+        lowerMessage.includes('representative') ||
+        lowerMessage.includes('person') ||
+        lowerMessage.includes('staff') ||
+        lowerMessage.includes('manager') ||
+        lowerMessage.includes('urgent') ||
+        lowerMessage.includes('call me') ||
+        lowerMessage.includes('phone call')
+    ) {
+        // Try to send handoff email
+        const customerContact = customerContacts[sessionKey];
+        const emailSent = await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+        
+        let botResponse;
+        if (emailSent) {
+            botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within 30 minutes. In the meantime, what's the best way to contact you - the email you provided earlier, or would you prefer a phone call?`;
+        } else {
+            botResponse = `I'd love to connect you with our team! 👥 Please email us directly at ${process.env.OPERATOR_EMAIL || 'your-email@example.com'} or call us, and we'll help you right away. Include "URGENT" in your subject line for fastest response.`;
+        }
+        
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        return res.json({ response: botResponse });
+    }
+
+    // Check for waiver/form related keywords
     if (
         lowerMessage.includes('waiver') ||
         lowerMessage.includes('form') ||
@@ -184,7 +314,9 @@ app.post('/api/chat', async function(req, res) {
     - Cancellation Policy: ${cancellationPolicy}
     - Weather Policy: ${weatherPolicy}
 
-    IMPORTANT: Keep responses to 2-3 short sentences. Be friendly and helpful but concise. Never say "undefined" or "null" - always provide helpful information.`;
+    IMPORTANT: Keep responses to 2-3 short sentences. Be friendly and helpful but concise. Never say "undefined" or "null" - always provide helpful information.
+
+    If someone needs complex help or wants to make a special request, suggest they can "speak to someone from our team" for personalized assistance.`;
 
     try {
         // Call Claude API
@@ -216,7 +348,7 @@ app.post('/api/chat', async function(req, res) {
         console.error('Error with Claude API:', error.response?.data || error.message);
 
         // Improved fallback responses
-        let fallbackResponse = "Sorry, I'm having connection issues. Please contact us directly for assistance!";
+        let fallbackResponse = "Sorry, I'm having connection issues. For immediate help, please speak to someone from our team!";
 
         if (lowerMessage.includes('time') || lowerMessage.includes('schedule')) {
             if (currentConfig.times && Array.isArray(currentConfig.times) && currentConfig.times.length > 0) {
@@ -245,12 +377,18 @@ app.post('/api/chat', async function(req, res) {
     }
 });
 
-// Contact info capture
+// UPDATED: Contact info capture with session storage
 app.post('/contact-info', (req, res) => {
-    const { email, phone } = req.body;
+    const { email, phone, operatorId, sessionId = 'default' } = req.body;
+    const sessionKey = `${operatorId}_${sessionId}`;
+    
+    // Store customer contact for this session
+    customerContacts[sessionKey] = { email, phone };
+    
     console.log('📬 Received contact info:', {
         email: email || 'N/A',
-        phone: phone || 'N/A'
+        phone: phone || 'N/A',
+        session: sessionKey
     });
     res.sendStatus(200);
 });
@@ -260,7 +398,8 @@ app.get('/api/test', (req, res) => {
     res.json({ 
         success: true, 
         message: 'Server is working!',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        emailConfigured: !!emailTransporter
     });
 });
 
@@ -276,6 +415,7 @@ app.get('/api/debug/:operatorId', (req, res) => {
                 success: true,
                 operatorId,
                 config,
+                emailConfigured: !!emailTransporter,
                 timesData: {
                     raw: config.times,
                     isArray: Array.isArray(config.times),
@@ -298,4 +438,5 @@ app.listen(PORT, () => {
     console.log('📝 Setup page: /setup');
     console.log('💬 Chat interface: /chat.html');
     console.log('🔧 API test: /api/test');
+    console.log('📧 Email service:', emailTransporter ? 'Ready' : 'Not configured');
 });
