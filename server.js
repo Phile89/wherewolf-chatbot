@@ -398,40 +398,62 @@ app.get('/api/dashboard/conversation/:conversationId/messages', async (req, res)
     }
 });
 
-// Dashboard API - Get stats (with optional operator filter)
+// Dashboard API - Get stats (with optional operator filter) - FIXED VERSION
 app.get('/api/dashboard/stats', async (req, res) => {
     try {
         const operatorFilter = req.query.operator;
         
-        let whereClause = "WHERE started_at >= NOW() - INTERVAL '7 days'";
-        let params = [];
+        let statsQuery;
+        let statsParams = [];
         
         if (operatorFilter) {
-            whereClause += " AND operator_id = $1";
-            params.push(operatorFilter);
+            statsQuery = `
+                SELECT 
+                    COUNT(*) as total_conversations,
+                    COUNT(*) FILTER (WHERE agent_requested = true) as agent_requests,
+                    COUNT(*) FILTER (WHERE customer_email IS NOT NULL) as with_email,
+                    COUNT(DISTINCT operator_id) as active_operators
+                FROM conversations 
+                WHERE started_at >= NOW() - INTERVAL '7 days' AND operator_id = $1
+            `;
+            statsParams = [operatorFilter];
+        } else {
+            statsQuery = `
+                SELECT 
+                    COUNT(*) as total_conversations,
+                    COUNT(*) FILTER (WHERE agent_requested = true) as agent_requests,
+                    COUNT(*) FILTER (WHERE customer_email IS NOT NULL) as with_email,
+                    COUNT(DISTINCT operator_id) as active_operators
+                FROM conversations 
+                WHERE started_at >= NOW() - INTERVAL '7 days'
+            `;
+            statsParams = [];
+        }
+
+        const stats = await pool.query(statsQuery, statsParams);
+
+        // Recent messages query
+        let recentMessagesQuery;
+        let recentParams = [];
+        
+        if (operatorFilter) {
+            recentMessagesQuery = `
+                SELECT COUNT(*) as total_messages
+                FROM messages m
+                JOIN conversations c ON m.conversation_id = c.conversation_id
+                WHERE m.timestamp >= NOW() - INTERVAL '24 hours' AND c.operator_id = $1
+            `;
+            recentParams = [operatorFilter];
+        } else {
+            recentMessagesQuery = `
+                SELECT COUNT(*) as total_messages
+                FROM messages m
+                JOIN conversations c ON m.conversation_id = c.conversation_id
+                WHERE m.timestamp >= NOW() - INTERVAL '24 hours'
+            `;
+            recentParams = [];
         }
         
-        const statsQuery = `
-            SELECT 
-                COUNT(*) as total_conversations,
-                COUNT(*) FILTER (WHERE agent_requested = true) as agent_requests,
-                COUNT(*) FILTER (WHERE customer_email IS NOT NULL) as with_email,
-                COUNT(DISTINCT operator_id) as active_operators
-            FROM conversations 
-            ${whereClause}
-        `;
-
-        const stats = await pool.query(statsQuery, params);
-
-        const recentMessagesQuery = `
-            SELECT COUNT(*) as total_messages
-            FROM messages m
-            JOIN conversations c ON m.conversation_id = c.conversation_id
-            WHERE m.timestamp >= NOW() - INTERVAL '24 hours'
-            ${operatorFilter ? 'AND c.operator_id = $' + (params.length + 1) : ''}
-        `;
-        
-        const recentParams = operatorFilter ? [...params, operatorFilter] : params;
         const recentMessages = await pool.query(recentMessagesQuery, recentParams);
 
         res.json({
