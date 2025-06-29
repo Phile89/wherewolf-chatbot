@@ -78,7 +78,7 @@ const conversations = {};
 // Email transporter setup
 let emailTransporter = null;
 if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
-    emailTransporter = nodemailer.createTransport({
+    emailTransporter = nodemailer.createTransporter({
         service: 'gmail',
         auth: {
             user: process.env.GMAIL_USER,
@@ -700,7 +700,150 @@ If someone needs complex help or wants to make special requests, suggest they ca
     return SYSTEM_PROMPT;
 }
 
-// Enhanced Chat endpoint with database logging
+// 🆕 NEW: Poll for new messages endpoint (for customers to get operator responses)
+app.post('/api/chat/poll-messages', async (req, res) => {
+    const { operatorId, sessionId = 'default', lastMessageCount = 0 } = req.body;
+
+    if (!operatorId) {
+        return res.status(400).json({ error: 'operatorId is required' });
+    }
+
+    const sessionKey = `${operatorId}_${sessionId}`;
+
+    try {
+        // Get conversation from database
+        const convResult = await pool.query(
+            'SELECT conversation_id FROM conversations WHERE session_key = $1',
+            [sessionKey]
+        );
+
+        if (convResult.rows.length === 0) {
+            return res.json({ newMessages: [], totalMessages: 0 });
+        }
+
+        const conversationId = convResult.rows[0].conversation_id;
+
+        // Get messages newer than the last count
+        const messagesResult = await pool.query(`
+            SELECT role, content, timestamp
+            FROM messages 
+            WHERE conversation_id = $1 
+            ORDER BY timestamp ASC
+        `, [conversationId]);
+
+        const allMessages = messagesResult.rows;
+        const newMessages = allMessages.slice(lastMessageCount);
+
+        // Filter to only operator and system messages for polling
+        const operatorMessages = newMessages.filter(msg => 
+            msg.role === 'operator' || msg.role === 'system'
+        );
+
+        res.json({
+            newMessages: operatorMessages,
+            totalMessages: allMessages.length,
+            hasOperatorMessages: operatorMessages.length > 0
+        });
+
+    } catch (error) {
+        console.error('Error polling messages:', error);
+        res.status(500).json({ error: 'Failed to poll messages' });
+    }
+});
+
+// 🆕 NEW: Send operator message endpoint
+app.post('/api/dashboard/send-message', async (req, res) => {
+    const { conversationId, message, operatorId } = req.body;
+
+    if (!conversationId || !message) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'conversationId and message are required' 
+        });
+    }
+
+    try {
+        // Check if this is the first operator message in this conversation
+        const existingOperatorMessages = await pool.query(
+            'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
+            [conversationId, 'operator']
+        );
+
+        const isFirstOperatorMessage = parseInt(existingOperatorMessages.rows[0].count) === 0;
+
+        // Add system message if this is the first operator message
+        if (isFirstOperatorMessage) {
+            await pool.query(
+                'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+                [conversationId, 'system', '👨‍💼 A team member has joined the chat to assist you personally!']
+            );
+            
+            await pool.query(
+                'UPDATE conversations SET last_message_at = NOW(), message_count = message_count + 1 WHERE conversation_id = $1',
+                [conversationId]
+            );
+        }
+
+        // Save operator message to database
+        await pool.query(
+            'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+            [conversationId, 'operator', message]
+        );
+
+        // Update conversation last_message_at and message_count
+        await pool.query(
+            'UPDATE conversations SET last_message_at = NOW(), message_count = message_count + 1 WHERE conversation_id = $1',
+            [conversationId]
+        );
+
+        // Get conversation details for session management
+        const convResult = await pool.query(
+            'SELECT operator_id, session_key FROM conversations WHERE conversation_id = $1',
+            [conversationId]
+        );
+
+        if (convResult.rows.length > 0) {
+            const { operator_id, session_key } = convResult.rows[0];
+            
+            // Add operator message to in-memory conversation
+            if (!conversations[session_key]) {
+                conversations[session_key] = [];
+            }
+            
+            // Add system message to memory if first operator message
+            if (isFirstOperatorMessage) {
+                conversations[session_key].push({
+                    role: 'system',
+                    content: '👨‍💼 A team member has joined the chat to assist you personally!'
+                });
+            }
+            
+            // Add the actual operator message
+            conversations[session_key].push({
+                role: 'operator',
+                content: message
+            });
+
+            console.log(`💬 Operator message sent to conversation ${conversationId}: ${message}`);
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'Operator message sent successfully',
+            timestamp: new Date().toISOString(),
+            isFirstMessage: isFirstOperatorMessage
+        });
+
+    } catch (error) {
+        console.error('Error sending operator message:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to send operator message' 
+        });
+    }
+});
+
+// 🆕 UPDATED: Enhanced Chat endpoint with operator message detection
 app.post('/api/chat', async function(req, res) {
     const { message, sessionId = 'default', operatorId } = req.body;
 
@@ -739,21 +882,22 @@ app.post('/api/chat', async function(req, res) {
         conversations[sessionKey] = [];
     }
     conversations[sessionKey].push({ role: 'user', content: message });
-// Check if an operator has taken over this conversation (check database, not memory)
-const operatorCheckResult = await pool.query(
-    'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
-    [conversation.conversation_id, 'operator']
-);
 
-const hasOperatorMessages = parseInt(operatorCheckResult.rows[0].count) > 0;
+    // 🆕 NEW: Check if an operator has taken over this conversation (check database, not memory)
+    const operatorCheckResult = await pool.query(
+        'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
+        [conversation.conversation_id, 'operator']
+    );
 
-if (hasOperatorMessages) {
-    // Operator has taken over - don't respond with bot, just acknowledge
-    const operatorResponse = "Thanks for your message! Our team member will respond shortly.";
-    conversations[sessionKey].push({ role: 'assistant', content: operatorResponse });
-    await saveMessage(conversation.conversation_id, 'assistant', operatorResponse);
-    return res.json({ response: operatorResponse });
-}
+    const hasOperatorMessages = parseInt(operatorCheckResult.rows[0].count) > 0;
+
+    if (hasOperatorMessages) {
+        // Operator has taken over - don't respond with bot, just acknowledge
+        const operatorResponse = "Thanks for your message! Our team member will respond shortly.";
+        conversations[sessionKey].push({ role: 'assistant', content: operatorResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', operatorResponse);
+        return res.json({ response: operatorResponse });
+    }
 
     const lowerMessage = message.toLowerCase();
     const waiverLink = currentConfig.waiverLink || "No waiver link provided.";
@@ -790,14 +934,14 @@ if (hasOperatorMessages) {
             if (emailTransporter) {
                 await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
             }
-            botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within ${responseTime}. How would you prefer to be contacted?`;
+            botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within ${responseTime}. You can also continue chatting here and they'll respond directly.`;
         } else {
             botResponse = `I'd love to connect you with our team! 👥 First, I'll need your contact information. What's your email address so our team can reach out within ${responseTime}?`;
         }
         
         conversations[sessionKey].push({ role: 'assistant', content: botResponse });
         await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-        return res.json({ response: botResponse });
+        return res.json({ response: botResponse, agentRequested: true });
     }
 
     // Handle agent handoff follow-ups (keeping existing logic)
@@ -970,7 +1114,7 @@ app.get('/api/test', (req, res) => {
         timestamp: new Date().toISOString(),
         emailConfigured: !!emailTransporter,
         databaseConfigured: !!process.env.DATABASE_URL,
-        version: 'Enhanced v2.1 with Dashboard'
+        version: 'Enhanced v2.1 with Two-Way Chat'
     });
 });
 
@@ -997,148 +1141,6 @@ app.get('/api/db-health', async (req, res) => {
         });
     }
 });
-// Send operator message endpoint
-app.post('/api/dashboard/send-message', async (req, res) => {
-    const { conversationId, message, operatorId } = req.body;
-
-    if (!conversationId || !message) {
-        return res.status(400).json({ 
-            success: false, 
-            error: 'conversationId and message are required' 
-        });
-    }
-
-    try {
-        // Check if this is the first operator message in this conversation
-        const existingOperatorMessages = await pool.query(
-            'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
-            [conversationId, 'operator']
-        );
-
-        const isFirstOperatorMessage = parseInt(existingOperatorMessages.rows[0].count) === 0;
-
-        // Add system message if this is the first operator message
-        if (isFirstOperatorMessage) {
-            await pool.query(
-                'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
-                [conversationId, 'system', '👨‍💼 A team member has joined the chat to assist you personally!']
-            );
-            
-            await pool.query(
-                'UPDATE conversations SET last_message_at = NOW(), message_count = message_count + 1 WHERE conversation_id = $1',
-                [conversationId]
-            );
-        }
-
-        // Save operator message to database
-        await pool.query(
-            'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
-            [conversationId, 'operator', message]
-        );
-
-        // Update conversation last_message_at and message_count
-        await pool.query(
-            'UPDATE conversations SET last_message_at = NOW(), message_count = message_count + 1 WHERE conversation_id = $1',
-            [conversationId]
-        );
-
-        // Get conversation details for session management
-        const convResult = await pool.query(
-            'SELECT operator_id, session_key FROM conversations WHERE conversation_id = $1',
-            [conversationId]
-        );
-
-        if (convResult.rows.length > 0) {
-            const { operator_id, session_key } = convResult.rows[0];
-            
-            // Add operator message to in-memory conversation
-            if (!conversations[session_key]) {
-                conversations[session_key] = [];
-            }
-            
-            // Add system message to memory if first operator message
-            if (isFirstOperatorMessage) {
-                conversations[session_key].push({
-                    role: 'system',
-                    content: '👨‍💼 A team member has joined the chat to assist you personally!'
-                });
-            }
-            
-            // Add the actual operator message
-            conversations[session_key].push({
-                role: 'operator',
-                content: message
-            });
-
-            console.log(`💬 Operator message sent to conversation ${conversationId}: ${message}`);
-        }
-
-        res.json({ 
-            success: true, 
-            message: 'Operator message sent successfully',
-            timestamp: new Date().toISOString(),
-            isFirstMessage: isFirstOperatorMessage
-        });
-
-    } catch (error) {
-        console.error('Error sending operator message:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to send operator message' 
-        });
-    }
-});
-
-// Poll for new messages endpoint (for customers to get operator responses)
-app.post('/api/chat/poll-messages', async (req, res) => {
-    const { operatorId, sessionId = 'default', lastMessageCount = 0 } = req.body;
-
-    if (!operatorId) {
-        return res.status(400).json({ error: 'operatorId is required' });
-    }
-
-    const sessionKey = `${operatorId}_${sessionId}`;
-
-    try {
-        // Get conversation from database
-        const convResult = await pool.query(
-            'SELECT conversation_id FROM conversations WHERE session_key = $1',
-            [sessionKey]
-        );
-
-        if (convResult.rows.length === 0) {
-            return res.json({ newMessages: [], totalMessages: 0 });
-        }
-
-        const conversationId = convResult.rows[0].conversation_id;
-
-        // Get messages newer than the last count
-        const messagesResult = await pool.query(`
-            SELECT role, content, timestamp
-            FROM messages 
-            WHERE conversation_id = $1 
-            ORDER BY timestamp ASC
-        `, [conversationId]);
-
-        const allMessages = messagesResult.rows;
-        const newMessages = allMessages.slice(lastMessageCount);
-
-        // Filter to only operator and system messages for polling
-        const operatorMessages = newMessages.filter(msg => 
-            msg.role === 'operator' || msg.role === 'system'
-        );
-
-        res.json({
-            newMessages: operatorMessages,
-            totalMessages: allMessages.length,
-            hasOperatorMessages: operatorMessages.length > 0
-        });
-
-    } catch (error) {
-        console.error('Error polling messages:', error);
-        res.status(500).json({ error: 'Failed to poll messages' });
-    }
-});
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
@@ -1150,7 +1152,7 @@ process.on('SIGINT', async () => {
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`\n🚀 Enhanced Chatbot server with Dashboard running on port ${PORT}`);
+    console.log(`\n🚀 Enhanced Chatbot server with Two-Way Chat running on port ${PORT}`);
     console.log('📝 Enhanced setup page: /setup');
     console.log('💬 Chat interface: /chat.html');
     console.log('📊 Dashboard: /dashboard');
@@ -1158,5 +1160,5 @@ app.listen(PORT, () => {
     console.log('🗄️ Database health: /api/db-health');
     console.log('📧 Email service:', emailTransporter ? 'Ready' : 'Not configured');
     console.log('🗃️ Database:', process.env.DATABASE_URL ? 'Connected' : 'Not configured');
-    console.log('✨ Features: Dashboard, PostgreSQL storage, Real-time chat logging');
+    console.log('✨ New Features: Two-way chat, Real-time operator messaging, Message polling');
 });
