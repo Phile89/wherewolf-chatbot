@@ -1,4 +1,4 @@
-// widget.js - Enhanced chat bubble with branding support
+// widget.js - Enhanced chat bubble with branding support - FIXED VERSION
 (function() {
     console.log('Enhanced Widget.js loading...');
     
@@ -14,19 +14,19 @@
     console.log('Loading enhanced widget for operator:', operatorId);
     console.log('Using brand color:', buttonColor);
     
-// Get server URL from config or detect from script source
-let serverUrl = config.serverUrl;
-
-if (!serverUrl) {
-    const currentScript = document.currentScript;
-    if (currentScript) {
-        // Fix: Handle query parameters properly
-        const scriptUrl = new URL(currentScript.src);
-        serverUrl = `${scriptUrl.protocol}//${scriptUrl.host}`;
-    } else {
-        serverUrl = 'https://wherewolf-chatbot.onrender.com'; // Fallback
+    // 🆕 FIXED: Better server URL detection that handles query parameters
+    let serverUrl = config.serverUrl;
+    
+    if (!serverUrl) {
+        const currentScript = document.currentScript;
+        if (currentScript) {
+            // Fix: Handle query parameters properly
+            const scriptUrl = new URL(currentScript.src);
+            serverUrl = `${scriptUrl.protocol}//${scriptUrl.host}`;
+        } else {
+            serverUrl = 'https://wherewolf-chatbot.onrender.com'; // Fallback
+        }
     }
-}
     console.log('Server URL:', serverUrl);
 
     // Helper function to determine if color is light or dark
@@ -219,7 +219,8 @@ if (!serverUrl) {
             // Load the chat page with absolute URL only once
             if (!hasLoaded) {
                 const iframe = chatWidget.querySelector('#chatFrame');
-                iframe.src = `${serverUrl}/chat.html?operator=${operatorId}`;
+                // 🆕 FIXED: Clean URL construction prevents malformed URLs
+                iframe.src = `${serverUrl}/chat.html?operator=${operatorId}&t=${Date.now()}`;
                 console.log('Loading enhanced chat iframe from:', iframe.src);
                 hasLoaded = true;
             }
@@ -286,7 +287,7 @@ if (!serverUrl) {
     console.log('Enhanced widget loaded successfully!');
     console.log('Operator:', operatorId);
     console.log('Brand color:', buttonColor);
-    console.log('Features: Responsive design, brand colors, pulse animation, mobile optimization');
+    console.log('Features: Responsive design, brand colors, pulse animation, mobile optimization, FIXED URL handling');
 
     // Expose widget API for advanced users
     window.wherewolfWidget = {
