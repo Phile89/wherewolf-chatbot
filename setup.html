@@ -1,159 +1,32 @@
-// 🆕 ENHANCED: Setup form submission with dashboard link generation
-document.getElementById('chatbotForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
+// 🆕 ENHANCED: Setup form submission with dashboard link generation document.getElementById('chatbotForm').addEventListener('submit', async function(e) { e.preventDefault(); // Collect all form data const selectedTimes = Array.from(document.querySelectorAll('.time-slot input:checked')).map(cb => cb.value); const selectedActivities = Array.from(document.querySelectorAll('.activity-option input:checked')).map(cb => cb.value); const selectedColor = document.querySelector('input[name="brandColor"]:checked').value; const selectedAlertPreference = document.querySelector('input[name="alertPreference"]:checked').value; const config = { // Basic Information businessName: document.getElementById('businessName').value, businessType: document.getElementById('businessType').value, location: document.getElementById('location').value, // Business Details websiteUrl: document.getElementById('websiteUrl').value, phoneNumber: document.getElementById('phoneNumber').value, businessHours: document.getElementById('businessHours').value, peakSeason: document.getElementById('peakSeason').value, maxGroupSize: document.getElementById('maxGroupSize').value, companyTagline: document.getElementById('companyTagline').value, // Activity Customization activityTypes: selectedActivities, difficultyLevel: document.getElementById('difficultyLevel').value, minAge: document.getElementById('minAge').value, maxAge: document.getElementById('maxAge').value, durationOptions: document.getElementById('durationOptions').value, seasonalAvailability: document.getElementById('seasonalAvailability').value, // Schedule & Pricing times: selectedTimes, duration: document.getElementById('duration').value, adultPrice: document.getElementById('adultPrice').value, childPrice: document.getElementById('childPrice').value, groupDiscount: document.getElementById('groupDiscount').value, specialOffers: document.getElementById('specialOffers').value, // Policies whatToBring: document.getElementById('whatToBring').value, cancellationPolicy: document.getElementById('cancellationPolicy').value, weatherPolicy: document.getElementById('weatherPolicy').value, // Chatbot Personality chatbotTone: document.getElementById('chatbotTone').value, languageStyle: document.getElementById('languageStyle').value, expertiseLevel: document.getElementById('expertiseLevel').value, responseLength: document.getElementById('responseLength').value, customGreeting: document.getElementById('customGreeting').value, // Advanced Features bookingLink: document.getElementById('bookingLink').value, socialMedia: document.getElementById('socialMedia').value, certifications: document.getElementById('certifications').value, // Contact Preferences alertPreference: selectedAlertPreference, // 🆕 NEW responseTime: document.getElementById('responseTime').value, contactMethods: document.getElementById('contactMethods').value, operatingHours: document.getElementById('operatingHours').value, handoffTriggers: document.getElementById('handoffTriggers').value, // Branding brandColor: selectedColor, // Waiver waiverLink: document.getElementById('waiverLink').value }; console.log('Submitting enhanced config:', config); try { const response = await fetch('/api/save-config', { method: 'POST', headers: { 'Content-Type': 'application/json', }, body: JSON.stringify(config) }); const result = await response.json(); console.log('Server response:', result); if (result.success && result.embedCode) { // 🆕 ENHANCED: Show different success messages based on alert preference document.getElementById('embedCode').textContent = result.embedCode; // Create enhanced success section with conditional dashboard link const successSection = document.getElementById('embedSection'); let successHTML = `
+🎉 Your Enhanced Chatbot is Ready!
+✅ Operator ID: ${result.operatorId}
+`; if (selectedAlertPreference === 'dashboard') { successHTML += `
+📊 Your Dashboard Link:
+${result.baseUrl}/dashboard
 
-    // Collect all form data
-    const selectedTimes = Array.from(document.querySelectorAll('.time-slot input:checked')).map(cb => cb.value);
-    const selectedActivities = Array.from(document.querySelectorAll('.activity-option input:checked')).map(cb => cb.value);
-    const selectedColor = document.querySelector('input[name="brandColor"]:checked').value;
-    const selectedAlertPreference = document.querySelector('input[name="alertPreference"]:checked').value;
+💡 Bookmark this link! Use it to respond to customers in real-time.
+`; } else if (selectedAlertPreference === 'email') { successHTML += `
+📧 Email Alerts Enabled
 
-    const config = {
-        // Basic Information
-        businessName: document.getElementById('businessName').value,
-        businessType: document.getElementById('businessType').value,
-        location: document.getElementById('location').value,
-        
-        // Business Details
-        websiteUrl: document.getElementById('websiteUrl').value,
-        phoneNumber: document.getElementById('phoneNumber').value,
-        businessHours: document.getElementById('businessHours').value,
-        peakSeason: document.getElementById('peakSeason').value,
-        maxGroupSize: document.getElementById('maxGroupSize').value,
-        companyTagline: document.getElementById('companyTagline').value,
-        
-        // Activity Customization
-        activityTypes: selectedActivities,
-        difficultyLevel: document.getElementById('difficultyLevel').value,
-        minAge: document.getElementById('minAge').value,
-        maxAge: document.getElementById('maxAge').value,
-        durationOptions: document.getElementById('durationOptions').value,
-        seasonalAvailability: document.getElementById('seasonalAvailability').value,
-        
-        // Schedule & Pricing
-        times: selectedTimes,
-        duration: document.getElementById('duration').value,
-        adultPrice: document.getElementById('adultPrice').value,
-        childPrice: document.getElementById('childPrice').value,
-        groupDiscount: document.getElementById('groupDiscount').value,
-        specialOffers: document.getElementById('specialOffers').value,
-        
-        // Policies
-        whatToBring: document.getElementById('whatToBring').value,
-        cancellationPolicy: document.getElementById('cancellationPolicy').value,
-        weatherPolicy: document.getElementById('weatherPolicy').value,
-        
-        // Chatbot Personality
-        chatbotTone: document.getElementById('chatbotTone').value,
-        languageStyle: document.getElementById('languageStyle').value,
-        expertiseLevel: document.getElementById('expertiseLevel').value,
-        responseLength: document.getElementById('responseLength').value,
-        customGreeting: document.getElementById('customGreeting').value,
-        
-        // Advanced Features
-        bookingLink: document.getElementById('bookingLink').value,
-        socialMedia: document.getElementById('socialMedia').value,
-        certifications: document.getElementById('certifications').value,
-        
-        // Contact Preferences
-        alertPreference: selectedAlertPreference, // 🆕 NEW
-        responseTime: document.getElementById('responseTime').value,
-        contactMethods: document.getElementById('contactMethods').value,
-        operatingHours: document.getElementById('operatingHours').value,
-        handoffTriggers: document.getElementById('handoffTriggers').value,
-        
-        // Branding
-        brandColor: selectedColor,
-        
-        // Waiver
-        waiverLink: document.getElementById('waiverLink').value
-    };
+You'll receive email notifications when customers request human support.
+`; } else { successHTML += `
+🤖 AI-Only Mode
 
-    console.log('Submitting enhanced config:', config);
+Your chatbot will handle all requests automatically without human alerts.
+`; } successHTML += `
 
-    try {
-        const response = await fetch('/api/save-config', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(config)
-        });
+Copy this code and paste it into your website:
+`; successSection.innerHTML = successHTML + `
 
-        const result = await response.json();
-        console.log('Server response:', result);
+${result.embedCode}
 
-        if (result.success && result.embedCode) {
-            // 🆕 ENHANCED: Show different success messages based on alert preference
-            document.getElementById('embedCode').textContent = result.embedCode;
-            
-            // Create enhanced success section with conditional dashboard link
-            const successSection = document.getElementById('embedSection');
-            let successHTML = `
-                <h3 style="margin-top: 40px;">🎉 Your Enhanced Chatbot is Ready!</h3>
-                <div style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border: 2px solid #10b981; border-radius: 12px; padding: 20px; margin: 20px 0;">
-                    <h4 style="color: #047857; margin: 0 0 10px 0;">✅ Operator ID: <code style="background: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">${result.operatorId}</code></h4>
-            `;
-            
-            if (selectedAlertPreference === 'dashboard') {
-                successHTML += `
-                    <div style="background: #8B5CF6; color: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                        <h4 style="margin: 0 0 10px 0;">📊 Your Dashboard Link:</h4>
-                        <a href="${result.baseUrl}/dashboard" target="_blank" style="color: white; font-weight: bold; text-decoration: underline; font-size: 16px;">${result.baseUrl}/dashboard</a>
-                        <p style="margin: 10px 0 0 0; font-size: 14px; opacity: 0.9;">💡 Bookmark this link! Use it to respond to customers in real-time.</p>
-                    </div>
-                `;
-            } else if (selectedAlertPreference === 'email') {
-                successHTML += `
-                    <div style="background: #f59e0b; color: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                        <h4 style="margin: 0 0 10px 0;">📧 Email Alerts Enabled</h4>
-                        <p style="margin: 0; font-size: 14px; opacity: 0.9;">You'll receive email notifications when customers request human support.</p>
-                    </div>
-                `;
-            } else {
-                successHTML += `
-                    <div style="background: #6b7280; color: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                        <h4 style="margin: 0 0 10px 0;">🤖 AI-Only Mode</h4>
-                        <p style="margin: 0; font-size: 14px; opacity: 0.9;">Your chatbot will handle all requests automatically without human alerts.</p>
-                    </div>
-                `;
-            }
-            
-            successHTML += `
-                </div>
-                <p style="margin-bottom: 20px;">Copy this code and paste it into your website:</p>
-            `;
-            
-            successSection.innerHTML = successHTML + `
-                <div class="embed-code">
-                    <button class="copy-btn" onclick="copyCode()">Copy Code</button>
-                    <pre id="embedCode">${result.embedCode}</pre>
-                </div>
-                
-                <div style="background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
-                    <h4 style="margin: 0 0 15px 0; color: #374151;">🚀 Next Steps:</h4>
-                    <ol style="margin: 0; padding-left: 20px; color: #6b7280;">
-                        <li style="margin-bottom: 8px;">Copy the embed code above and paste it into your website</li>
-                        <li style="margin-bottom: 8px;">Test your chatbot by visiting your website</li>
-                        ${selectedAlertPreference === 'dashboard' ? '<li style="margin-bottom: 8px;"><strong>Bookmark your dashboard link</strong> for responding to customers</li>' : ''}
-                        <li style="margin-bottom: 8px;">Try asking for an agent to test the handoff system</li>
-                        <li>Customize further by creating a new chatbot with different settings</li>
-                    </ol>
-                </div>
-                
-                <div style="text-align: center; margin: 30px 0;">
-                    <a href="/setup" style="background: #8B5CF6; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Create Another Chatbot</a>
-                    ${selectedAlertPreference === 'dashboard' ? `<a href="${result.baseUrl}/dashboard" target="_blank" style="background: #10b981; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-left: 10px;">Open Dashboard</a>` : ''}
-                </div>
-            `;
-            
-            successSection.style.display = 'block';
-            successSection.scrollIntoView({ behavior: 'smooth' });
-        } else {
-            alert('Failed to generate chatbot: ' + JSON.stringify(result));
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error saving configuration: ' + error.message);
-    }
-});
+🚀 Next Steps:
+
+    Copy the embed code above and paste it into your website
+    Test your chatbot by visiting your website
+    ${selectedAlertPreference === 'dashboard' ? '
+    Bookmark your dashboard link for responding to customers
+    ' : ''}
+    Try asking for an agent to test the handoff system
+    Customize further by creating a new chatbot with different settin
