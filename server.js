@@ -739,8 +739,13 @@ app.post('/api/chat', async function(req, res) {
         conversations[sessionKey] = [];
     }
     conversations[sessionKey].push({ role: 'user', content: message });
-// Check if an operator has taken over this conversation
-const hasOperatorMessages = conversations[sessionKey].some(msg => msg.role === 'operator');
+// Check if an operator has taken over this conversation (check database, not memory)
+const operatorCheckResult = await pool.query(
+    'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
+    [conversation.conversation_id, 'operator']
+);
+
+const hasOperatorMessages = parseInt(operatorCheckResult.rows[0].count) > 0;
 
 if (hasOperatorMessages) {
     // Operator has taken over - don't respond with bot, just acknowledge
