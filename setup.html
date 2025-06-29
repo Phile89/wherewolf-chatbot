@@ -1040,80 +1040,93 @@
             document.getElementById('progressFill').style.width = progress + '%';
         }
 
-        // 🆕 ENHANCED: Form submission with alert preferences
+        // 🆕 ENHANCED: Form submission with alert preferences and error checking
         document.getElementById('chatbotForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
-            // Collect all form data
-            const selectedTimes = Array.from(document.querySelectorAll('.time-slot input:checked')).map(cb => cb.value);
-            const selectedActivities = Array.from(document.querySelectorAll('.activity-option input:checked')).map(cb => cb.value);
-            const selectedColor = document.querySelector('input[name="brandColor"]:checked').value;
-            const selectedAlertPreference = document.querySelector('input[name="alertPreference"]:checked').value;
-
-            const config = {
-                // Basic Information
-                businessName: document.getElementById('businessName').value,
-                businessType: document.getElementById('businessType').value,
-                location: document.getElementById('location').value,
-                
-                // Business Details
-                websiteUrl: document.getElementById('websiteUrl').value,
-                phoneNumber: document.getElementById('phoneNumber').value,
-                businessHours: document.getElementById('businessHours').value,
-                peakSeason: document.getElementById('peakSeason').value,
-                maxGroupSize: document.getElementById('maxGroupSize').value,
-                companyTagline: document.getElementById('companyTagline').value,
-                
-                // Activity Customization
-                activityTypes: selectedActivities,
-                difficultyLevel: document.getElementById('difficultyLevel').value,
-                minAge: document.getElementById('minAge').value,
-                maxAge: document.getElementById('maxAge').value,
-                durationOptions: document.getElementById('durationOptions').value,
-                seasonalAvailability: document.getElementById('seasonalAvailability').value,
-                
-                // Schedule & Pricing
-                times: selectedTimes,
-                duration: document.getElementById('duration').value,
-                adultPrice: document.getElementById('adultPrice').value,
-                childPrice: document.getElementById('childPrice').value,
-                groupDiscount: document.getElementById('groupDiscount').value,
-                specialOffers: document.getElementById('specialOffers').value,
-                
-                // Policies
-                whatToBring: document.getElementById('whatToBring').value,
-                cancellationPolicy: document.getElementById('cancellationPolicy').value,
-                weatherPolicy: document.getElementById('weatherPolicy').value,
-                
-                // Chatbot Personality
-                chatbotTone: document.getElementById('chatbotTone').value,
-                languageStyle: document.getElementById('languageStyle').value,
-                expertiseLevel: document.getElementById('expertiseLevel').value,
-                responseLength: document.getElementById('responseLength').value,
-                customGreeting: document.getElementById('customGreeting').value,
-                
-                // Advanced Features
-                bookingLink: document.getElementById('bookingLink').value,
-                socialMedia: document.getElementById('socialMedia').value,
-                certifications: document.getElementById('certifications').value,
-                
-                // Contact Preferences
-                alertPreference: selectedAlertPreference, // 🆕 NEW
-                responseTime: document.getElementById('responseTime').value,
-                contactMethods: document.getElementById('contactMethods').value,
-                operatingHours: document.getElementById('operatingHours').value,
-                handoffTriggers: document.getElementById('handoffTriggers').value,
-                
-                // Branding
-                brandColor: selectedColor,
-                
-                // Waiver
-                waiverLink: document.getElementById('waiverLink').value
-            };
-
-            console.log('Submitting enhanced config:', config);
-
             try {
+                // Collect all form data with error checking
+                const selectedTimes = Array.from(document.querySelectorAll('.time-slot input:checked')).map(cb => cb.value);
+                const selectedActivities = Array.from(document.querySelectorAll('.activity-option input:checked')).map(cb => cb.value);
+                
+                const brandColorElement = document.querySelector('input[name="brandColor"]:checked');
+                const alertPreferenceElement = document.querySelector('input[name="alertPreference"]:checked');
+                
+                if (!brandColorElement) {
+                    alert('Please select a brand color');
+                    return;
+                }
+                if (!alertPreferenceElement) {
+                    alert('Please select an alert preference');
+                    return;
+                }
+                
+                const selectedColor = brandColorElement.value;
+                const selectedAlertPreference = alertPreferenceElement.value;
+
+                const config = {
+                    // Basic Information
+                    businessName: document.getElementById('businessName').value,
+                    businessType: document.getElementById('businessType').value,
+                    location: document.getElementById('location').value,
+                    
+                    // Business Details
+                    websiteUrl: document.getElementById('websiteUrl').value,
+                    phoneNumber: document.getElementById('phoneNumber').value,
+                    businessHours: document.getElementById('businessHours').value,
+                    peakSeason: document.getElementById('peakSeason').value,
+                    maxGroupSize: document.getElementById('maxGroupSize').value,
+                    companyTagline: document.getElementById('companyTagline').value,
+                    
+                    // Activity Customization
+                    activityTypes: selectedActivities,
+                    difficultyLevel: document.getElementById('difficultyLevel').value,
+                    minAge: document.getElementById('minAge').value,
+                    maxAge: document.getElementById('maxAge').value,
+                    durationOptions: document.getElementById('durationOptions').value,
+                    seasonalAvailability: document.getElementById('seasonalAvailability').value,
+                    
+                    // Schedule & Pricing
+                    times: selectedTimes,
+                    duration: document.getElementById('duration').value,
+                    adultPrice: document.getElementById('adultPrice').value,
+                    childPrice: document.getElementById('childPrice').value,
+                    groupDiscount: document.getElementById('groupDiscount').value,
+                    specialOffers: document.getElementById('specialOffers').value,
+                    
+                    // Policies
+                    whatToBring: document.getElementById('whatToBring').value,
+                    cancellationPolicy: document.getElementById('cancellationPolicy').value,
+                    weatherPolicy: document.getElementById('weatherPolicy').value,
+                    
+                    // Chatbot Personality
+                    chatbotTone: document.getElementById('chatbotTone').value,
+                    languageStyle: document.getElementById('languageStyle').value,
+                    expertiseLevel: document.getElementById('expertiseLevel').value,
+                    responseLength: document.getElementById('responseLength').value,
+                    customGreeting: document.getElementById('customGreeting').value,
+                    
+                    // Advanced Features
+                    bookingLink: document.getElementById('bookingLink').value,
+                    socialMedia: document.getElementById('socialMedia').value,
+                    certifications: document.getElementById('certifications').value,
+                    
+                    // Contact Preferences
+                    alertPreference: selectedAlertPreference, // 🆕 NEW
+                    responseTime: document.getElementById('responseTime').value,
+                    contactMethods: document.getElementById('contactMethods').value,
+                    operatingHours: document.getElementById('operatingHours').value,
+                    handoffTriggers: document.getElementById('handoffTriggers').value,
+                    
+                    // Branding
+                    brandColor: selectedColor,
+                    
+                    // Waiver
+                    waiverLink: document.getElementById('waiverLink').value
+                };
+
+                console.log('Submitting enhanced config:', config);
+
                 const response = await fetch('/api/save-config', {
                     method: 'POST',
                     headers: {
@@ -1126,9 +1139,6 @@
                 console.log('Server response:', result);
 
                 if (result.success && result.embedCode) {
-                    // 🆕 ENHANCED: Show different success messages based on alert preference
-                    document.getElementById('embedCode').textContent = result.embedCode;
-                    
                     // Create enhanced success section with conditional dashboard link
                     const successSection = document.getElementById('embedSection');
                     let successHTML = `
@@ -1195,7 +1205,7 @@
                     alert('Failed to generate chatbot: ' + JSON.stringify(result));
                 }
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Form submission error:', error);
                 alert('Error saving configuration: ' + error.message);
             }
         });
