@@ -785,50 +785,109 @@
             }
         }
 
-        // 🆕 UPDATED: Enhanced sendMessageToServer function to handle operator responses
-        async function sendMessageToServer(message) {
-            showTyping();
+    // 🆕 UPDATED: Enhanced sendMessageToServer function with better two-way chat handling
+async function sendMessageToServer(message) {
+    showTyping();
+    
+    try {
+        console.log('Sending message:', message, 'with operator:', operatorId);
+        const response = await fetch(`${serverUrl}/api/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                message: message,
+                operatorId: operatorId 
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Server response:', data);
+        hideTyping();
+        
+        // Check if response indicates operator takeover
+        if (data.operatorJoined) {
+            displayMessage('👨‍💼 A team member has joined the chat to assist you personally!', 'system');
+        }
+        
+        // Display the response (could be from bot or operator)
+        displayMessage(data.response, data.fromOperator ? 'operator' : 'bot');
+        
+        // 🆕 IMPROVED: Better handling of different chat modes
+        if (data.agentRequested || data.operatorJoined || data.startPolling || data.twoWayChat) {
+            startOperatorMessagePolling();
             
-            try {
-                console.log('Sending message:', message, 'with operator:', operatorId);
-                const response = await fetch(`${serverUrl}/api/chat`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        message: message,
-                        operatorId: operatorId 
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Server error: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                console.log('Server response:', data);
-                hideTyping();
-                
-                // Check if response indicates operator takeover
-                if (data.operatorJoined) {
-                    displayMessage('👨‍💼 A team member has joined the chat to assist you personally!', 'system');
-                }
-                
-                // Display the response (could be from bot or operator)
-                displayMessage(data.response, data.fromOperator ? 'operator' : 'bot');
-                
-                // Start polling for operator messages if agent was requested
-                if (data.agentRequested || data.operatorJoined) {
-                    startOperatorMessagePolling();
-                }
-                
-            } catch (error) {
-                console.error('Enhanced chat error:', error);
-                hideTyping();
-                displayMessage('Sorry, I\'m having connection issues. Please try again or contact us directly.', 'bot');
+            // 🆕 NEW: Different indicators for different modes
+            if (data.twoWayChat) {
+                setTimeout(() => {
+                    const indicator = document.createElement('div');
+                    indicator.id = 'waiting-indicator';
+                    indicator.style.cssText = `
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+                        color: white;
+                        padding: 12px 20px;
+                        border-radius: 25px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        z-index: 10002;
+                        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+                        animation: pulse 2s infinite;
+                    `;
+                    indicator.innerHTML = '💬 Two-way chat active - team member will respond here!';
+                    document.body.appendChild(indicator);
+                    
+                    // Remove indicator after 20 seconds
+                    setTimeout(() => {
+                        if (document.getElementById('waiting-indicator')) {
+                            indicator.remove();
+                        }
+                    }, 20000);
+                }, 2000);
+            } else if (data.agentRequested) {
+                setTimeout(() => {
+                    const indicator = document.createElement('div');
+                    indicator.id = 'waiting-indicator';
+                    indicator.style.cssText = `
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                        color: white;
+                        padding: 12px 20px;
+                        border-radius: 25px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        z-index: 10002;
+                        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+                        animation: pulse 2s infinite;
+                    `;
+                    indicator.innerHTML = '👨‍💼 Team member will contact you soon...';
+                    document.body.appendChild(indicator);
+                    
+                    // Remove indicator after 30 seconds
+                    setTimeout(() => {
+                        if (document.getElementById('waiting-indicator')) {
+                            indicator.remove();
+                        }
+                    }, 30000);
+                }, 2000);
             }
         }
+        
+    } catch (error) {
+        console.error('Enhanced chat error:', error);
+        hideTyping();
+        displayMessage('Sorry, I\'m having connection issues. Please try again or contact us directly.', 'bot');
+    }
+}
 
         function sendQuickReply(text) {
             document.getElementById('chatInput').value = text;
