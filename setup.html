@@ -1,1087 +1,159 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chatbot Setup - Enhanced</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f7fa;
-            padding: 20px;
-            line-height: 1.6;
-        }
+// 🆕 ENHANCED: Setup form submission with dashboard link generation
+document.getElementById('chatbotForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
 
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            padding: 40px;
-        }
+    // Collect all form data
+    const selectedTimes = Array.from(document.querySelectorAll('.time-slot input:checked')).map(cb => cb.value);
+    const selectedActivities = Array.from(document.querySelectorAll('.activity-option input:checked')).map(cb => cb.value);
+    const selectedColor = document.querySelector('input[name="brandColor"]:checked').value;
+    const selectedAlertPreference = document.querySelector('input[name="alertPreference"]:checked').value;
 
-        h1 {
-            color: #2c3e50;
-            margin-bottom: 30px;
-            text-align: center;
-        }
-
-        /* Collapsible sections */
-        .form-section {
-            margin-bottom: 20px;
-            border: 2px solid #e9ecef;
-            border-radius: 12px;
-            overflow: hidden;
-        }
-
-        .section-header {
-            background: #f8f9fa;
-            padding: 20px;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #e9ecef;
-            user-select: none;
-        }
-
-        .section-header:hover {
-            background: #e9ecef;
-        }
-
-        .section-header h3 {
-            margin: 0;
-            color: #495057;
-            font-size: 18px;
-        }
-
-        .section-toggle {
-            font-size: 20px;
-            color: #6c757d;
-            transition: transform 0.3s ease;
-        }
-
-        .section-content {
-            padding: 25px;
-            display: none;
-        }
-
-        .section-content.open {
-            display: block;
-        }
-
-        .section-header.open .section-toggle {
-            transform: rotate(180deg);
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        .form-row-three {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: flex;
-            align-items: center;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #374151;
-        }
-
-        .info-icon {
-            margin-left: 8px;
-            width: 16px;
-            height: 16px;
-            background: #6b7280;
-            border-radius: 50%;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            cursor: help;
-            position: relative;
-        }
-
-        .tooltip {
-            position: absolute;
-            top: -40px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #1f2937;
-            color: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            white-space: nowrap;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s;
-            z-index: 1000;
-            max-width: 250px;
-            white-space: normal;
-            width: max-content;
-        }
-
-        .info-icon:hover .tooltip {
-            opacity: 1;
-        }
-
-        input, textarea, select {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #ced4da;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s ease;
-        }
-
-        input:focus, textarea:focus, select:focus {
-            outline: none;
-            border-color: #8B5CF6;
-        }
-
-        /* Conditional pricing section */
-        .conditional-section {
-            position: relative;
-        }
-
-        .conditional-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(255,255,255,0.8);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            color: #6b7280;
-            z-index: 10;
-        }
-
-        /* Enhanced time slots - every 30 minutes */
-        .time-slots {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-            gap: 8px;
-            margin-top: 10px;
-            max-height: 300px;
-            overflow-y: auto;
-            border: 1px solid #e5e7eb;
-            padding: 15px;
-            border-radius: 8px;
-        }
-
-        .time-slot {
-            display: flex;
-            align-items: center;
-            padding: 8px 10px;
-            background: white;
-            border: 2px solid #e9ecef;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 12px;
-        }
-
-        .time-slot:hover {
-            border-color: #8B5CF6;
-        }
-
-        .time-slot.selected {
-            border-color: #8B5CF6;
-            background-color: #f3f0ff;
-        }
-
-        .time-slot input {
-            width: auto !important;
-            margin-right: 8px;
-            cursor: pointer;
-        }
-
-        /* Activity types */
-        .activity-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .activity-option {
-            display: flex;
-            align-items: center;
-            padding: 12px;
-            background: white;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .activity-option:hover {
-            border-color: #8B5CF6;
-        }
-
-        .activity-option.selected {
-            border-color: #8B5CF6;
-            background-color: #f3f0ff;
-        }
-
-        .activity-option input {
-            width: auto !important;
-            margin-right: 10px;
-            cursor: pointer;
-        }
-
-        /* Color picker options */
-        .color-options {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .color-option {
-            display: flex;
-            align-items: center;
-            padding: 8px 12px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .color-option:hover {
-            border-color: #8B5CF6;
-        }
-
-        .color-option.selected {
-            border-color: #8B5CF6;
-            background-color: #f3f0ff;
-        }
-
-        .color-swatch {
-            width: 20px;
-            height: 20px;
-            border-radius: 4px;
-            margin-right: 8px;
-        }
-
-        .color-option input {
-            width: auto !important;
-            margin: 0;
-        }
-
-        .generate-btn {
-            background: #8B5CF6;
-            color: white;
-            padding: 16px 35px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1.2em;
-            font-weight: 700;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 30px;
-            transition: background 0.3s ease;
-        }
-
-        .generate-btn:hover {
-            background: #7C3AED;
-        }
-
-        .embed-code {
-            background: #1e293b;
-            color: #94a3b8;
-            padding: 25px;
-            border-radius: 10px;
-            margin-top: 25px;
-            font-family: 'Courier New', monospace;
-            position: relative;
-        }
-
-        .copy-btn {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background: #475569;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-
-        .help-text {
-            font-size: 0.9em;
-            color: #6c757d;
-            margin-top: 8px;
-        }
-
-        .section-description {
-            color: #6c757d;
-            font-size: 14px;
-            margin-bottom: 20px;
-            font-style: italic;
-        }
-
-        /* Progress indicator */
-        .progress-bar {
-            width: 100%;
-            height: 4px;
-            background: #e9ecef;
-            border-radius: 2px;
-            margin-bottom: 30px;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: #8B5CF6;
-            width: 20%;
-            transition: width 0.3s ease;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🚤 Enhanced Chatbot Setup</h1>
+    const config = {
+        // Basic Information
+        businessName: document.getElementById('businessName').value,
+        businessType: document.getElementById('businessType').value,
+        location: document.getElementById('location').value,
         
-        <div class="progress-bar">
-            <div class="progress-fill" id="progressFill"></div>
-        </div>
+        // Business Details
+        websiteUrl: document.getElementById('websiteUrl').value,
+        phoneNumber: document.getElementById('phoneNumber').value,
+        businessHours: document.getElementById('businessHours').value,
+        peakSeason: document.getElementById('peakSeason').value,
+        maxGroupSize: document.getElementById('maxGroupSize').value,
+        companyTagline: document.getElementById('companyTagline').value,
+        
+        // Activity Customization
+        activityTypes: selectedActivities,
+        difficultyLevel: document.getElementById('difficultyLevel').value,
+        minAge: document.getElementById('minAge').value,
+        maxAge: document.getElementById('maxAge').value,
+        durationOptions: document.getElementById('durationOptions').value,
+        seasonalAvailability: document.getElementById('seasonalAvailability').value,
+        
+        // Schedule & Pricing
+        times: selectedTimes,
+        duration: document.getElementById('duration').value,
+        adultPrice: document.getElementById('adultPrice').value,
+        childPrice: document.getElementById('childPrice').value,
+        groupDiscount: document.getElementById('groupDiscount').value,
+        specialOffers: document.getElementById('specialOffers').value,
+        
+        // Policies
+        whatToBring: document.getElementById('whatToBring').value,
+        cancellationPolicy: document.getElementById('cancellationPolicy').value,
+        weatherPolicy: document.getElementById('weatherPolicy').value,
+        
+        // Chatbot Personality
+        chatbotTone: document.getElementById('chatbotTone').value,
+        languageStyle: document.getElementById('languageStyle').value,
+        expertiseLevel: document.getElementById('expertiseLevel').value,
+        responseLength: document.getElementById('responseLength').value,
+        customGreeting: document.getElementById('customGreeting').value,
+        
+        // Advanced Features
+        bookingLink: document.getElementById('bookingLink').value,
+        socialMedia: document.getElementById('socialMedia').value,
+        certifications: document.getElementById('certifications').value,
+        
+        // Contact Preferences
+        alertPreference: selectedAlertPreference, // 🆕 NEW
+        responseTime: document.getElementById('responseTime').value,
+        contactMethods: document.getElementById('contactMethods').value,
+        operatingHours: document.getElementById('operatingHours').value,
+        handoffTriggers: document.getElementById('handoffTriggers').value,
+        
+        // Branding
+        brandColor: selectedColor,
+        
+        // Waiver
+        waiverLink: document.getElementById('waiverLink').value
+    };
 
-        <form id="chatbotForm">
-            <!-- Basic Information -->
-            <div class="form-section">
-                <div class="section-header open" onclick="toggleSection(this)">
-                    <h3>📋 Basic Information</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content open">
-                    <div class="section-description">Core details about your business and tour offerings</div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="businessName">Business Name *</label>
-                            <input type="text" id="businessName" required placeholder="Key West Boat Tours">
-                        </div>
-                        <div class="form-group">
-                            <label for="businessType">Primary Activity *</label>
-                            <select id="businessType">
-                                <option>Boat Tours</option>
-                                <option>Jet Ski Rentals</option>
-                                <option>Fishing Charters</option>
-                                <option>Kayak Tours</option>
-                                <option>Hiking Tours</option>
-                                <option>City Tours</option>
-                                <option>Food Tours</option>
-                                <option>Wine Tasting</option>
-                                <option>Adventure Sports</option>
-                                <option>Cultural Experiences</option>
-                                <option>Other</option>
-                            </select>
-                        </div>
-                    </div>
+    console.log('Submitting enhanced config:', config);
 
-                    <div class="form-group">
-                        <label for="location">Location / Meeting Point *</label>
-                        <input type="text" id="location" placeholder="Marina Bay, Dock 5" required>
-                    </div>
-                </div>
-            </div>
+    try {
+        const response = await fetch('/api/save-config', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(config)
+        });
 
-            <!-- Business Details -->
-            <div class="form-section">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h3>🏢 Business Details</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content">
-                    <div class="section-description">Additional business information for better customer service</div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="websiteUrl">Website URL</label>
-                            <input type="url" id="websiteUrl" placeholder="https://www.yourbusiness.com">
-                        </div>
-                        <div class="form-group">
-                            <label for="phoneNumber">Phone Number</label>
-                            <input type="tel" id="phoneNumber" placeholder="+1 (555) 123-4567">
-                        </div>
-                    </div>
+        const result = await response.json();
+        console.log('Server response:', result);
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="businessHours">Business Hours</label>
-                            <input type="text" id="businessHours" placeholder="8 AM - 6 PM daily">
-                        </div>
-                        <div class="form-group">
-                            <label for="peakSeason">Peak Season</label>
-                            <input type="text" id="peakSeason" placeholder="December - April">
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="maxGroupSize">Maximum Group Size</label>
-                            <input type="number" id="maxGroupSize" placeholder="12" min="1">
-                        </div>
-                        <div class="form-group">
-                            <label for="companyTagline">Company Tagline</label>
-                            <input type="text" id="companyTagline" placeholder="Creating unforgettable adventures">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Activity Customization -->
-            <div class="form-section">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h3>🎯 Activity Customization</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content">
-                    <div class="section-description">Detailed information about your activities and requirements</div>
-                    
-                    <div class="form-group">
-                        <label>Activity Types (select all that apply)</label>
-                        <div class="activity-grid">
-                            <label class="activity-option">
-                                <input type="checkbox" value="Boat Tours" onchange="updateActivityOption(this)">
-                                <span>🚤 Boat Tours</span>
-                            </label>
-                            <label class="activity-option">
-                                <input type="checkbox" value="Fishing" onchange="updateActivityOption(this)">
-                                <span>🎣 Fishing</span>
-                            </label>
-                            <label class="activity-option">
-                                <input type="checkbox" value="Snorkeling" onchange="updateActivityOption(this)">
-                                <span>🤿 Snorkeling</span>
-                            </label>
-                            <label class="activity-option">
-                                <input type="checkbox" value="Kayaking" onchange="updateActivityOption(this)">
-                                <span>🛶 Kayaking</span>
-                            </label>
-                            <label class="activity-option">
-                                <input type="checkbox" value="Hiking" onchange="updateActivityOption(this)">
-                                <span>🥾 Hiking</span>
-                            </label>
-                            <label class="activity-option">
-                                <input type="checkbox" value="City Tours" onchange="updateActivityOption(this)">
-                                <span>🏛️ City Tours</span>
-                            </label>
-                            <label class="activity-option">
-                                <input type="checkbox" value="Food Tours" onchange="updateActivityOption(this)">
-                                <span>🍽️ Food Tours</span>
-                            </label>
-                            <label class="activity-option">
-                                <input type="checkbox" value="Wine Tasting" onchange="updateActivityOption(this)">
-                                <span>🍷 Wine Tasting</span>
-                            </label>
-                            <label class="activity-option">
-                                <input type="checkbox" value="Adventure Sports" onchange="updateActivityOption(this)">
-                                <span>🏄 Adventure Sports</span>
-                            </label>
-                            <label class="activity-option">
-                                <input type="checkbox" value="Cultural Experiences" onchange="updateActivityOption(this)">
-                                <span>🎭 Cultural</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="form-row-three">
-                        <div class="form-group">
-                            <label for="difficultyLevel">
-                                Difficulty Level
-                                <span class="info-icon">i
-                                    <div class="tooltip">How challenging your activity is for participants</div>
-                                </span>
-                            </label>
-                            <select id="difficultyLevel">
-                                <option>Beginner</option>
-                                <option>Intermediate</option>
-                                <option>Advanced</option>
-                                <option>All Levels</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="minAge">Minimum Age</label>
-                            <input type="number" id="minAge" placeholder="0" min="0">
-                        </div>
-                        <div class="form-group">
-                            <label for="maxAge">Maximum Age (0 = no limit)</label>
-                            <input type="number" id="maxAge" placeholder="0" min="0">
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="durationOptions">
-                                Duration Options
-                                <span class="info-icon">i
-                                    <div class="tooltip">Category of how long your tours typically last</div>
-                                </span>
-                            </label>
-                            <select id="durationOptions">
-                                <option>Half-day (2-4 hours)</option>
-                                <option>Full-day (6-8 hours)</option>
-                                <option>Multi-day</option>
-                                <option>Custom duration</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="seasonalAvailability">
-                                Seasonal Availability
-                                <span class="info-icon">i
-                                    <div class="tooltip">When during the year your tours operate</div>
-                                </span>
-                            </label>
-                            <select id="seasonalAvailability">
-                                <option>Year-round</option>
-                                <option>Seasonal (specify dates)</option>
-                                <option>Weather dependent</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Tour Schedule -->
-            <div class="form-section">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h3>⏰ Tour Schedule</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content">
-                    <div class="section-description">When your tours run and how long they last</div>
-                    
-                    <div class="form-group">
-                        <label>Standard Tour Times (select all that apply)</label>
-                        <div class="time-slots" id="timeSlots">
-                            <!-- Time slots will be generated by JavaScript -->
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="duration">Typical Tour Duration</label>
-                        <input type="text" id="duration" placeholder="2.5 hours">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Advanced Features -->
-            <div class="form-section">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h3>⚡ Advanced Features</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content">
-                    <div class="section-description">Enhanced functionality and integrations</div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="bookingLink">
-                                Booking System Link
-                                <span class="info-icon">i
-                                    <div class="tooltip">If provided, pricing questions will be deferred to your booking system</div>
-                                </span>
-                            </label>
-                            <input type="url" id="bookingLink" placeholder="https://your-booking-system.com" oninput="togglePricingSection()" onchange="togglePricingSection()">
-                        </div>
-                        <div class="form-group">
-                            <label for="socialMedia">Social Media Links</label>
-                            <input type="text" id="socialMedia" placeholder="Instagram: @yourbusiness, Facebook: /yourbusiness">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="certifications">Safety Certifications & Licenses</label>
-                        <textarea id="certifications" placeholder="Coast Guard licensed, First Aid certified, Insured with..."></textarea>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Pricing (conditional) -->
-            <div class="form-section conditional-section" id="pricingSection">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h3>💰 Pricing</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content">
-                    <div class="section-description">Your pricing structure and special offers</div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="adultPrice">Adult Price</label>
-                            <input type="text" id="adultPrice" placeholder="$95 USD">
-                        </div>
-                        <div class="form-group">
-                            <label for="childPrice">Child Price</label>
-                            <input type="text" id="childPrice" placeholder="$65 USD (ages 4-12)">
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="groupDiscount">Group Discount</label>
-                            <input type="text" id="groupDiscount" placeholder="15% off for 6+ people">
-                        </div>
-                        <div class="form-group">
-                            <label for="specialOffers">Current Special Offers</label>
-                            <input type="text" id="specialOffers" placeholder="Book 2 tours, get 10% off">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Policies -->
-            <div class="form-section">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h3>📋 Policies</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content">
-                    <div class="section-description">Important policies and what customers should know</div>
-                    
-                    <div class="form-group">
-                        <label for="whatToBring">What to Bring</label>
-                        <textarea id="whatToBring" placeholder="Sunscreen, sunglasses, camera">Sunscreen, sunglasses, camera, light jacket for evening tours</textarea>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="cancellationPolicy">Cancellation Policy</label>
-                            <textarea id="cancellationPolicy" placeholder="Full refund if cancelled 24 hours before tour">Full refund if cancelled 24 hours before tour</textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="weatherPolicy">Weather Policy</label>
-                            <input type="text" id="weatherPolicy" placeholder="Tours run in light rain, full refund for storms">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Chatbot Personality -->
-            <div class="form-section">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h3>🤖 Chatbot Personality</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content">
-                    <div class="section-description">Customize how your chatbot communicates with customers</div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="chatbotTone">
-                                Communication Tone
-                                <span class="info-icon">i
-                                    <div class="tooltip">Friendly: Warm & welcoming | Professional: Courteous & formal | Casual: Relaxed & informal | Enthusiastic: Energetic with emojis</div>
-                                </span>
-                            </label>
-                            <select id="chatbotTone">
-                                <option>Friendly</option>
-                                <option>Professional</option>
-                                <option>Casual</option>
-                                <option>Enthusiastic</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="languageStyle">
-                                Language Style
-                                <span class="info-icon">i
-                                    <div class="tooltip">How formal or casual the language should be</div>
-                                </span>
-                            </label>
-                            <select id="languageStyle">
-                                <option>Conversational</option>
-                                <option>Formal</option>
-                                <option>Local/Regional</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="expertiseLevel">
-                                Information Level
-                                <span class="info-icon">i
-                                    <div class="tooltip">Basic: Simple answers | Detailed expert: In-depth technical info | Educational: Focus on learning opportunities</div>
-                                </span>
-                            </label>
-                            <select id="expertiseLevel">
-                                <option>Basic information</option>
-                                <option>Detailed expert knowledge</option>
-                                <option>Educational focus</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="responseLength">Response Length</label>
-                            <select id="responseLength">
-                                <option>Brief (1-2 sentences)</option>
-                                <option>Moderate (2-3 sentences)</option>
-                                <option>Detailed (3-4 sentences)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="customGreeting">Custom Welcome Message</label>
-                        <textarea id="customGreeting" placeholder="Hi! Welcome to [Business Name]. I'm here to help you plan your perfect adventure!"></textarea>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Contact Preferences -->
-            <div class="form-section">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h3>📞 Contact Preferences</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content">
-                    <div class="section-description">How and when customers can reach your team</div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="responseTime">Expected Response Time</label>
-                            <select id="responseTime">
-                                <option>15 minutes</option>
-                                <option>30 minutes</option>
-                                <option>1 hour</option>
-                                <option>2 hours</option>
-                                <option>Same day</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="contactMethods">Preferred Contact Methods</label>
-                            <input type="text" id="contactMethods" placeholder="Email, Phone, WhatsApp">
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="operatingHours">Human Support Hours</label>
-                            <input type="text" id="operatingHours" placeholder="9 AM - 5 PM EST, Monday-Friday">
-                        </div>
-                        <div class="form-group">
-                            <label for="handoffTriggers">Agent Handoff Keywords</label>
-                            <input type="text" id="handoffTriggers" placeholder="urgent, emergency, complaint, refund">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Branding -->
-            <div class="form-section">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h3>🎨 Branding</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content">
-                    <div class="section-description">Customize the look and feel of your chat widget</div>
-                    
-                    <div class="form-group">
-                        <label>Chat Widget Color Theme</label>
-                        <div class="color-options">
-                            <label class="color-option selected">
-                                <input type="radio" name="brandColor" value="#8B5CF6" checked onchange="updateColorOption(this)">
-                                <div class="color-swatch" style="background: #8B5CF6;"></div>
-                                <span>Purple</span>
-                            </label>
-                            <label class="color-option">
-                                <input type="radio" name="brandColor" value="#3B82F6" onchange="updateColorOption(this)">
-                                <div class="color-swatch" style="background: #3B82F6;"></div>
-                                <span>Blue</span>
-                            </label>
-                            <label class="color-option">
-                                <input type="radio" name="brandColor" value="#10B981" onchange="updateColorOption(this)">
-                                <div class="color-swatch" style="background: #10B981;"></div>
-                                <span>Green</span>
-                            </label>
-                            <label class="color-option">
-                                <input type="radio" name="brandColor" value="#F59E0B" onchange="updateColorOption(this)">
-                                <div class="color-swatch" style="background: #F59E0B;"></div>
-                                <span>Orange</span>
-                            </label>
-                            <label class="color-option">
-                                <input type="radio" name="brandColor" value="#EF4444" onchange="updateColorOption(this)">
-                                <div class="color-swatch" style="background: #EF4444;"></div>
-                                <span>Red</span>
-                            </label>
-                            <label class="color-option">
-                                <input type="radio" name="brandColor" value="#6366F1" onchange="updateColorOption(this)">
-                                <div class="color-swatch" style="background: #6366F1;"></div>
-                                <span>Indigo</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Waiver Integration -->
-            <div class="form-section">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h3>📝 Waiver Integration</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content">
-                    <div class="section-description">Connect your Wherewolf waiver system</div>
-                    
-                    <div class="form-group">
-                        <label for="waiverLink">Your Wherewolf Waiver Link</label>
-                        <input type="url" id="waiverLink" placeholder="https://mono.wherewolf.co.nz/your-waiver-id">
-                        <p class="help-text">Customers will be able to ask for the waiver and get this link automatically</p>
-                    </div>
-                </div>
-            </div>
-
-            <button type="submit" class="generate-btn">🚀 Generate My Enhanced Chatbot</button>
-        </form>
-
-        <div id="embedSection" style="display: none;">
-            <h3 style="margin-top: 40px;">🎉 Your Enhanced Chatbot is Ready!</h3>
-            <p style="margin-bottom: 20px;">Copy this code and paste it into your website:</p>
+        if (result.success && result.embedCode) {
+            // 🆕 ENHANCED: Show different success messages based on alert preference
+            document.getElementById('embedCode').textContent = result.embedCode;
             
-            <div class="embed-code">
-                <button class="copy-btn" onclick="copyCode()">Copy Code</button>
-                <pre id="embedCode"></pre>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Generate time slots every 30 minutes
-        function generateTimeSlots() {
-            const timeSlotsContainer = document.getElementById('timeSlots');
-            const times = [];
+            // Create enhanced success section with conditional dashboard link
+            const successSection = document.getElementById('embedSection');
+            let successHTML = `
+                <h3 style="margin-top: 40px;">🎉 Your Enhanced Chatbot is Ready!</h3>
+                <div style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border: 2px solid #10b981; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                    <h4 style="color: #047857; margin: 0 0 10px 0;">✅ Operator ID: <code style="background: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">${result.operatorId}</code></h4>
+            `;
             
-            for (let hour = 0; hour < 24; hour++) {
-                for (let minute = 0; minute < 60; minute += 30) {
-                    const time = new Date(2000, 0, 1, hour, minute);
-                    const timeStr = time.toLocaleTimeString('en-US', { 
-                        hour: 'numeric', 
-                        minute: '2-digit',
-                        hour12: true 
-                    });
-                    times.push(timeStr);
-                }
-            }
-            
-            // Pre-select some popular times
-            const popularTimes = ['9:00 AM', '2:00 PM', '5:00 PM'];
-            
-            times.forEach(time => {
-                const isPopular = popularTimes.includes(time);
-                const label = document.createElement('label');
-                label.className = 'time-slot' + (isPopular ? ' selected' : '');
-                label.innerHTML = `
-                    <input type="checkbox" value="${time}" onchange="updateTimeSlot(this)" ${isPopular ? 'checked' : ''}>
-                    <span>${time}</span>
+            if (selectedAlertPreference === 'dashboard') {
+                successHTML += `
+                    <div style="background: #8B5CF6; color: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                        <h4 style="margin: 0 0 10px 0;">📊 Your Dashboard Link:</h4>
+                        <a href="${result.baseUrl}/dashboard" target="_blank" style="color: white; font-weight: bold; text-decoration: underline; font-size: 16px;">${result.baseUrl}/dashboard</a>
+                        <p style="margin: 10px 0 0 0; font-size: 14px; opacity: 0.9;">💡 Bookmark this link! Use it to respond to customers in real-time.</p>
+                    </div>
                 `;
-                timeSlotsContainer.appendChild(label);
-            });
-        }
-
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            generateTimeSlots();
-            updateProgress();
-        });
-
-        // Section toggle functionality
-        function toggleSection(header) {
-            const content = header.nextElementSibling;
-            const isOpen = content.classList.contains('open');
-            
-            if (isOpen) {
-                content.classList.remove('open');
-                header.classList.remove('open');
+            } else if (selectedAlertPreference === 'email') {
+                successHTML += `
+                    <div style="background: #f59e0b; color: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                        <h4 style="margin: 0 0 10px 0;">📧 Email Alerts Enabled</h4>
+                        <p style="margin: 0; font-size: 14px; opacity: 0.9;">You'll receive email notifications when customers request human support.</p>
+                    </div>
+                `;
             } else {
-                content.classList.add('open');
-                header.classList.add('open');
+                successHTML += `
+                    <div style="background: #6b7280; color: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                        <h4 style="margin: 0 0 10px 0;">🤖 AI-Only Mode</h4>
+                        <p style="margin: 0; font-size: 14px; opacity: 0.9;">Your chatbot will handle all requests automatically without human alerts.</p>
+                    </div>
+                `;
             }
             
-            updateProgress();
-        }
-
-        // Update time slot selection
-        function updateTimeSlot(checkbox) {
-            const slotElement = checkbox.closest('.time-slot');
-            slotElement.classList.toggle('selected', checkbox.checked);
-        }
-
-        // Update activity selection
-        function updateActivityOption(checkbox) {
-            const optionElement = checkbox.closest('.activity-option');
-            optionElement.classList.toggle('selected', checkbox.checked);
-        }
-
-        // Update color selection
-        function updateColorOption(radio) {
-            document.querySelectorAll('.color-option').forEach(option => {
-                option.classList.remove('selected');
-            });
-            radio.closest('.color-option').classList.add('selected');
-        }
-
-        // Toggle pricing section based on booking link
-        function togglePricingSection() {
-            const bookingLink = document.getElementById('bookingLink').value;
-            const pricingSection = document.getElementById('pricingSection');
+            successHTML += `
+                </div>
+                <p style="margin-bottom: 20px;">Copy this code and paste it into your website:</p>
+            `;
             
-            if (bookingLink) {
-                if (!pricingSection.querySelector('.conditional-overlay')) {
-                    const overlay = document.createElement('div');
-                    overlay.className = 'conditional-overlay';
-                    overlay.textContent = 'Pricing questions will be deferred to your booking system';
-                    pricingSection.appendChild(overlay);
-                }
-            } else {
-                const overlay = pricingSection.querySelector('.conditional-overlay');
-                if (overlay) {
-                    overlay.remove();
-                }
-            }
+            successSection.innerHTML = successHTML + `
+                <div class="embed-code">
+                    <button class="copy-btn" onclick="copyCode()">Copy Code</button>
+                    <pre id="embedCode">${result.embedCode}</pre>
+                </div>
+                
+                <div style="background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                    <h4 style="margin: 0 0 15px 0; color: #374151;">🚀 Next Steps:</h4>
+                    <ol style="margin: 0; padding-left: 20px; color: #6b7280;">
+                        <li style="margin-bottom: 8px;">Copy the embed code above and paste it into your website</li>
+                        <li style="margin-bottom: 8px;">Test your chatbot by visiting your website</li>
+                        ${selectedAlertPreference === 'dashboard' ? '<li style="margin-bottom: 8px;"><strong>Bookmark your dashboard link</strong> for responding to customers</li>' : ''}
+                        <li style="margin-bottom: 8px;">Try asking for an agent to test the handoff system</li>
+                        <li>Customize further by creating a new chatbot with different settings</li>
+                    </ol>
+                </div>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="/setup" style="background: #8B5CF6; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Create Another Chatbot</a>
+                    ${selectedAlertPreference === 'dashboard' ? `<a href="${result.baseUrl}/dashboard" target="_blank" style="background: #10b981; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-left: 10px;">Open Dashboard</a>` : ''}
+                </div>
+            `;
+            
+            successSection.style.display = 'block';
+            successSection.scrollIntoView({ behavior: 'smooth' });
+        } else {
+            alert('Failed to generate chatbot: ' + JSON.stringify(result));
         }
-
-        // Update progress bar
-        function updateProgress() {
-            const totalSections = document.querySelectorAll('.form-section').length;
-            const openSections = document.querySelectorAll('.section-content.open').length;
-            const progress = (openSections / totalSections) * 100;
-            document.getElementById('progressFill').style.width = progress + '%';
-        }
-
-        // Form submission
-        document.getElementById('chatbotForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            // Collect all form data
-            const selectedTimes = Array.from(document.querySelectorAll('.time-slot input:checked')).map(cb => cb.value);
-            const selectedActivities = Array.from(document.querySelectorAll('.activity-option input:checked')).map(cb => cb.value);
-            const selectedColor = document.querySelector('input[name="brandColor"]:checked').value;
-
-            const config = {
-                // Basic Information
-                businessName: document.getElementById('businessName').value,
-                businessType: document.getElementById('businessType').value,
-                location: document.getElementById('location').value,
-                
-                // Business Details
-                websiteUrl: document.getElementById('websiteUrl').value,
-                phoneNumber: document.getElementById('phoneNumber').value,
-                businessHours: document.getElementById('businessHours').value,
-                peakSeason: document.getElementById('peakSeason').value,
-                maxGroupSize: document.getElementById('maxGroupSize').value,
-                companyTagline: document.getElementById('companyTagline').value,
-                
-                // Activity Customization
-                activityTypes: selectedActivities,
-                difficultyLevel: document.getElementById('difficultyLevel').value,
-                minAge: document.getElementById('minAge').value,
-                maxAge: document.getElementById('maxAge').value,
-                durationOptions: document.getElementById('durationOptions').value,
-                seasonalAvailability: document.getElementById('seasonalAvailability').value,
-                
-                // Schedule & Pricing
-                times: selectedTimes,
-                duration: document.getElementById('duration').value,
-                adultPrice: document.getElementById('adultPrice').value,
-                childPrice: document.getElementById('childPrice').value,
-                groupDiscount: document.getElementById('groupDiscount').value,
-                specialOffers: document.getElementById('specialOffers').value,
-                
-                // Policies
-                whatToBring: document.getElementById('whatToBring').value,
-                cancellationPolicy: document.getElementById('cancellationPolicy').value,
-                weatherPolicy: document.getElementById('weatherPolicy').value,
-                
-                // Chatbot Personality
-                chatbotTone: document.getElementById('chatbotTone').value,
-                languageStyle: document.getElementById('languageStyle').value,
-                expertiseLevel: document.getElementById('expertiseLevel').value,
-                responseLength: document.getElementById('responseLength').value,
-                customGreeting: document.getElementById('customGreeting').value,
-                
-                // Advanced Features
-                bookingLink: document.getElementById('bookingLink').value,
-                socialMedia: document.getElementById('socialMedia').value,
-                certifications: document.getElementById('certifications').value,
-                
-                // Contact Preferences
-                responseTime: document.getElementById('responseTime').value,
-                contactMethods: document.getElementById('contactMethods').value,
-                operatingHours: document.getElementById('operatingHours').value,
-                handoffTriggers: document.getElementById('handoffTriggers').value,
-                
-                // Branding
-                brandColor: selectedColor,
-                
-                // Waiver
-                waiverLink: document.getElementById('waiverLink').value
-            };
-
-            console.log('Submitting enhanced config:', config);
-
-            try {
-                const response = await fetch('/api/save-config', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(config)
-                });
-
-                const result = await response.json();
-                console.log('Server response:', result);
-
-                if (result.success && result.embedCode) {
-                    document.getElementById('embedCode').textContent = result.embedCode;
-                    document.getElementById('embedSection').style.display = 'block';
-                    document.getElementById('embedSection').scrollIntoView({ behavior: 'smooth' });
-                } else {
-                    alert('Failed to generate chatbot: ' + JSON.stringify(result));
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Error saving configuration: ' + error.message);
-            }
-        });
-
-        function copyCode() {
-            const embedCodeElement = document.getElementById('embedCode');
-            const textToCopy = embedCodeElement.textContent;
-
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(textToCopy).then(() => {
-                    alert('Embed code copied to clipboard!');
-                });
-            } else {
-                const textArea = document.createElement("textarea");
-                textArea.value = textToCopy;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                alert('Embed code copied to clipboard!');
-            }
-        }
-    </script>
-</body>
-</html>
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error saving configuration: ' + error.message);
+    }
+});
