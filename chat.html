@@ -456,6 +456,7 @@
         let isFirstMessage = true;
         let hasProvidedContact = false;
         let pendingMessage = null;
+        let sessionId = 'chat_' + Math.random().toString(36).substr(2, 9);
 
         // Two-way chat variables
         let pollingInterval = null;
@@ -699,7 +700,7 @@
                         email, 
                         phone, 
                         operatorId: operatorId,
-                        sessionId: 'default'
+                        sessionId: sessionId
                     })
                 });
                 
@@ -762,7 +763,8 @@
                     },
                     body: JSON.stringify({ 
                         message: message,
-                        operatorId: operatorId 
+                        operatorId: operatorId
+                        sessionId: sessionId
                     })
                 });
                 
@@ -859,6 +861,7 @@
                         },
                         body: JSON.stringify({ 
                             operatorId: operatorId,
+                            sessionId: sessionId
                             lastMessageCount: lastMessageCount
                         })
                     });
