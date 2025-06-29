@@ -14,17 +14,19 @@
     console.log('Loading enhanced widget for operator:', operatorId);
     console.log('Using brand color:', buttonColor);
     
-    // Get server URL from config or detect from script source
-    let serverUrl = config.serverUrl;
-    
-    if (!serverUrl) {
-        const currentScript = document.currentScript;
-        if (currentScript) {
-            serverUrl = currentScript.src.replace('/widget.js', '');
-        } else {
-            serverUrl = 'https://wherewolf-chatbot.onrender.com'; // Fallback
-        }
+// Get server URL from config or detect from script source
+let serverUrl = config.serverUrl;
+
+if (!serverUrl) {
+    const currentScript = document.currentScript;
+    if (currentScript) {
+        // Fix: Handle query parameters properly
+        const scriptUrl = new URL(currentScript.src);
+        serverUrl = `${scriptUrl.protocol}//${scriptUrl.host}`;
+    } else {
+        serverUrl = 'https://wherewolf-chatbot.onrender.com'; // Fallback
     }
+}
     console.log('Server URL:', serverUrl);
 
     // Helper function to determine if color is light or dark
