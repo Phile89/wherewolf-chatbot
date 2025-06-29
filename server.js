@@ -331,34 +331,52 @@ async function getOperatorConfig(operatorId) {
     }
 }
 
-// Dashboard API - Get all conversations (with optional operator filter)
+// Dashboard API - Get all conversations (with optional operator filter) - FIXED VERSION
 app.get('/api/dashboard/conversations', async (req, res) => {
     try {
         const operatorFilter = req.query.operator;
         
-        let query = `
-            SELECT 
-                c.conversation_id,
-                c.operator_id,
-                c.customer_email,
-                c.customer_phone,
-                c.started_at,
-                c.last_message_at,
-                c.message_count,
-                c.agent_requested,
-                oc.config->>'businessName' as business_name
-            FROM conversations c
-            LEFT JOIN operator_configs oc ON c.operator_id = oc.operator_id
-        `;
-        
+        let query;
         let params = [];
         
         if (operatorFilter) {
-            query += ' WHERE c.operator_id = $1';
-            params.push(operatorFilter);
+            query = `
+                SELECT 
+                    c.conversation_id,
+                    c.operator_id,
+                    c.customer_email,
+                    c.customer_phone,
+                    c.started_at,
+                    c.last_message_at,
+                    c.message_count,
+                    c.agent_requested,
+                    oc.config->>'businessName' as business_name
+                FROM conversations c
+                LEFT JOIN operator_configs oc ON c.operator_id = oc.operator_id
+                WHERE c.operator_id = $1
+                ORDER BY c.last_message_at DESC 
+                LIMIT 100
+            `;
+            params = [operatorFilter];
+        } else {
+            query = `
+                SELECT 
+                    c.conversation_id,
+                    c.operator_id,
+                    c.customer_email,
+                    c.customer_phone,
+                    c.started_at,
+                    c.last_message_at,
+                    c.message_count,
+                    c.agent_requested,
+                    oc.config->>'businessName' as business_name
+                FROM conversations c
+                LEFT JOIN operator_configs oc ON c.operator_id = oc.operator_id
+                ORDER BY c.last_message_at DESC 
+                LIMIT 100
+            `;
+            params = [];
         }
-        
-        query += ' ORDER BY c.last_message_at DESC LIMIT 100';
         
         const result = await pool.query(query, params);
 
@@ -371,7 +389,6 @@ app.get('/api/dashboard/conversations', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch conversations' });
     }
 });
-
 // Dashboard API - Get messages for a conversation
 app.get('/api/dashboard/conversation/:conversationId/messages', async (req, res) => {
     try {
