@@ -332,7 +332,7 @@
 <body>
     <div class="header">
         <h1>🚀 Wherewolf Chatbot Dashboard</h1>
-        <p>Monitor and manage all your chatbot conversations in real-time</p>
+        <p id="headerSubtitle">Monitor and manage all your chatbot conversations in real-time</p>
     </div>
 
     <div class="container">
@@ -397,11 +397,18 @@
         let conversations = [];
         let selectedConversationId = null;
 
+        // Get operator ID from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const operatorFilter = urlParams.get('operator');
+
         // Load dashboard data
         async function loadDashboard() {
             try {
                 // Load stats
-                const statsResponse = await fetch('/api/dashboard/stats');
+                const statsUrl = operatorFilter ? 
+                    `/api/dashboard/stats?operator=${operatorFilter}` : 
+                    '/api/dashboard/stats';
+                const statsResponse = await fetch(statsUrl);
                 const statsData = await statsResponse.json();
                 
                 if (statsData.success) {
@@ -409,7 +416,10 @@
                 }
 
                 // Load conversations
-                const conversationsResponse = await fetch('/api/dashboard/conversations');
+                const conversationsUrl = operatorFilter ? 
+                    `/api/dashboard/conversations?operator=${operatorFilter}` : 
+                    '/api/dashboard/conversations';
+                const conversationsResponse = await fetch(conversationsUrl);
                 const conversationsData = await conversationsResponse.json();
                 
                 if (conversationsData.success) {
@@ -588,6 +598,12 @@
 
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
+            // Update header if filtering by operator
+            if (operatorFilter) {
+                document.getElementById('headerSubtitle').textContent = 
+                    `Viewing conversations for Operator: ${operatorFilter}`;
+            }
+            
             loadDashboard();
             startAutoRefresh();
         });
