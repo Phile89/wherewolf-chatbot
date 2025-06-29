@@ -699,8 +699,7 @@ If someone needs complex help or wants to make special requests, suggest they ca
 
     return SYSTEM_PROMPT;
 }
-
-// 🆕 NEW: Poll for new messages endpoint (for customers to get operator responses)
+// 🆕 IMPROVED: Faster and more efficient poll-messages endpoint
 app.post('/api/chat/poll-messages', async (req, res) => {
     const { operatorId, sessionId = 'default', lastMessageCount = 0 } = req.body;
 
@@ -723,34 +722,64 @@ app.post('/api/chat/poll-messages', async (req, res) => {
 
         const conversationId = convResult.rows[0].conversation_id;
 
-        // Get messages newer than the last count
+        // 🆕 OPTIMIZED: Only get recent messages for better performance
         const messagesResult = await pool.query(`
             SELECT role, content, timestamp
             FROM messages 
             WHERE conversation_id = $1 
+            AND timestamp > NOW() - INTERVAL '1 hour'
             ORDER BY timestamp ASC
         `, [conversationId]);
 
         const allMessages = messagesResult.rows;
         const newMessages = allMessages.slice(lastMessageCount);
 
-        // Filter to only operator and system messages for polling
+        // 🆕 IMPROVED: Only return operator and system messages, but track all for count
         const operatorMessages = newMessages.filter(msg => 
             msg.role === 'operator' || msg.role === 'system'
         );
 
-        res.json({
+        // 🆕 NEW: Add metadata for better client handling
+        const response = {
             newMessages: operatorMessages,
             totalMessages: allMessages.length,
-            hasOperatorMessages: operatorMessages.length > 0
+            hasOperatorMessages: operatorMessages.length > 0,
+            lastPolled: new Date().toISOString()
+        };
+
+        // 🆕 PERFORMANCE: Set appropriate cache headers
+        res.set({
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
         });
+
+        res.json(response);
 
     } catch (error) {
         console.error('Error polling messages:', error);
-        res.status(500).json({ error: 'Failed to poll messages' });
+        res.status(500).json({ 
+            error: 'Failed to poll messages',
+            timestamp: new Date().toISOString()
+        });
     }
 });
 
+// 🆕 NEW: Lightweight heartbeat endpoint for connection testing
+app.head('/api/test', (req, res) => {
+    res.status(200).end();
+});
+
+app.get('/api/test', (req, res) => {
+    res.json({ 
+        success: true, 
+        message: 'Enhanced database server with Two-Way Chat is working!',
+        timestamp: new Date().toISOString(),
+        emailConfigured: !!emailTransporter,
+        databaseConfigured: !!process.env.DATABASE_URL,
+        version: 'Enhanced v2.2 with Faster Two-Way Chat'
+    });
+});
 // 🆕 NEW: Send operator message endpoint
 app.post('/api/dashboard/send-message', async (req, res) => {
     const { conversationId, message, operatorId } = req.body;
