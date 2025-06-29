@@ -1,13 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const fs = require('fs');
 const path = require('path');
 const nodemailer = require('nodemailer');
+const { Pool } = require('pg');
 require('dotenv').config();
 
 console.log('CLAUDE_API_KEY:', process.env.CLAUDE_API_KEY ? 'Loaded' : 'Missing');
 console.log('GMAIL_USER:', process.env.GMAIL_USER ? 'Loaded' : 'Missing');
+console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'Loaded' : 'Missing');
 console.log('PORT:', process.env.PORT || 3000);
 
 const app = express();
@@ -17,13 +18,33 @@ app.use(express.json());
 // Serve static files from the root directory
 app.use(express.static(__dirname));
 
-// Create configs directory if it doesn't exist
-const configsDir = path.join(__dirname, 'configs');
-if (!fs.existsSync(configsDir)) {
-    fs.mkdirSync(configsDir);
+// Database connection
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+
+// Initialize database table
+async function initializeDatabase() {
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS operator_configs (
+                operator_id VARCHAR(10) PRIMARY KEY,
+                config JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        console.log('✅ Database table initialized');
+    } catch (error) {
+        console.error('❌ Database initialization error:', error);
+    }
 }
 
-// Conversation history storage
+// Initialize database on startup
+initializeDatabase();
+
+// Conversation history storage (in-memory for now)
 const conversations = {};
 
 // Email transporter setup
@@ -154,18 +175,60 @@ app.get('/chat.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'chat.html'));
 });
 
-// Endpoint to save operator config (enhanced)
-app.post('/api/save-config', (req, res) => {
+// Database function to save operator config
+async function saveOperatorConfig(operatorId, config) {
+    try {
+        await pool.query(
+            `INSERT INTO operator_configs (operator_id, config, updated_at) 
+             VALUES ($1, $2, NOW()) 
+             ON CONFLICT (operator_id) 
+             DO UPDATE SET config = $2, updated_at = NOW()`,
+            [operatorId, JSON.stringify(config)]
+        );
+        console.log(`✅ Config saved to database for operator ${operatorId}`);
+        return true;
+    } catch (error) {
+        console.error('❌ Database save error:', error);
+        return false;
+    }
+}
+
+// Database function to get operator config
+async function getOperatorConfig(operatorId) {
+    try {
+        const result = await pool.query(
+            'SELECT config FROM operator_configs WHERE operator_id = $1',
+            [operatorId]
+        );
+        
+        if (result.rows.length > 0) {
+            console.log(`✅ Config loaded from database for operator ${operatorId}`);
+            return result.rows[0].config;
+        } else {
+            console.log(`❌ Config not found in database for operator ${operatorId}`);
+            return null;
+        }
+    } catch (error) {
+        console.error('❌ Database read error:', error);
+        return null;
+    }
+}
+
+// Endpoint to save operator config (with database)
+app.post('/api/save-config', async (req, res) => {
     console.log('Received enhanced config save request:', req.body);
     
     const config = req.body;
     const operatorId = Math.random().toString(36).substring(2, 9); 
 
-    const configFilePath = path.join(configsDir, `${operatorId}.json`);
-
     try {
-        // Save enhanced config to file
-        fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2), 'utf8');
+        // Save enhanced config to database
+        const saved = await saveOperatorConfig(operatorId, config);
+        
+        if (!saved) {
+            return res.status(500).json({ success: false, error: 'Failed to save configuration to database.' });
+        }
+
         console.log(`Enhanced config saved successfully for operator ${operatorId}`);
 
         // Dynamic URL generation
@@ -191,29 +254,29 @@ app.post('/api/save-config', (req, res) => {
             baseUrl
         });
     } catch (error) {
-        console.error('Error saving enhanced config file:', error);
+        console.error('Error saving enhanced config:', error);
         res.status(500).json({ success: false, error: 'Failed to save configuration.' });
     }
 });
 
-// Endpoint to get operator config
-app.get('/api/config/:operatorId', (req, res) => {
+// Endpoint to get operator config (from database)
+app.get('/api/config/:operatorId', async (req, res) => {
     const { operatorId } = req.params;
-    const configPath = path.join(configsDir, `${operatorId}.json`);
 
-    console.log(`Looking for config at: ${configPath}`);
+    console.log(`Looking for config in database for operator: ${operatorId}`);
 
-    if (fs.existsSync(configPath)) {
-        try {
-            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    try {
+        const config = await getOperatorConfig(operatorId);
+        
+        if (config) {
             res.json(config);
-        } catch (error) {
-            console.error(`Error reading config for ${operatorId}:`, error);
-            res.status(500).json({ error: 'Failed to read configuration.' });
+        } else {
+            console.log(`Config not found for operator: ${operatorId}`);
+            res.status(404).json({ error: 'Config not found' });
         }
-    } else {
-        console.log(`Config not found for operator: ${operatorId}`);
-        res.status(404).json({ error: 'Config not found' });
+    } catch (error) {
+        console.error(`Error reading config for ${operatorId}:`, error);
+        res.status(500).json({ error: 'Failed to read configuration.' });
     }
 });
 
@@ -387,14 +450,13 @@ app.post('/api/chat', async function(req, res) {
         return res.status(400).json({ error: "operatorId is required for chat" });
     }
 
-    // Load this operator's enhanced config
+    // Load this operator's enhanced config from database
     let currentConfig;
     try {
-        const configPath = path.join(configsDir, `${operatorId}.json`);
-        if (!fs.existsSync(configPath)) {
+        currentConfig = await getOperatorConfig(operatorId);
+        if (!currentConfig) {
             return res.status(404).json({ error: 'Operator config not found.' });
         }
-        currentConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     } catch (error) {
         console.error(`Error loading config for operatorId ${operatorId}:`, error);
         return res.status(500).json({ error: 'Failed to load operator configuration.' });
@@ -653,26 +715,28 @@ app.post('/contact-info', (req, res) => {
 app.get('/api/test', (req, res) => {
     res.json({ 
         success: true, 
-        message: 'Enhanced server is working!',
+        message: 'Enhanced database server is working!',
         timestamp: new Date().toISOString(),
         emailConfigured: !!emailTransporter,
-        version: 'Enhanced v2.0'
+        databaseConfigured: !!process.env.DATABASE_URL,
+        version: 'Enhanced v2.0 with PostgreSQL'
     });
 });
 
-// Enhanced debug endpoint
-app.get('/api/debug/:operatorId', (req, res) => {
+// Enhanced debug endpoint with database info
+app.get('/api/debug/:operatorId', async (req, res) => {
     const { operatorId } = req.params;
-    const configPath = path.join(configsDir, `${operatorId}.json`);
 
-    if (fs.existsSync(configPath)) {
-        try {
-            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    try {
+        const config = await getOperatorConfig(operatorId);
+        
+        if (config) {
             res.json({
                 success: true,
                 operatorId,
                 config,
                 emailConfigured: !!emailTransporter,
+                databaseConfigured: !!process.env.DATABASE_URL,
                 enhancedFeatures: {
                     activityTypes: config.activityTypes || [],
                     brandColor: config.brandColor || '#8B5CF6',
@@ -694,21 +758,49 @@ app.get('/api/debug/:operatorId', (req, res) => {
                     filtered: config.times ? config.times.filter(time => time && time.trim() !== '') : []
                 }
             });
-        } catch (error) {
-            res.status(500).json({ error: 'Failed to read config', details: error.message });
+        } else {
+            res.status(404).json({ error: 'Config not found in database' });
         }
-    } else {
-        res.status(404).json({ error: 'Config not found' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to read config from database', details: error.message });
     }
+});
+
+// Database health check endpoint
+app.get('/api/db-health', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT COUNT(*) FROM operator_configs');
+        res.json({
+            success: true,
+            message: 'Database connection healthy',
+            totalConfigs: parseInt(result.rows[0].count),
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Database connection failed',
+            error: error.message
+        });
+    }
+});
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+    console.log('Gracefully shutting down...');
+    await pool.end();
+    process.exit(0);
 });
 
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`\n🚀 Enhanced Chatbot server running on port ${PORT}`);
+    console.log(`\n🚀 Enhanced Chatbot server with PostgreSQL running on port ${PORT}`);
     console.log('📝 Enhanced setup page: /setup');
     console.log('💬 Chat interface: /chat.html');
     console.log('🔧 API test: /api/test');
+    console.log('🗄️ Database health: /api/db-health');
     console.log('📧 Email service:', emailTransporter ? 'Ready' : 'Not configured');
-    console.log('✨ Enhanced features: Brand colors, Personality, Advanced configs');
+    console.log('🗃️ Database:', process.env.DATABASE_URL ? 'Connected' : 'Not configured');
+    console.log('✨ Enhanced features: Brand colors, Personality, PostgreSQL storage');
 });
