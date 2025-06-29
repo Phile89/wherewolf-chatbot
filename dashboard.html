@@ -190,6 +190,76 @@
             gap: 12px;
         }
 
+        .chat-input-container {
+            padding: 16px 20px;
+            border-top: 1px solid #e2e8f0;
+            background: #f8fafc;
+            display: none;
+        }
+
+        .chat-input-container.active {
+            display: block;
+        }
+
+        .chat-input-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            outline: none;
+            resize: none;
+            font-family: inherit;
+            font-size: 14px;
+            min-height: 20px;
+            max-height: 100px;
+        }
+
+        .chat-input:focus {
+            border-color: #8B5CF6;
+        }
+
+        .send-btn {
+            background: #8B5CF6;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            background: #7C3AED;
+        }
+
+        .send-btn:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+        }
+
+        .operator-badge {
+            background: #10b981;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 8px;
+            font-weight: 600;
+        }
+
+        .operator-info {
+            font-size: 12px;
+            color: #64748b;
+            margin-bottom: 8px;
+        }
+
         .message {
             max-width: 85%;
             padding: 12px 16px;
@@ -211,6 +281,24 @@
             align-self: flex-start;
             border-bottom-left-radius: 6px;
             border: 1px solid #e2e8f0;
+        }
+
+        .message.operator {
+            background: #10b981;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 6px;
+            border: 1px solid #059669;
+        }
+
+        .message.system {
+            background: #fef3c7;
+            color: #92400e;
+            align-self: center;
+            max-width: 90%;
+            text-align: center;
+            font-size: 12px;
+            font-style: italic;
         }
 
         .message-time {
@@ -297,154 +385,6 @@
             border: 1px solid #fecaca;
         }
 
-        /* Notification styles */
-        .notification-panel {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 10000;
-            max-width: 350px;
-        }
-
-        .notification {
-            background: white;
-            border: 2px solid #ef4444;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            animation: slideIn 0.3s ease-out;
-            position: relative;
-        }
-
-        .notification.agent-request {
-            border-color: #ef4444;
-            background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
-        }
-
-        .notification.new-message {
-            border-color: #8B5CF6;
-            background: linear-gradient(135deg, #f3f0ff 0%, #ffffff 100%);
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-
-        .notification-close {
-            position: absolute;
-            top: 8px;
-            right: 12px;
-            cursor: pointer;
-            font-size: 18px;
-            color: #666;
-        }
-
-        .notification-title {
-            font-weight: 700;
-            margin-bottom: 8px;
-            color: #1a202c;
-        }
-
-        .notification-content {
-            font-size: 14px;
-            color: #64748b;
-            margin-bottom: 12px;
-        }
-
-        .notification-actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        .notification-btn {
-            padding: 6px 12px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .notification-btn.primary {
-            background: #ef4444;
-            color: white;
-        }
-
-        .notification-btn.secondary {
-            background: #f1f5f9;
-            color: #64748b;
-        }
-
-        /* Analytics chart styles */
-        .analytics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 32px;
-        }
-
-        .chart-card {
-            background: white;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            border: 1px solid #e2e8f0;
-        }
-
-        .chart-title {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 16px;
-            color: #1a202c;
-        }
-
-        .chart-placeholder {
-            height: 200px;
-            background: #f8fafc;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #64748b;
-            font-style: italic;
-        }
-
-        /* Settings panel */
-        .settings-toggle {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: #8B5CF6;
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 50%;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
-            z-index: 1000;
-        }
-
-        .settings-panel {
-            position: fixed;
-            bottom: 80px;
-            left: 20px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            padding: 20px;
-            display: none;
-            border: 1px solid #e2e8f0;
-            z-index: 1000;
-        }
-
         /* Responsive design */
         @media (max-width: 1024px) {
             .main-content {
@@ -502,30 +442,6 @@
                 <div class="stat-number" id="activeOperators">-</div>
                 <div class="stat-label">Active Operators</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number" id="avgResponseTime">-</div>
-                <div class="stat-label">Avg Response Time</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="conversionRate">-</div>
-                <div class="stat-label">Contact Capture Rate</div>
-            </div>
-        </div>
-
-        <!-- Analytics Section -->
-        <div class="analytics-grid">
-            <div class="chart-card">
-                <h3 class="chart-title">📈 Messages Over Time</h3>
-                <div class="chart-placeholder">
-                    <canvas id="messagesChart" width="280" height="180"></canvas>
-                </div>
-            </div>
-            <div class="chart-card">
-                <h3 class="chart-title">🚨 Agent Requests</h3>
-                <div class="chart-placeholder">
-                    <canvas id="agentChart" width="280" height="180"></canvas>
-                </div>
-            </div>
         </div>
 
         <!-- Main Content -->
@@ -561,150 +477,35 @@
                         <p>Select a conversation from the left to view messages</p>
                     </div>
                 </div>
+                <div class="chat-input-container" id="chatInputContainer">
+                    <div class="operator-info">
+                        <strong>👨‍💼 You are now responding as the operator</strong> - Customer will see your messages immediately
+                    </div>
+                    <div class="chat-input-row">
+                        <textarea 
+                            class="chat-input" 
+                            id="operatorMessageInput" 
+                            placeholder="Type your response to the customer..."
+                            onkeypress="handleOperatorKeyPress(event)"
+                        ></textarea>
+                        <button class="send-btn" id="sendOperatorMessage" onclick="sendOperatorMessage()">
+                            Send
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-
-    <!-- Notification Panel -->
-    <div class="notification-panel" id="notificationPanel"></div>
-
-    <!-- Settings -->
-    <button class="settings-toggle" onclick="toggleSettings()">⚙️</button>
-    <div class="settings-panel" id="settingsPanel">
-        <h4 style="margin-top: 0;">🔔 Notification Settings</h4>
-        <label style="display: block; margin: 12px 0;">
-            <input type="checkbox" id="browserNotifications" onchange="updateNotificationSettings()"> 
-            Browser Notifications
-        </label>
-        <label style="display: block; margin: 12px 0;">
-            <input type="checkbox" id="soundAlerts" checked onchange="updateNotificationSettings()"> 
-            Sound Alerts
-        </label>
-        <label style="display: block; margin: 12px 0;">
-            <input type="checkbox" id="agentRequestAlerts" checked onchange="updateNotificationSettings()"> 
-            Agent Request Alerts
-        </label>
-        <hr style="margin: 16px 0;">
-        <h4>📊 Dashboard Settings</h4>
-        <label style="display: block; margin: 12px 0;">
-            Auto-refresh every:
-            <select id="refreshInterval" onchange="updateRefreshInterval()" style="margin-left: 8px;">
-                <option value="10000">10 seconds</option>
-                <option value="30000" selected>30 seconds</option>
-                <option value="60000">1 minute</option>
-                <option value="300000">5 minutes</option>
-            </select>
-        </label>
     </div>
 
     <script>
         let conversations = [];
         let selectedConversationId = null;
-        let refreshIntervalId = null;
-        let lastAgentRequestCount = 0;
-        let lastMessageCount = 0;
-        let notificationSettings = {
-            browserNotifications: false,
-            soundAlerts: true,
-            agentRequestAlerts: true
-        };
 
         // Get operator ID from URL parameter
         const urlParams = new URLSearchParams(window.location.search);
         const operatorFilter = urlParams.get('operator');
 
-        // Request browser notification permission
-        async function requestNotificationPermission() {
-            if ('Notification' in window) {
-                const permission = await Notification.requestPermission();
-                document.getElementById('browserNotifications').checked = permission === 'granted';
-                notificationSettings.browserNotifications = permission === 'granted';
-            }
-        }
-
-        // Show notification
-        function showNotification(title, message, type = 'agent-request') {
-            // Visual notification
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.innerHTML = `
-                <div class="notification-close" onclick="this.parentElement.remove()">×</div>
-                <div class="notification-title">${title}</div>
-                <div class="notification-content">${message}</div>
-                <div class="notification-actions">
-                    <button class="notification-btn primary" onclick="loadDashboard(); this.parentElement.parentElement.remove();">
-                        View Dashboard
-                    </button>
-                    <button class="notification-btn secondary" onclick="this.parentElement.parentElement.remove();">
-                        Dismiss
-                    </button>
-                </div>
-            `;
-
-            document.getElementById('notificationPanel').appendChild(notification);
-
-            // Auto-remove after 10 seconds
-            setTimeout(() => {
-                if (notification.parentElement) {
-                    notification.remove();
-                }
-            }, 10000);
-
-            // Browser notification
-            if (notificationSettings.browserNotifications && 'Notification' in window && Notification.permission === 'granted') {
-                new Notification(title, {
-                    body: message,
-                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🚨</text></svg>'
-                });
-            }
-
-            // Sound alert
-            if (notificationSettings.soundAlerts) {
-                playNotificationSound();
-            }
-        }
-
-        // Play notification sound
-        function playNotificationSound() {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-
-            oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-            oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
-            oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.2);
-
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.3);
-        }
-
-        // Settings functions
-        function toggleSettings() {
-            const panel = document.getElementById('settingsPanel');
-            panel.style.display = panel.style.display === 'none' || !panel.style.display ? 'block' : 'none';
-        }
-
-        function updateNotificationSettings() {
-            notificationSettings.browserNotifications = document.getElementById('browserNotifications').checked;
-            notificationSettings.soundAlerts = document.getElementById('soundAlerts').checked;
-            notificationSettings.agentRequestAlerts = document.getElementById('agentRequestAlerts').checked;
-            
-            localStorage.setItem('dashboardNotificationSettings', JSON.stringify(notificationSettings));
-        }
-
-        function updateRefreshInterval() {
-            const interval = parseInt(document.getElementById('refreshInterval').value);
-            startAutoRefresh(interval);
-            localStorage.setItem('dashboardRefreshInterval', interval.toString());
-        }
-
-        // Enhanced load dashboard with change detection
+        // Load dashboard data
         async function loadDashboard() {
             try {
                 // Load stats
@@ -716,17 +517,6 @@
                 
                 if (statsData.success) {
                     updateStats(statsData.stats);
-                    
-                    // Check for new agent requests
-                    const currentAgentRequests = parseInt(statsData.stats.agent_requests) || 0;
-                    if (notificationSettings.agentRequestAlerts && currentAgentRequests > lastAgentRequestCount && lastAgentRequestCount > 0) {
-                        showNotification(
-                            '🚨 New Agent Request!',
-                            `${currentAgentRequests - lastAgentRequestCount} customer(s) requesting human assistance`,
-                            'agent-request'
-                        );
-                    }
-                    lastAgentRequestCount = currentAgentRequests;
                 }
 
                 // Load conversations
@@ -737,136 +527,23 @@
                 const conversationsData = await conversationsResponse.json();
                 
                 if (conversationsData.success) {
-                    const previousConversationCount = conversations.length;
                     conversations = conversationsData.conversations;
                     renderConversations(conversations);
-                    
-                    // Check for new conversations
-                    if (conversations.length > previousConversationCount && previousConversationCount > 0) {
-                        showNotification(
-                            '💬 New Conversation',
-                            `${conversations.length - previousConversationCount} new conversation(s) started`,
-                            'new-message'
-                        );
-                    }
                 } else {
                     showError('Failed to load conversations');
                 }
-
-                // Update analytics
-                updateAnalytics();
-
             } catch (error) {
                 console.error('Error loading dashboard:', error);
                 showError('Failed to connect to server');
             }
         }
 
-        // Update stats display with enhanced metrics
+        // Update stats display
         function updateStats(stats) {
             document.getElementById('totalConversations').textContent = stats.total_conversations || 0;
             document.getElementById('agentRequests').textContent = stats.agent_requests || 0;
             document.getElementById('withEmail').textContent = stats.with_email || 0;
             document.getElementById('activeOperators').textContent = stats.active_operators || 0;
-            
-            // Calculate conversion rate
-            const totalConversations = parseInt(stats.total_conversations) || 0;
-            const withEmail = parseInt(stats.with_email) || 0;
-            const conversionRate = totalConversations > 0 ? Math.round((withEmail / totalConversations) * 100) : 0;
-            document.getElementById('conversionRate').textContent = `${conversionRate}%`;
-            
-            // Estimated response time (placeholder - would need more backend work)
-            document.getElementById('avgResponseTime').textContent = '< 2 min';
-        }
-
-        // Simple analytics charts
-        function updateAnalytics() {
-            drawMessagesChart();
-            drawAgentRequestsChart();
-        }
-
-        function drawMessagesChart() {
-            const canvas = document.getElementById('messagesChart');
-            const ctx = canvas.getContext('2d');
-            
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Sample data (in real implementation, this would come from the server)
-            const data = [5, 12, 8, 15, 22, 18, 25];
-            const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-            
-            // Draw chart
-            const maxValue = Math.max(...data);
-            const barWidth = canvas.width / data.length;
-            const barMaxHeight = canvas.height - 40;
-            
-            ctx.fillStyle = '#8B5CF6';
-            ctx.font = '12px Arial';
-            ctx.textAlign = 'center';
-            
-            data.forEach((value, index) => {
-                const barHeight = (value / maxValue) * barMaxHeight;
-                const x = index * barWidth + 10;
-                const y = canvas.height - barHeight - 20;
-                
-                // Draw bar
-                ctx.fillRect(x, y, barWidth - 20, barHeight);
-                
-                // Draw label
-                ctx.fillStyle = '#64748b';
-                ctx.fillText(labels[index], x + (barWidth - 20) / 2, canvas.height - 5);
-                
-                // Draw value
-                ctx.fillStyle = '#1a202c';
-                ctx.fillText(value.toString(), x + (barWidth - 20) / 2, y - 5);
-                
-                ctx.fillStyle = '#8B5CF6';
-            });
-        }
-
-        function drawAgentRequestsChart() {
-            const canvas = document.getElementById('agentChart');
-            const ctx = canvas.getContext('2d');
-            
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Sample data
-            const agentRequests = parseInt(document.getElementById('agentRequests').textContent) || 0;
-            const totalConversations = parseInt(document.getElementById('totalConversations').textContent) || 0;
-            const percentage = totalConversations > 0 ? (agentRequests / totalConversations) * 100 : 0;
-            
-            // Draw pie chart
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            const radius = 60;
-            
-            // Background circle
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-            ctx.fillStyle = '#f1f5f9';
-            ctx.fill();
-            
-            // Agent requests slice
-            if (percentage > 0) {
-                ctx.beginPath();
-                ctx.moveTo(centerX, centerY);
-                ctx.arc(centerX, centerY, radius, -Math.PI / 2, -Math.PI / 2 + (percentage / 100) * 2 * Math.PI);
-                ctx.closePath();
-                ctx.fillStyle = '#ef4444';
-                ctx.fill();
-            }
-            
-            // Text
-            ctx.fillStyle = '#1a202c';
-            ctx.font = 'bold 16px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(`${Math.round(percentage)}%`, centerX, centerY + 5);
-            
-            ctx.font = '12px Arial';
-            ctx.fillStyle = '#64748b';
-            ctx.fillText('Agent Requests', centerX, centerY + 25);
         }
 
         // Render conversations list
@@ -937,6 +614,9 @@
                 updateChatHeader(conversation);
             }
 
+            // Show operator input
+            document.getElementById('chatInputContainer').classList.add('active');
+
             // Load messages
             try {
                 const response = await fetch(`/api/dashboard/conversation/${conversationId}/messages`);
@@ -951,6 +631,107 @@
                 console.error('Error loading messages:', error);
                 showError('Failed to load messages');
             }
+        }
+
+        // Send operator message
+        async function sendOperatorMessage() {
+            const messageInput = document.getElementById('operatorMessageInput');
+            const sendButton = document.getElementById('sendOperatorMessage');
+            const message = messageInput.value.trim();
+
+            if (!message || !selectedConversationId) return;
+
+            // Disable input while sending
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+            sendButton.textContent = 'Sending...';
+
+            try {
+                const response = await fetch('/api/dashboard/send-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        conversationId: selectedConversationId,
+                        message: message,
+                        operatorId: operatorFilter || 'dashboard-operator'
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Clear input
+                    messageInput.value = '';
+                    
+                    // Add message to UI immediately
+                    addMessageToUI({
+                        role: 'operator',
+                        content: message,
+                        timestamp: new Date().toISOString()
+                    });
+
+                    // Scroll to bottom
+                    const chatMessages = document.getElementById('chatMessages');
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                    // Show success feedback
+                    sendButton.textContent = '✓ Sent';
+                    setTimeout(() => {
+                        sendButton.textContent = 'Send';
+                    }, 1000);
+
+                } else {
+                    throw new Error(data.error || 'Failed to send message');
+                }
+            } catch (error) {
+                console.error('Error sending operator message:', error);
+                alert('Failed to send message: ' + error.message);
+                sendButton.textContent = 'Failed - Retry';
+                setTimeout(() => {
+                    sendButton.textContent = 'Send';
+                }, 2000);
+            } finally {
+                // Re-enable input
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        // Handle keyboard shortcuts for operator input
+        function handleOperatorKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendOperatorMessage();
+            }
+        }
+
+        // Add single message to UI (for immediate feedback)
+        function addMessageToUI(message) {
+            const container = document.getElementById('chatMessages');
+            const time = new Date(message.timestamp).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            let roleClass = message.role;
+            let roleLabel = '';
+            
+            if (message.role === 'operator') {
+                roleLabel = ' (You)';
+                roleClass = 'operator';
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${roleClass}`;
+            messageDiv.innerHTML = `
+                <div>${message.content}${roleLabel}</div>
+                <div class="message-time">${time}</div>
+            `;
+            
+            container.appendChild(messageDiv);
         }
 
         // Update chat header with conversation info
@@ -978,6 +759,9 @@
                     <div class="empty-state">
                         <div class="empty-state-icon">💭</div>
                         <p>No messages in this conversation</p>
+                        <p style="font-size: 12px; color: #64748b; margin-top: 8px;">
+                            Start the conversation by typing a message below
+                        </p>
                     </div>
                 `;
                 return;
@@ -989,9 +773,20 @@
                     minute: '2-digit'
                 });
 
+                let roleClass = message.role;
+                let roleLabel = '';
+                
+                // Handle different message types
+                if (message.role === 'operator') {
+                    roleLabel = ' (Operator)';
+                    roleClass = 'operator';
+                } else if (message.role === 'system') {
+                    roleClass = 'system';
+                }
+
                 return `
-                    <div class="message ${message.role}">
-                        <div>${message.content}</div>
+                    <div class="message ${roleClass}">
+                        <div>${message.content}${roleLabel}</div>
                         <div class="message-time">${time}</div>
                     </div>
                 `;
@@ -1011,61 +806,28 @@
             `;
         }
 
-        // Auto-refresh with configurable interval
-        function startAutoRefresh(interval = 30000) {
-            if (refreshIntervalId) {
-                clearInterval(refreshIntervalId);
-            }
-            
-            refreshIntervalId = setInterval(() => {
+        // Auto-refresh every 30 seconds
+        function startAutoRefresh() {
+            setInterval(() => {
                 loadDashboard();
                 
                 // Reload current conversation if one is selected
                 if (selectedConversationId) {
                     selectConversation(selectedConversationId);
                 }
-            }, interval);
+            }, 30000);
         }
 
-        // Initialize dashboard with enhanced features
+        // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
-            // Load saved settings
-            const savedNotificationSettings = localStorage.getItem('dashboardNotificationSettings');
-            if (savedNotificationSettings) {
-                notificationSettings = JSON.parse(savedNotificationSettings);
-                document.getElementById('browserNotifications').checked = notificationSettings.browserNotifications;
-                document.getElementById('soundAlerts').checked = notificationSettings.soundAlerts;
-                document.getElementById('agentRequestAlerts').checked = notificationSettings.agentRequestAlerts;
-            }
-            
-            const savedRefreshInterval = localStorage.getItem('dashboardRefreshInterval');
-            if (savedRefreshInterval) {
-                document.getElementById('refreshInterval').value = savedRefreshInterval;
-            }
-            
             // Update header if filtering by operator
             if (operatorFilter) {
                 document.getElementById('headerSubtitle').textContent = 
                     `Viewing conversations for Operator: ${operatorFilter}`;
             }
             
-            // Request notification permission
-            requestNotificationPermission();
-            
-            // Load dashboard and start auto-refresh
             loadDashboard();
-            const refreshInterval = parseInt(document.getElementById('refreshInterval').value);
-            startAutoRefresh(refreshInterval);
-            
-            // Close settings when clicking outside
-            document.addEventListener('click', function(e) {
-                const settingsPanel = document.getElementById('settingsPanel');
-                const settingsToggle = document.querySelector('.settings-toggle');
-                
-                if (!settingsPanel.contains(e.target) && !settingsToggle.contains(e.target)) {
-                    settingsPanel.style.display = 'none';
-                }
-            });
+            startAutoRefresh();
         });
 
         // Keyboard shortcuts
