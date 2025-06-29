@@ -921,11 +921,18 @@ app.post('/api/chat', async function(req, res) {
     const hasOperatorMessages = parseInt(operatorCheckResult.rows[0].count) > 0;
 
     if (hasOperatorMessages) {
-        // Operator has taken over - don't respond with bot, just acknowledge
-        const operatorResponse = "Thanks for your message! Our team member will respond shortly.";
+        // 🆕 FIXED: Return proper flags to enable two-way chat
+        const operatorResponse = "Thanks for your message! Our team member will respond shortly in this chat.";
         conversations[sessionKey].push({ role: 'assistant', content: operatorResponse });
         await saveMessage(conversation.conversation_id, 'assistant', operatorResponse);
-        return res.json({ response: operatorResponse });
+        
+        // 🆕 CRITICAL FIX: Include the flags that trigger polling on the client
+        return res.json({ 
+            response: operatorResponse,
+            operatorJoined: true,    // This triggers polling
+            twoWayChat: true,        // This shows the two-way chat indicator
+            startPolling: true       // Extra flag for clarity
+        });
     }
 
     const lowerMessage = message.toLowerCase();
@@ -959,18 +966,42 @@ app.post('/api/chat', async function(req, res) {
         
         let botResponse;
         
-        if (customerContact && (customerContact.email || customerContact.phone)) {
-            if (emailTransporter) {
-                await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+        // 🆕 FIXED: Check alert preference for proper response
+        if (currentConfig.alertPreference === 'dashboard') {
+            // Two-way chat mode
+            botResponse = `I'm connecting you with our team right away! 👥 They'll respond directly in this chat within ${responseTime}. Feel free to continue typing your questions.`;
+            
+            if (customerContact && (customerContact.email || customerContact.phone)) {
+                if (emailTransporter) {
+                    await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+                }
             }
-            botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within ${responseTime}. You can also continue chatting here and they'll respond directly.`;
+            
+            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+            
+            // 🆕 FIXED: Return proper flags for two-way chat
+            return res.json({ 
+                response: botResponse, 
+                agentRequested: true,
+                twoWayChat: true,      // Enable two-way chat mode
+                startPolling: true     // Start polling for operator messages
+            });
         } else {
-            botResponse = `I'd love to connect you with our team! 👥 First, I'll need your contact information. What's your email address so our team can reach out within ${responseTime}?`;
+            // Regular email/phone contact mode
+            if (customerContact && (customerContact.email || customerContact.phone)) {
+                if (emailTransporter) {
+                    await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+                }
+                botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within ${responseTime}. You can also continue chatting here and they'll respond directly.`;
+            } else {
+                botResponse = `I'd love to connect you with our team! 👥 First, I'll need your contact information. What's your email address so our team can reach out within ${responseTime}?`;
+            }
+            
+            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+            return res.json({ response: botResponse, agentRequested: true });
         }
-        
-        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-        return res.json({ response: botResponse, agentRequested: true });
     }
 
     // Handle agent handoff follow-ups (keeping existing logic)
