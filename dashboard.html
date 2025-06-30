@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wherewolf Chatbot Dashboard</title>
+    <title>Wherewolf Chatbot Dashboard - Enhanced</title>
     <style>
         * {
             margin: 0;
@@ -36,11 +36,165 @@
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             padding: 24px;
         }
 
+        /* Filter Section */
+        .filter-section {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 24px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .filter-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .filter-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a202c;
+        }
+
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .filter-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-input {
+            padding: 8px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .filter-input:focus {
+            border-color: #8B5CF6;
+        }
+
+        .filter-select {
+            padding: 8px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .filter-select:focus {
+            border-color: #8B5CF6;
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #8B5CF6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #7C3AED;
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+
+        /* Status Pills */
+        .status-pills {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .status-pill {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .status-pill.active {
+            border-color: #8B5CF6;
+        }
+
+        .status-pill.new {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-pill.in-progress {
+            background: #f3e8ff;
+            color: #7c3aed;
+        }
+
+        .status-pill.resolved {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-pill.on-hold {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-pill.all {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        /* Stats Grid */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -70,12 +224,14 @@
             letter-spacing: 0.5px;
         }
 
+        /* Main Content */
         .main-content {
             display: grid;
             grid-template-columns: 1fr 400px;
             gap: 24px;
         }
 
+        /* Conversations Panel */
         .conversations-panel {
             background: white;
             border-radius: 12px;
@@ -88,6 +244,9 @@
             padding: 20px 24px;
             border-bottom: 1px solid #e2e8f0;
             background: #f8fafc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .panel-title {
@@ -118,20 +277,35 @@
             border-left: 4px solid #8B5CF6;
         }
 
-        .conversation-item.has-agent-request {
-            background: #fef2f2;
-            border-left: 4px solid #ef4444;
+        .conversation-status {
+            position: absolute;
+            top: 16px;
+            right: 24px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
         }
 
-        .conversation-item.has-agent-request .agent-badge {
-            display: inline-block;
-            background: #ef4444;
-            color: white;
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 10px;
-            margin-left: 8px;
-            font-weight: 600;
+        .conversation-status.new {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .conversation-status.in-progress {
+            background: #f3e8ff;
+            color: #7c3aed;
+        }
+
+        .conversation-status.resolved {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .conversation-status.on-hold {
+            background: #fef3c7;
+            color: #92400e;
         }
 
         .conversation-header {
@@ -139,6 +313,7 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 8px;
+            padding-right: 80px; /* Space for status badge */
         }
 
         .business-name {
@@ -157,14 +332,47 @@
             margin-bottom: 4px;
         }
 
-        .message-count {
-            font-size: 12px;
-            color: #64748b;
-            display: flex;
-            align-items: center;
-            gap: 4px;
+        .conversation-preview {
+            font-size: 13px;
+            color: #94a3b8;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-top: 4px;
         }
 
+        .conversation-badges {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-email {
+            background: #e0f2fe;
+            color: #0369a1;
+        }
+
+        .badge-phone {
+            background: #ede9fe;
+            color: #6d28d9;
+        }
+
+        .badge-agent {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        /* Chat Panel */
         .chat-panel {
             background: white;
             border-radius: 12px;
@@ -179,6 +387,21 @@
             padding: 20px 24px;
             border-bottom: 1px solid #e2e8f0;
             background: #f8fafc;
+        }
+
+        .chat-header-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .status-select {
+            padding: 6px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 13px;
+            background: white;
+            cursor: pointer;
         }
 
         .chat-messages {
@@ -242,22 +465,6 @@
         .send-btn:disabled {
             background: #d1d5db;
             cursor: not-allowed;
-        }
-
-        .operator-badge {
-            background: #10b981;
-            color: white;
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 10px;
-            margin-left: 8px;
-            font-weight: 600;
-        }
-
-        .operator-info {
-            font-size: 12px;
-            color: #64748b;
-            margin-bottom: 8px;
         }
 
         .message {
@@ -345,47 +552,34 @@
             100% { transform: rotate(360deg); }
         }
 
-        .refresh-btn {
-            background: #8B5CF6;
-            color: white;
-            border: none;
-            padding: 12px 20px;
+        /* Search Bar */
+        .search-container {
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px 12px 40px;
+            border: 2px solid #e5e7eb;
             border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: background 0.3s ease;
-            margin-left: auto;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            font-size: 14px;
+            outline: none;
         }
 
-        .refresh-btn:hover {
-            background: #7C3AED;
+        .search-input:focus {
+            border-color: #8B5CF6;
         }
 
-        .contact-info {
-            background: #f8fafc;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 12px;
-            font-size: 13px;
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
         }
 
-        .contact-info strong {
-            color: #1a202c;
-        }
-
-        .error-message {
-            background: #fef2f2;
-            color: #dc2626;
-            padding: 16px;
-            border-radius: 8px;
-            margin: 16px;
-            border: 1px solid #fecaca;
-        }
-
-        /* Responsive design */
+        /* Responsive Design */
         @media (max-width: 1024px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -414,6 +608,10 @@
             .stat-number {
                 font-size: 24px;
             }
+            
+            .filter-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -424,6 +622,99 @@
     </div>
 
     <div class="container">
+        <!-- Filter Section -->
+        <div class="filter-section">
+            <div class="filter-header">
+                <h3 class="filter-title">🔍 Filters</h3>
+                <button class="btn btn-secondary" onclick="toggleFilters()">
+                    <span id="filterToggleText">Hide Filters</span>
+                </button>
+            </div>
+            
+            <div id="filterContent">
+                <div class="search-container">
+                    <span class="search-icon">🔍</span>
+                    <input 
+                        type="text" 
+                        class="search-input" 
+                        id="searchInput" 
+                        placeholder="Search by email, phone, business name, or message content..."
+                        onkeyup="debounceSearch()"
+                    >
+                </div>
+                
+                <div class="filter-grid">
+                    <div class="filter-group">
+                        <label class="filter-label">Operator</label>
+                        <select class="filter-select" id="operatorFilter" onchange="applyFilters()">
+                            <option value="">All Operators</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">Has Email</label>
+                        <select class="filter-select" id="hasEmailFilter" onchange="applyFilters()">
+                            <option value="">All</option>
+                            <option value="true">With Email</option>
+                            <option value="false">Without Email</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">Has Phone</label>
+                        <select class="filter-select" id="hasPhoneFilter" onchange="applyFilters()">
+                            <option value="">All</option>
+                            <option value="true">With Phone</option>
+                            <option value="false">Without Phone</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">Agent Requested</label>
+                        <select class="filter-select" id="agentRequestedFilter" onchange="applyFilters()">
+                            <option value="">All</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">Date From</label>
+                        <input type="date" class="filter-input" id="dateFromFilter" onchange="applyFilters()">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">Date To</label>
+                        <input type="date" class="filter-input" id="dateToFilter" onchange="applyFilters()">
+                    </div>
+                </div>
+                
+                <div class="filter-actions">
+                    <button class="btn btn-secondary" onclick="clearFilters()">Clear All</button>
+                    <button class="btn btn-primary" onclick="applyFilters()">Apply Filters</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Pills -->
+        <div class="status-pills" id="statusPills">
+            <div class="status-pill all active" onclick="filterByStatus('all')">
+                All Conversations <span id="allCount">(0)</span>
+            </div>
+            <div class="status-pill new" onclick="filterByStatus('new')">
+                New <span id="newCount">(0)</span>
+            </div>
+            <div class="status-pill in-progress" onclick="filterByStatus('in_progress')">
+                In Progress <span id="inProgressCount">(0)</span>
+            </div>
+            <div class="status-pill resolved" onclick="filterByStatus('resolved')">
+                Resolved <span id="resolvedCount">(0)</span>
+            </div>
+            <div class="status-pill on-hold" onclick="filterByStatus('on_hold')">
+                On Hold <span id="onHoldCount">(0)</span>
+            </div>
+        </div>
+
         <!-- Stats Section -->
         <div class="stats-grid" id="statsGrid">
             <div class="stat-card">
@@ -449,13 +740,10 @@
             <!-- Conversations List -->
             <div class="conversations-panel">
                 <div class="panel-header">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h2 class="panel-title">Recent Conversations</h2>
-                        <button class="refresh-btn" onclick="loadDashboard()">
-                            <span>🔄</span>
-                            Refresh
-                        </button>
-                    </div>
+                    <h2 class="panel-title">Conversations</h2>
+                    <button class="btn btn-primary" onclick="loadDashboard()">
+                        🔄 Refresh
+                    </button>
                 </div>
                 <div class="conversations-list" id="conversationsList">
                     <div class="loading">
@@ -470,6 +758,14 @@
                 <div class="chat-header">
                     <h3 id="chatTitle">Select a conversation</h3>
                     <div id="chatSubtitle" style="font-size: 14px; color: #64748b; margin-top: 4px;"></div>
+                    <div class="chat-header-actions" id="chatActions" style="display: none;">
+                        <select class="status-select" id="statusSelect" onchange="updateConversationStatus()">
+                            <option value="new">New</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="resolved">Resolved</option>
+                            <option value="on_hold">On Hold</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="chat-messages" id="chatMessages">
                     <div class="empty-state">
@@ -478,8 +774,8 @@
                     </div>
                 </div>
                 <div class="chat-input-container" id="chatInputContainer">
-                    <div class="operator-info">
-                        <strong>👨‍💼 You are now responding as the operator</strong> - Customer will see your messages immediately
+                    <div style="font-size: 13px; color: #64748b; margin-bottom: 8px;">
+                        <strong>👨‍💼 You are responding as the operator</strong> - Customer will see your messages immediately
                     </div>
                     <div class="chat-input-row">
                         <textarea 
@@ -500,40 +796,191 @@
     <script>
         let conversations = [];
         let selectedConversationId = null;
+        let currentFilters = {
+            status: 'all'
+        };
+        let searchTimeout = null;
 
-        // Get operator ID from URL parameter
-        const urlParams = new URLSearchParams(window.location.search);
-        const operatorFilter = urlParams.get('operator');
+        // Load initial data
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboard();
+            loadFilterStats();
+            setInterval(loadFilterStats, 30000); // Update stats every 30 seconds
+        });
+
+        // Load filter statistics
+        async function loadFilterStats() {
+            try {
+                const response = await fetch('/api/dashboard/filter-stats');
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update status pill counts
+                    document.getElementById('newCount').textContent = `(${data.stats.new_count || 0})`;
+                    document.getElementById('inProgressCount').textContent = `(${data.stats.in_progress_count || 0})`;
+                    document.getElementById('resolvedCount').textContent = `(${data.stats.resolved_count || 0})`;
+                    document.getElementById('onHoldCount').textContent = `(${data.stats.on_hold_count || 0})`;
+                    
+                    const totalCount = (data.stats.new_count || 0) + 
+                                     (data.stats.in_progress_count || 0) + 
+                                     (data.stats.resolved_count || 0) + 
+                                     (data.stats.on_hold_count || 0);
+                    document.getElementById('allCount').textContent = `(${totalCount})`;
+                }
+            } catch (error) {
+                console.error('Error loading filter stats:', error);
+            }
+        }
+
+        // Toggle filter visibility
+        function toggleFilters() {
+            const filterContent = document.getElementById('filterContent');
+            const toggleText = document.getElementById('filterToggleText');
+            
+            if (filterContent.style.display === 'none') {
+                filterContent.style.display = 'block';
+                toggleText.textContent = 'Hide Filters';
+            } else {
+                filterContent.style.display = 'none';
+                toggleText.textContent = 'Show Filters';
+            }
+        }
+
+        // Filter by status
+        function filterByStatus(status) {
+            // Update active status pill
+            document.querySelectorAll('.status-pill').forEach(pill => {
+                pill.classList.remove('active');
+            });
+            
+            const activePill = document.querySelector(`.status-pill.${status === 'in_progress' ? 'in-progress' : status}`);
+            if (activePill) {
+                activePill.classList.add('active');
+            }
+            
+            currentFilters.status = status;
+            applyFilters();
+        }
+
+        // Apply all filters
+        async function applyFilters() {
+            const params = new URLSearchParams();
+            
+            // Add status filter
+            if (currentFilters.status && currentFilters.status !== 'all') {
+                params.append('status', currentFilters.status);
+            }
+            
+            // Add other filters
+            const operatorFilter = document.getElementById('operatorFilter').value;
+            if (operatorFilter) params.append('operator', operatorFilter);
+            
+            const hasEmailFilter = document.getElementById('hasEmailFilter').value;
+            if (hasEmailFilter) params.append('hasEmail', hasEmailFilter);
+            
+            const hasPhoneFilter = document.getElementById('hasPhoneFilter').value;
+            if (hasPhoneFilter) params.append('hasPhone', hasPhoneFilter);
+            
+            const agentRequestedFilter = document.getElementById('agentRequestedFilter').value;
+            if (agentRequestedFilter) params.append('agentRequested', agentRequestedFilter);
+            
+            const dateFromFilter = document.getElementById('dateFromFilter').value;
+            if (dateFromFilter) params.append('dateFrom', dateFromFilter);
+            
+            const dateToFilter = document.getElementById('dateToFilter').value;
+            if (dateToFilter) params.append('dateTo', dateToFilter);
+            
+            const searchInput = document.getElementById('searchInput').value;
+            if (searchInput) params.append('search', searchInput);
+            
+            await loadConversations(params.toString());
+        }
+
+        // Debounced search
+        function debounceSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                applyFilters();
+            }, 500);
+        }
+
+        // Clear all filters
+        function clearFilters() {
+            document.getElementById('operatorFilter').value = '';
+            document.getElementById('hasEmailFilter').value = '';
+            document.getElementById('hasPhoneFilter').value = '';
+            document.getElementById('agentRequestedFilter').value = '';
+            document.getElementById('dateFromFilter').value = '';
+            document.getElementById('dateToFilter').value = '';
+            document.getElementById('searchInput').value = '';
+            
+            filterByStatus('all');
+        }
 
         // Load dashboard data
         async function loadDashboard() {
             try {
                 // Load stats
-                const statsUrl = operatorFilter ? 
-                    `/api/dashboard/stats?operator=${operatorFilter}` : 
-                    '/api/dashboard/stats';
-                const statsResponse = await fetch(statsUrl);
+                const statsResponse = await fetch('/api/dashboard/stats');
                 const statsData = await statsResponse.json();
                 
                 if (statsData.success) {
                     updateStats(statsData.stats);
                 }
 
-                // Load conversations
-                const conversationsUrl = operatorFilter ? 
-                    `/api/dashboard/conversations?operator=${operatorFilter}` : 
-                    '/api/dashboard/conversations';
-                const conversationsResponse = await fetch(conversationsUrl);
-                const conversationsData = await conversationsResponse.json();
+                // Load conversations with current filters
+                await applyFilters();
                 
-                if (conversationsData.success) {
-                    conversations = conversationsData.conversations;
+                // Load unique operators for filter
+                await loadOperators();
+                
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                showError('Failed to connect to server');
+            }
+        }
+
+        // Load unique operators
+        async function loadOperators() {
+            try {
+                const response = await fetch('/api/dashboard/conversations');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const operators = [...new Set(data.conversations.map(c => c.operator_id))];
+                    const operatorSelect = document.getElementById('operatorFilter');
+                    
+                    // Keep the current selection
+                    const currentValue = operatorSelect.value;
+                    
+                    operatorSelect.innerHTML = '<option value="">All Operators</option>';
+                    operators.forEach(op => {
+                        operatorSelect.innerHTML += `<option value="${op}">${op}</option>`;
+                    });
+                    
+                    // Restore selection
+                    operatorSelect.value = currentValue;
+                }
+            } catch (error) {
+                console.error('Error loading operators:', error);
+            }
+        }
+
+        // Load conversations
+        async function loadConversations(queryString = '') {
+            try {
+                const url = queryString ? `/api/dashboard/conversations?${queryString}` : '/api/dashboard/conversations';
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    conversations = data.conversations;
                     renderConversations(conversations);
                 } else {
                     showError('Failed to load conversations');
                 }
             } catch (error) {
-                console.error('Error loading dashboard:', error);
+                console.error('Error loading conversations:', error);
                 showError('Failed to connect to server');
             }
         }
@@ -554,9 +1001,9 @@
                 container.innerHTML = `
                     <div class="empty-state" style="padding: 40px; text-align: center;">
                         <div class="empty-state-icon">📭</div>
-                        <p>No conversations yet</p>
+                        <p>No conversations found</p>
                         <p style="font-size: 12px; color: #64748b; margin-top: 8px;">
-                            Conversations will appear here as customers start chatting
+                            Try adjusting your filters or wait for new conversations
                         </p>
                     </div>
                 `;
@@ -571,27 +1018,28 @@
                     minute: '2-digit'
                 });
 
-                const contactInfo = [];
-                if (conv.customer_email) contactInfo.push(`📧 ${conv.customer_email}`);
-                if (conv.customer_phone) contactInfo.push(`📞 ${conv.customer_phone}`);
+                const status = conv.status || 'new';
+                const statusClass = status.replace('_', '-');
 
                 return `
-                    <div class="conversation-item ${conv.agent_requested ? 'has-agent-request' : ''}" 
+                    <div class="conversation-item" 
                          onclick="selectConversation(${conv.conversation_id})"
                          data-conversation-id="${conv.conversation_id}">
+                        <div class="conversation-status ${statusClass}">${status.replace('_', ' ').toUpperCase()}</div>
                         <div class="conversation-header">
                             <div class="business-name">
                                 ${conv.business_name || 'Unknown Business'}
-                                ${conv.agent_requested ? '<span class="agent-badge">AGENT REQUESTED</span>' : ''}
                             </div>
                             <div class="conversation-time">${lastMessageTime}</div>
                         </div>
                         <div class="conversation-details">
                             Operator: ${conv.operator_id}
                         </div>
-                        ${contactInfo.length > 0 ? `<div class="conversation-details">${contactInfo.join(' • ')}</div>` : ''}
-                        <div class="message-count">
-                            💬 ${conv.message_count || 0} messages
+                        ${conv.last_message ? `<div class="conversation-preview">${conv.last_message}</div>` : ''}
+                        <div class="conversation-badges">
+                            ${conv.customer_email ? '<span class="badge badge-email">📧 Email</span>' : ''}
+                            ${conv.customer_phone ? '<span class="badge badge-phone">📞 Phone</span>' : ''}
+                            ${conv.agent_requested ? '<span class="badge badge-agent">🚨 Agent</span>' : ''}
                         </div>
                     </div>
                 `;
@@ -612,6 +1060,10 @@
             const conversation = conversations.find(c => c.conversation_id === conversationId);
             if (conversation) {
                 updateChatHeader(conversation);
+                
+                // Show status selector
+                document.getElementById('chatActions').style.display = 'block';
+                document.getElementById('statusSelect').value = conversation.status || 'new';
             }
 
             // Show operator input
@@ -630,6 +1082,53 @@
             } catch (error) {
                 console.error('Error loading messages:', error);
                 showError('Failed to load messages');
+            }
+        }
+
+        // Update conversation status
+        async function updateConversationStatus() {
+            const newStatus = document.getElementById('statusSelect').value;
+            
+            try {
+                const response = await fetch('/api/dashboard/update-status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        conversationId: selectedConversationId,
+                        status: newStatus
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update local data
+                    const conv = conversations.find(c => c.conversation_id === selectedConversationId);
+                    if (conv) {
+                        conv.status = newStatus;
+                    }
+                    
+                    // Refresh the list
+                    renderConversations(conversations);
+                    
+                    // Re-select the conversation
+                    document.querySelector(`[data-conversation-id="${selectedConversationId}"]`).classList.add('selected');
+                    
+                    // Refresh stats
+                    loadFilterStats();
+                    
+                    // Show success feedback
+                    const statusSelect = document.getElementById('statusSelect');
+                    statusSelect.style.borderColor = '#10b981';
+                    setTimeout(() => {
+                        statusSelect.style.borderColor = '#e5e7eb';
+                    }, 1000);
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+                alert('Failed to update status');
             }
         }
 
@@ -655,7 +1154,7 @@
                     body: JSON.stringify({
                         conversationId: selectedConversationId,
                         message: message,
-                        operatorId: operatorFilter || 'dashboard-operator'
+                        operatorId: 'dashboard-operator'
                     })
                 });
 
@@ -681,6 +1180,15 @@
                     setTimeout(() => {
                         sendButton.textContent = 'Send';
                     }, 1000);
+
+                    // Update conversation status to in_progress if it was new
+                    const conv = conversations.find(c => c.conversation_id === selectedConversationId);
+                    if (conv && conv.status === 'new') {
+                        conv.status = 'in_progress';
+                        document.getElementById('statusSelect').value = 'in_progress';
+                        renderConversations(conversations);
+                        document.querySelector(`[data-conversation-id="${selectedConversationId}"]`).classList.add('selected');
+                    }
 
                 } else {
                     throw new Error(data.error || 'Failed to send message');
@@ -800,35 +1308,21 @@
         function showError(message) {
             const container = document.getElementById('conversationsList');
             container.innerHTML = `
-                <div class="error-message">
+                <div style="padding: 20px; text-align: center; color: #dc2626;">
                     ❌ ${message}
                 </div>
             `;
         }
 
         // Auto-refresh every 30 seconds
-        function startAutoRefresh() {
-            setInterval(() => {
-                loadDashboard();
-                
-                // Reload current conversation if one is selected
-                if (selectedConversationId) {
-                    selectConversation(selectedConversationId);
-                }
-            }, 30000);
-        }
-
-        // Initialize dashboard
-        document.addEventListener('DOMContentLoaded', function() {
-            // Update header if filtering by operator
-            if (operatorFilter) {
-                document.getElementById('headerSubtitle').textContent = 
-                    `Viewing conversations for Operator: ${operatorFilter}`;
-            }
+        setInterval(() => {
+            applyFilters();
             
-            loadDashboard();
-            startAutoRefresh();
-        });
+            // Reload current conversation if one is selected
+            if (selectedConversationId) {
+                selectConversation(selectedConversationId);
+            }
+        }, 30000);
 
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
