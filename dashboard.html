@@ -800,9 +800,26 @@
             status: 'all'
         };
         let searchTimeout = null;
+        let operatorFromUrl = null;
+
+        // Get operator from URL if present
+        const urlParams = new URLSearchParams(window.location.search);
+        operatorFromUrl = urlParams.get('operator');
 
         // Load initial data
         document.addEventListener('DOMContentLoaded', function() {
+            // If operator is in URL, set it and update UI
+            if (operatorFromUrl) {
+                document.getElementById('headerSubtitle').textContent = `Monitoring conversations for operator: ${operatorFromUrl}`;
+                // Set the operator filter
+                setTimeout(() => {
+                    const operatorSelect = document.getElementById('operatorFilter');
+                    if (operatorSelect) {
+                        operatorSelect.value = operatorFromUrl;
+                    }
+                }, 500);
+            }
+            
             loadDashboard();
             loadFilterStats();
             setInterval(loadFilterStats, 30000); // Update stats every 30 seconds
@@ -872,7 +889,7 @@
             }
             
             // Add other filters
-            const operatorFilter = document.getElementById('operatorFilter').value;
+            const operatorFilter = document.getElementById('operatorFilter').value || operatorFromUrl;
             if (operatorFilter) params.append('operator', operatorFilter);
             
             const hasEmailFilter = document.getElementById('hasEmailFilter').value;
@@ -894,6 +911,9 @@
             if (searchInput) params.append('search', searchInput);
             
             await loadConversations(params.toString());
+            
+            // Also update stats with operator filter
+            await loadStats(operatorFilter);
         }
 
         // Debounced search
@@ -906,7 +926,7 @@
 
         // Clear all filters
         function clearFilters() {
-            document.getElementById('operatorFilter').value = '';
+            document.getElementById('operatorFilter').value = operatorFromUrl || '';
             document.getElementById('hasEmailFilter').value = '';
             document.getElementById('hasPhoneFilter').value = '';
             document.getElementById('agentRequestedFilter').value = '';
@@ -920,15 +940,7 @@
         // Load dashboard data
         async function loadDashboard() {
             try {
-                // Load stats
-                const statsResponse = await fetch('/api/dashboard/stats');
-                const statsData = await statsResponse.json();
-                
-                if (statsData.success) {
-                    updateStats(statsData.stats);
-                }
-
-                // Load conversations with current filters
+                // Apply filters with URL operator if present
                 await applyFilters();
                 
                 // Load unique operators for filter
@@ -937,6 +949,24 @@
             } catch (error) {
                 console.error('Error loading dashboard:', error);
                 showError('Failed to connect to server');
+            }
+        }
+
+        // Load stats with operator filter
+        async function loadStats(operatorFilter = null) {
+            try {
+                const url = operatorFilter 
+                    ? `/api/dashboard/stats?operator=${operatorFilter}` 
+                    : '/api/dashboard/stats';
+                    
+                const statsResponse = await fetch(url);
+                const statsData = await statsResponse.json();
+                
+                if (statsData.success) {
+                    updateStats(statsData.stats);
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
             }
         }
 
@@ -951,15 +981,16 @@
                     const operatorSelect = document.getElementById('operatorFilter');
                     
                     // Keep the current selection
-                    const currentValue = operatorSelect.value;
+                    const currentValue = operatorSelect.value || operatorFromUrl;
                     
                     operatorSelect.innerHTML = '<option value="">All Operators</option>';
                     operators.forEach(op => {
-                        operatorSelect.innerHTML += `<option value="${op}">${op}</option>`;
+                        const selected = op === currentValue ? 'selected' : '';
+                        operatorSelect.innerHTML += `<option value="${op}" ${selected}>${op}</option>`;
                     });
                     
                     // Restore selection
-                    operatorSelect.value = currentValue;
+                    operatorSelect.value = currentValue || '';
                 }
             } catch (error) {
                 console.error('Error loading operators:', error);
