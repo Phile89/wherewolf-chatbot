@@ -555,11 +555,57 @@
                 // Initialize chat with enhanced welcome message
                 initializeEnhancedChat();
                 
+                // 🆕 NEW: Load conversation history if exists
+                loadConversationHistory();
+                
                 console.log('🎉 Chat initialization complete!');
                 
             } catch (error) {
                 console.error('💥 Config loading error:', error);
                 showError(`Error loading chat: ${error.message}. Please check the operator ID and try again.`);
+            }
+        }
+
+        // 🆕 NEW: Load conversation history when chat loads
+        async function loadConversationHistory() {
+            try {
+                const response = await fetch(`${serverUrl}/api/chat/history`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        operatorId: operatorId,
+                        sessionId: 'default'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.messages && data.messages.length > 0) {
+                        const messagesContainer = document.getElementById('chatMessages');
+                        messagesContainer.innerHTML = ''; // Clear loading message
+                        
+                        // Display all historical messages
+                        data.messages.forEach(msg => {
+                            displayMessage(msg.content, msg.role);
+                        });
+                        
+                        // If conversation had operator involvement, start polling
+                        if (data.hasOperator || data.agentRequested) {
+                            console.log('🔄 Previous operator involvement detected, starting polling...');
+                            startOperatorMessagePolling();
+                            isFirstMessage = false; // Skip contact form since conversation already started
+                        }
+                        
+                        // Update lastMessageCount for polling
+                        lastMessageCount = data.messages.length;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading conversation history:', error);
+                // Continue normally if history load fails
             }
         }
 
@@ -615,34 +661,38 @@
             }
             
             const messagesContainer = document.getElementById('chatMessages');
-            messagesContainer.innerHTML = '';
+            
+            // Only show welcome if no history was loaded
+            if (messagesContainer.querySelector('.loading-message')) {
+                messagesContainer.innerHTML = '';
 
-            // Add business info card if we have extra details
-            if (businessConfig.websiteUrl || businessConfig.phoneNumber || businessConfig.businessHours) {
-                const businessInfoHtml = `
+                // Add business info card if we have extra details
+                if (businessConfig.websiteUrl || businessConfig.phoneNumber || businessConfig.businessHours) {
+                    const businessInfoHtml = `
+                        <div class="message bot-message">
+                            <div class="business-info">
+                                <h4>${businessName}</h4>
+                                <p>${companyTagline && companyTagline !== businessName ? companyTagline : `Your trusted ${businessType} provider`}</p>
+                            </div>
+                        </div>
+                    `;
+                    messagesContainer.insertAdjacentHTML('beforeend', businessInfoHtml);
+                }
+
+                // Add main welcome message
+                const welcomeHtml = `
                     <div class="message bot-message">
-                        <div class="business-info">
-                            <h4>${businessName}</h4>
-                            <p>${companyTagline && companyTagline !== businessName ? companyTagline : `Your trusted ${businessType} provider`}</p>
+                        <div>${welcomeMessage}</div>
+                        <div class="quick-replies">
+                            <button class="quick-reply" onclick="sendQuickReply('What are your tour times?')">🕒 Tour Times</button>
+                            <button class="quick-reply" onclick="sendQuickReply('How much does it cost?')">💰 Pricing</button>
+                            <button class="quick-reply" onclick="sendQuickReply('Where do I meet you?')">📍 Location</button>
+                            <button class="quick-reply" onclick="sendQuickReply('What should I bring?')">🎒 What to Bring</button>
                         </div>
                     </div>
                 `;
-                messagesContainer.insertAdjacentHTML('beforeend', businessInfoHtml);
+                messagesContainer.insertAdjacentHTML('beforeend', welcomeHtml);
             }
-
-            // Add main welcome message
-            const welcomeHtml = `
-                <div class="message bot-message">
-                    <div>${welcomeMessage}</div>
-                    <div class="quick-replies">
-                        <button class="quick-reply" onclick="sendQuickReply('What are your tour times?')">🕒 Tour Times</button>
-                        <button class="quick-reply" onclick="sendQuickReply('How much does it cost?')">💰 Pricing</button>
-                        <button class="quick-reply" onclick="sendQuickReply('Where do I meet you?')">📍 Location</button>
-                        <button class="quick-reply" onclick="sendQuickReply('What should I bring?')">🎒 What to Bring</button>
-                    </div>
-                </div>
-            `;
-            messagesContainer.insertAdjacentHTML('beforeend', welcomeHtml);
 
             // Enable input
             const chatInput = document.getElementById('chatInput');
