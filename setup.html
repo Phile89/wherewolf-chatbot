@@ -854,8 +854,40 @@
                 </div>
             </div>
 
-            <!-- Tour Schedule -->
+            <!-- Advanced Features -->
             <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>⚡ Advanced Features</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">Enhanced functionality and integrations</div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="bookingLink">
+                                Booking System Link
+                                <span class="info-icon">i
+                                    <div class="tooltip">If provided, pricing and schedule questions will be deferred to your booking system</div>
+                                </span>
+                            </label>
+                            <input type="url" id="bookingLink" placeholder="https://your-booking-system.com" oninput="toggleConditionalSections()" onchange="toggleConditionalSections()">
+                        </div>
+                        <div class="form-group">
+                            <label for="socialMedia">Social Media Links</label>
+                            <input type="text" id="socialMedia" placeholder="Instagram: @yourbusiness, Facebook: /yourbusiness">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="certifications">Safety Certifications & Licenses</label>
+                        <textarea id="certifications" placeholder="Coast Guard licensed, First Aid certified, Insured with..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tour Schedule (conditional) -->
+            <div class="form-section conditional-section" id="scheduleSection">
                 <div class="section-header" onclick="toggleSection(this)">
                     <h3>⏰ Tour Schedule</h3>
                     <span class="section-toggle">▼</span>
@@ -873,38 +905,6 @@
                     <div class="form-group">
                         <label for="duration">Typical Tour Duration</label>
                         <input type="text" id="duration" placeholder="2.5 hours">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Advanced Features -->
-            <div class="form-section">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h3>⚡ Advanced Features</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content">
-                    <div class="section-description">Enhanced functionality and integrations</div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="bookingLink">
-                                Booking System Link
-                                <span class="info-icon">i
-                                    <div class="tooltip">If provided, pricing questions will be deferred to your booking system</div>
-                                </span>
-                            </label>
-                            <input type="url" id="bookingLink" placeholder="https://your-booking-system.com" oninput="togglePricingSection()" onchange="togglePricingSection()">
-                        </div>
-                        <div class="form-group">
-                            <label for="socialMedia">Social Media Links</label>
-                            <input type="text" id="socialMedia" placeholder="Instagram: @yourbusiness, Facebook: /yourbusiness">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="certifications">Safety Certifications & Licenses</label>
-                        <textarea id="certifications" placeholder="Coast Guard licensed, First Aid certified, Insured with..."></textarea>
                     </div>
                 </div>
             </div>
@@ -1035,6 +1035,62 @@
                     <div class="form-group">
                         <label for="customGreeting">Custom Welcome Message</label>
                         <textarea id="customGreeting" placeholder="Hi! Welcome to [Business Name]. I'm here to help you plan your perfect adventure!"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Knowledge Boundaries -->
+            <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>🧠 Knowledge Boundaries</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">Help your chatbot know what it should and shouldn't answer</div>
+                    
+                    <div class="form-group">
+                        <label for="weatherInfo">
+                            Weather Information
+                            <span class="info-icon">i
+                                <div class="tooltip">How should the bot handle weather questions?</div>
+                            </span>
+                        </label>
+                        <select id="weatherInfo">
+                            <option value="defer">Defer to human team (recommended)</option>
+                            <option value="policy">Only mention weather policy</option>
+                            <option value="never">Never discuss weather</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="realTimeInfo">
+                                Real-Time Information
+                                <span class="info-icon">i
+                                    <div class="tooltip">Things that change daily like weather, availability, special conditions</div>
+                                </span>
+                            </label>
+                            <textarea id="realTimeInfo" placeholder="Current weather, today's conditions, live availability, water temperature, tide times"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="dontAnswerTopics">
+                                Topics to Avoid
+                                <span class="info-icon">i
+                                    <div class="tooltip">Topics the bot should say it doesn't know about</div>
+                                </span>
+                            </label>
+                            <textarea id="dontAnswerTopics" placeholder="Medical advice, legal matters, specific future dates, personal recommendations"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="additionalKnowledge">
+                            Additional Knowledge
+                            <span class="info-icon">i
+                                <div class="tooltip">Specific facts the bot should know (parking info, local tips, etc.)</div>
+                            </span>
+                        </label>
+                        <textarea id="additionalKnowledge" placeholder="Free parking at Marina Lot B, Best photo spot is at sunset point, Dolphins most active in morning"></textarea>
                     </div>
                 </div>
             </div>
@@ -1276,24 +1332,45 @@
             radio.checked = true;
         }
 
-        // Toggle pricing section based on booking link
-        function togglePricingSection() {
+        // Toggle conditional sections based on booking link
+        function toggleConditionalSections() {
             const bookingLink = document.getElementById('bookingLink').value;
             const pricingSection = document.getElementById('pricingSection');
+            const scheduleSection = document.getElementById('scheduleSection');
             
             if (bookingLink) {
+                // Add overlay to pricing section
                 if (!pricingSection.querySelector('.conditional-overlay')) {
-                    const overlay = document.createElement('div');
-                    overlay.className = 'conditional-overlay';
-                    overlay.textContent = 'Pricing questions will be deferred to your booking system';
-                    pricingSection.appendChild(overlay);
+                    const pricingOverlay = document.createElement('div');
+                    pricingOverlay.className = 'conditional-overlay';
+                    pricingOverlay.textContent = 'Pricing questions will be deferred to your booking system';
+                    pricingSection.appendChild(pricingOverlay);
+                }
+                
+                // Add overlay to schedule section
+                if (!scheduleSection.querySelector('.conditional-overlay')) {
+                    const scheduleOverlay = document.createElement('div');
+                    scheduleOverlay.className = 'conditional-overlay';
+                    scheduleOverlay.textContent = 'Schedule questions will be deferred to your booking system';
+                    scheduleSection.appendChild(scheduleOverlay);
                 }
             } else {
-                const overlay = pricingSection.querySelector('.conditional-overlay');
-                if (overlay) {
-                    overlay.remove();
+                // Remove overlays
+                const pricingOverlay = pricingSection.querySelector('.conditional-overlay');
+                if (pricingOverlay) {
+                    pricingOverlay.remove();
+                }
+                
+                const scheduleOverlay = scheduleSection.querySelector('.conditional-overlay');
+                if (scheduleOverlay) {
+                    scheduleOverlay.remove();
                 }
             }
+        }
+        
+        // Backward compatibility
+        function togglePricingSection() {
+            toggleConditionalSections();
         }
 
         // Update progress bar
@@ -1370,6 +1447,12 @@
                     responseLength: document.getElementById('responseLength').value,
                     customGreeting: document.getElementById('customGreeting').value,
                     
+                    // Knowledge Boundaries
+                    weatherInfo: document.getElementById('weatherInfo').value,
+                    realTimeInfo: document.getElementById('realTimeInfo').value,
+                    dontAnswerTopics: document.getElementById('dontAnswerTopics').value,
+                    additionalKnowledge: document.getElementById('additionalKnowledge').value,
+                    
                     // Advanced Features
                     bookingLink: document.getElementById('bookingLink').value,
                     socialMedia: document.getElementById('socialMedia').value,
@@ -1443,7 +1526,7 @@
                     successSection.innerHTML = successHTML + `
                         <div class="embed-code">
                             <button class="copy-btn" onclick="copyCode()">Copy Code</button>
-                            <pre id="embedCode">${result.embedCode}</pre>
+                            <pre id="embedCode">${result.embedCode.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
                         </div>
                         
                         <div style="background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
