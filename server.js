@@ -1430,4 +1430,3 @@ app.listen(PORT, () => {
     console.log('🗃️ Database:', process.env.DATABASE_URL ? 'Connected' : 'Not configured');
     console.log('✨ New Features: Two-way chat, Real-time operator messaging, Message polling');
 });
-```
