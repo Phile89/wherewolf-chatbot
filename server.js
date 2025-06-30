@@ -871,6 +871,70 @@ app.post('/api/dashboard/send-message', async (req, res) => {
         });
     }
 });
+// 🆕 NEW: Load conversation history endpoint
+app.post('/api/chat/history', async (req, res) => {
+    const { operatorId, sessionId = 'default' } = req.body;
+
+    if (!operatorId) {
+        return res.status(400).json({ error: 'operatorId is required' });
+    }
+
+    const sessionKey = `${operatorId}_${sessionId}`;
+
+    try {
+        // Get conversation from database
+        const convResult = await pool.query(
+            'SELECT conversation_id, agent_requested FROM conversations WHERE session_key = $1',
+            [sessionKey]
+        );
+
+        if (convResult.rows.length === 0) {
+            // No conversation history
+            return res.json({ messages: [], hasOperator: false, agentRequested: false });
+        }
+
+        const conversationId = convResult.rows[0].conversation_id;
+        const agentRequested = convResult.rows[0].agent_requested;
+
+        // Get all messages for this conversation
+        const messagesResult = await pool.query(`
+            SELECT role, content, timestamp
+            FROM messages 
+            WHERE conversation_id = $1 
+            ORDER BY timestamp ASC
+        `, [conversationId]);
+
+        // Check if operator has joined
+        const operatorCheckResult = await pool.query(
+            'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
+            [conversationId, 'operator']
+        );
+
+        const hasOperator = parseInt(operatorCheckResult.rows[0].count) > 0;
+
+        // Format messages for display
+        const messages = messagesResult.rows.map(msg => ({
+            role: msg.role === 'assistant' ? 'bot' : msg.role,
+            content: msg.content,
+            timestamp: msg.timestamp
+        }));
+
+        res.json({
+            messages: messages,
+            hasOperator: hasOperator,
+            agentRequested: agentRequested
+        });
+
+    } catch (error) {
+        console.error('Error loading conversation history:', error);
+        res.status(500).json({ 
+            error: 'Failed to load conversation history',
+            messages: [],
+            hasOperator: false,
+            agentRequested: false
+        });
+    }
+});
 
 // 🆕 UPDATED: Enhanced Chat endpoint with operator message detection
 app.post('/api/chat', async function(req, res) {
