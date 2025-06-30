@@ -633,7 +633,7 @@ app.get('/api/config/:operatorId', async (req, res) => {
 // Store customer contact info globally (kept for compatibility)
 const customerContacts = {};
 
-// Enhanced system prompt builder (keeping existing logic)
+// Enhanced system prompt builder with knowledge boundaries
 function buildEnhancedSystemPrompt(config) {
     const businessName = config.businessName || "our tour company";
     const businessType = config.businessType || "tours";
@@ -661,6 +661,12 @@ function buildEnhancedSystemPrompt(config) {
     const certifications = config.certifications || "";
     const responseTime = config.responseTime || "30 minutes";
     const contactMethods = config.contactMethods || "email and phone";
+    
+    // Knowledge boundary settings
+    const weatherInfo = config.weatherInfo || "defer";
+    const realTimeInfo = config.realTimeInfo || "";
+    const dontAnswerTopics = config.dontAnswerTopics || "";
+    const additionalKnowledge = config.additionalKnowledge || "";
     
     const tone = config.chatbotTone || "Friendly";
     const languageStyle = config.languageStyle || "Conversational";
@@ -730,8 +736,52 @@ function buildEnhancedSystemPrompt(config) {
         contactInfo += `Website: ${websiteUrl}. `;
     }
 
+    // Build knowledge boundaries section
+    let knowledgeBoundaries = `
+CRITICAL RULES - YOU MUST FOLLOW THESE:
+1. NEVER make up information you don't know. If you don't know something, say "I don't have that information" or "I'd need to check with our team about that."
+2. NEVER guess about real-time information like current weather, today's conditions, or live availability.
+3. NEVER provide specific dates or times unless they are explicitly listed in your knowledge.
+4. Always be honest when you don't know something.
+`;
+
+    // Handle weather information
+    if (weatherInfo === "defer") {
+        knowledgeBoundaries += `
+5. For ANY weather questions, say: "For current weather conditions and forecasts, please speak to someone from our team. They can provide real-time weather updates and discuss any weather-related concerns."
+`;
+    } else if (weatherInfo === "policy") {
+        knowledgeBoundaries += `
+5. For weather questions, ONLY mention our weather policy: "${weatherPolicy}". Do NOT guess about current or future weather conditions.
+`;
+    } else if (weatherInfo === "never") {
+        knowledgeBoundaries += `
+5. Do NOT discuss weather at all. If asked, say "Please contact our team directly for weather-related questions."
+`;
+    }
+
+    // Add real-time information restrictions
+    if (realTimeInfo) {
+        const realTimeTopics = realTimeInfo.split(',').map(t => t.trim()).filter(t => t);
+        knowledgeBoundaries += `
+6. NEVER provide information about these real-time topics: ${realTimeTopics.join(', ')}. 
+   For these topics, say: "I don't have real-time information about that. Please speak to our team for current details."
+`;
+    }
+
+    // Add topics to avoid
+    if (dontAnswerTopics) {
+        const avoidTopics = dontAnswerTopics.split(',').map(t => t.trim()).filter(t => t);
+        knowledgeBoundaries += `
+7. Do NOT answer questions about: ${avoidTopics.join(', ')}.
+   For these topics, say: "I can't help with that specific question. Please contact our team directly."
+`;
+    }
+
     const SYSTEM_PROMPT = `You are a ${tone.toLowerCase()} chatbot for ${businessName}${companyTagline ? ` - ${companyTagline}` : ''}.
 ${personalityInstructions}
+
+${knowledgeBoundaries}
 
 BUSINESS INFO:
 - Type: ${businessType} (${difficultyLevel} difficulty)
@@ -767,6 +817,10 @@ CONTACT & BOOKING:
 - ${socialMedia ? `Social: ${socialMedia}. ` : ''}
 - Business hours: ${businessHours}
 - Response time: ${responseTime}
+
+${additionalKnowledge ? `ADDITIONAL INFORMATION YOU KNOW:
+${additionalKnowledge}
+` : ''}
 
 ${expertiseLevel === "Educational focus" ? "Focus on educational aspects and learning opportunities. " : ""}
 ${expertiseLevel === "Detailed expert knowledge" ? "Provide detailed, expert-level information when asked. " : ""}
@@ -858,7 +912,7 @@ app.get('/api/test', (req, res) => {
         timestamp: new Date().toISOString(),
         emailConfigured: !!emailTransporter,
         databaseConfigured: !!process.env.DATABASE_URL,
-        version: 'Enhanced v2.1 with Two-Way Chat'
+        version: 'Enhanced v2.2 with Knowledge Boundaries'
     });
 });
 
@@ -1420,7 +1474,7 @@ process.on('SIGINT', async () => {
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`\n🚀 Enhanced Chatbot server with Two-Way Chat running on port ${PORT}`);
+    console.log(`\n🚀 Enhanced Chatbot server with Knowledge Boundaries running on port ${PORT}`);
     console.log('📝 Enhanced setup page: /setup');
     console.log('💬 Chat interface: /chat.html');
     console.log('📊 Dashboard: /dashboard');
@@ -1428,5 +1482,5 @@ app.listen(PORT, () => {
     console.log('🗄️ Database health: /api/db-health');
     console.log('📧 Email service:', emailTransporter ? 'Ready' : 'Not configured');
     console.log('🗃️ Database:', process.env.DATABASE_URL ? 'Connected' : 'Not configured');
-    console.log('✨ New Features: Two-way chat, Real-time operator messaging, Message polling');
+    console.log('✨ New Features: Knowledge boundaries to prevent hallucination');
 });
