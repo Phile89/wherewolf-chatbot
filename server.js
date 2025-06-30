@@ -1007,12 +1007,12 @@ app.post('/api/chat', async function(req, res) {
 
     const hasOperatorMessages = parseInt(operatorCheckResult.rows[0].count) > 0;
     
-    // 🆕 NEW: Check if we've already sent the operator notification
+    // 🆕 FIXED: Check if we've already sent the operator notification - FIX THE LIKE QUERY
     const notificationCheckResult = await pool.query(
         `SELECT COUNT(*) FROM messages 
          WHERE conversation_id = $1 
          AND role = 'assistant' 
-         AND content LIKE '%team member will respond shortly%'`,
+         AND content LIKE '%Our team member will respond shortly%'`,
         [conversation.conversation_id]
     );
     
