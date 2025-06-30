@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "description": "Enhanced AI chatbot for tour operators with Wherewolf integration",
   "main": "server.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
