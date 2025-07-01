@@ -5,6 +5,7 @@ const path = require('path');
 const nodemailer = require('nodemailer');
 const { Pool } = require('pg');
 require('dotenv').config();
+const twilio = require('twilio');
 
 console.log('CLAUDE_API_KEY:', process.env.CLAUDE_API_KEY ? 'Loaded' : 'Missing');
 console.log('GMAIL_USER:', process.env.GMAIL_USER ? 'Loaded' : 'Missing');
@@ -113,6 +114,17 @@ if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
     console.log('Email service configured');
 } else {
     console.log('Email service not configured (missing credentials)');
+}
+
+// Initialize Twilio client
+const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
+    ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+    : null;
+
+if (twilioClient) {
+    console.log('Twilio service configured');
+} else {
+    console.log('Twilio service not configured (missing credentials)');
 }
 
 // Database functions for conversations
@@ -226,6 +238,116 @@ async function sendHandoffEmail(config, conversationHistory, customerContact, op
             const role = msg.role === 'user' ? 'Customer' : 'Chatbot';
             conversationText += `${role}: ${msg.content}\n\n`;
         });
+
+// 🆕 NEW: Webhook to receive incoming SMS from Twilio
+app.post('/api/sms/webhook', async (req, res) => {
+    const { From, To, Body, MessageSid } = req.body;
+    
+    console.log(`📱 Incoming SMS from ${From}: ${Body}`);
+    
+    try {
+        // Find or create conversation based on phone number
+        let convResult = await pool.query(
+            'SELECT conversation_id, operator_id FROM conversations WHERE customer_sms_number = $1 AND sms_enabled = true ORDER BY last_message_at DESC LIMIT 1',
+            [From]
+        );
+        
+        let conversationId;
+        let operatorId;
+        
+        if (convResult.rows.length > 0) {
+            // Existing conversation
+            conversationId = convResult.rows[0].conversation_id;
+            operatorId = convResult.rows[0].operator_id;
+        } else {
+            // This part may need customization. For now, it creates a new conversation
+        // assigned to a default operator ID. You could change 'sms_default'.
+            operatorId = 'sms_default'; 
+            
+            const sessionKey = `sms_${From}_${Date.now()}`;
+            const newConv = await pool.query(
+                'INSERT INTO conversations (operator_id, session_key, customer_phone, customer_sms_number, sms_enabled, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING conversation_id',
+                [operatorId, sessionKey, From, From, true, 'new']
+            );
+            conversationId = newConv.rows[0].conversation_id;
+        }
+        
+        // Save SMS message to the new sms_messages table
+        await pool.query(
+            'INSERT INTO sms_messages (conversation_id, direction, from_number, to_number, message_body, message_sid) VALUES ($1, $2, $3, $4, $5, $6)',
+            [conversationId, 'inbound', From, To, Body, MessageSid]
+        );
+        
+        // Save as a regular message for the dashboard to display
+        await saveMessage(conversationId, 'user', `📱 SMS from ${From}: ${Body}`);
+        
+        res.status(200).send('<Response></Response>'); // Acknowledge to Twilio
+        
+    } catch (error) {
+        console.error('Error processing incoming SMS:', error);
+        res.status(500).send('Error processing SMS');
+    }
+});
+
+// 🆕 NEW: Send SMS function
+async function sendSMS(toNumber, message, conversationId) {
+    if (!twilioClient) {
+        console.error('Twilio not configured');
+        return null;
+    }
+    
+    try {
+        const result = await twilioClient.messages.create({
+            body: message,
+            from: process.env.TWILIO_PHONE_NUMBER,
+            to: toNumber
+        });
+        
+        console.log(`📤 SMS sent to ${toNumber}: ${result.sid}`);
+
+        // Save outbound SMS to the database
+        await pool.query(
+            'INSERT INTO sms_messages (conversation_id, direction, from_number, to_number, message_body, message_sid, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [conversationId, 'outbound', process.env.TWILIO_PHONE_NUMBER, toNumber, message, result.sid, 'sent']
+        );
+        
+        return result;
+    } catch (error) {
+        console.error('Error sending SMS:', error);
+        return null;
+    }
+}
+
+// 🆕 NEW: Dashboard endpoint to send SMS
+app.post('/api/dashboard/send-sms', async (req, res) => {
+    const { conversationId, message } = req.body;
+    
+    try {
+        const convResult = await pool.query(
+            'SELECT customer_sms_number FROM conversations WHERE conversation_id = $1',
+            [conversationId]
+        );
+        
+        if (convResult.rows.length === 0 || !convResult.rows[0].customer_sms_number) {
+            return res.status(404).json({ error: 'Conversation or SMS number not found' });
+        }
+        
+        const customerSmsNumber = convResult.rows[0].customer_sms_number;
+        const smsResult = await sendSMS(customerSmsNumber, message, conversationId);
+        
+        if (smsResult) {
+            // Save as a regular message for dashboard display
+            await saveMessage(conversationId, 'operator', `📤 SMS to ${customerSmsNumber}: ${message}`);
+            res.json({ success: true, messageSid: smsResult.sid });
+        } else {
+            res.status(500).json({ error: 'Failed to send SMS' });
+        }
+        
+    } catch (error) {
+        console.error('Error in dashboard send SMS endpoint:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 
         const emailContent = `
 🚨 URGENT: Customer Requesting Human Agent
