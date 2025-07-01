@@ -799,39 +799,243 @@ app.get('/api/dashboard/conversations', async (req, res) => {
     }
 });
 
-// Dashboard API - Get messages for a conversation
-app.get('/api/dashboard/conversation/:conversationId/messages', async (req, res) => {
+// COMPLETE REPLACEMENT for the poll-messages endpoint in server.js
+// COMPLETE REPLACEMENT for the poll-messages endpoint in server.js
+// Enhanced and more efficient poll-messages endpoint with better error handling
+
+app.post('/api/chat/poll-messages', validateRequired(['operatorId']), async (req, res) => {
+    const { operatorId, sessionId = 'default', lastMessageCount = 0 } = req.body;
+
+    const sessionKey = `${operatorId}_${sessionId}`;
+
     try {
-        const { conversationId } = req.params;
-        
-        // Validate conversationId is a number
-        if (!/^\d+$/.test(conversationId)) {
-            return res.status(400).json({ 
-                success: false,
-                error: 'Invalid conversation ID' 
+        console.log(`📡 Polling request: ${sessionKey}, lastCount: ${lastMessageCount}`);
+
+        // Get conversation from database
+        const convResult = await pool.query(
+            'SELECT conversation_id, last_message_at, last_operator_message_at FROM conversations WHERE session_key = $1',
+            [sessionKey]
+        );
+
+        if (convResult.rows.length === 0) {
+            return res.json({ 
+                success: true,
+                newMessages: [], 
+                totalMessages: 0,
+                hasOperatorMessages: false,
+                lastPolled: new Date().toISOString()
             });
         }
-        
-        const result = await pool.query(`
+
+        const conversation = convResult.rows[0];
+        const conversationId = conversation.conversation_id;
+
+        // Get all messages for this conversation
+        const messagesResult = await pool.query(`
             SELECT 
-                message_id,
-                role,
-                content,
-                timestamp
+                role, 
+                content, 
+                timestamp,
+                message_id
             FROM messages 
             WHERE conversation_id = $1 
-            ORDER BY timestamp ASC
-        `, [parseInt(conversationId)]);
+            ORDER BY timestamp ASC, message_id ASC
+        `, [conversationId]);
+
+        const allMessages = messagesResult.rows;
+        const totalMessages = allMessages.length;
+
+        // Determine which messages are new
+        const newMessages = allMessages.slice(lastMessageCount);
+
+        // Filter for operator and system messages only for the client
+        const relevantNewMessages = newMessages.filter(msg => 
+            msg.role === 'operator' || msg.role === 'system'
+        );
+
+        // Check if there are any operator messages at all
+        const hasOperatorMessages = allMessages.some(msg => msg.role === 'operator');
+
+        // Enhanced response with more metadata
+        const response = {
+            success: true,
+            newMessages: relevantNewMessages.map(msg => ({
+                role: msg.role,
+                content: msg.content,
+                timestamp: msg.timestamp
+            })),
+            totalMessages: totalMessages,
+            hasOperatorMessages: hasOperatorMessages,
+            lastPolled: new Date().toISOString(),
+            conversationId: conversationId,
+            lastOperatorMessageAt: conversation.last_operator_message_at
+        };
+
+        // Set appropriate cache headers for real-time polling
+        res.set({
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'X-Accel-Buffering': 'no' // Disable nginx buffering for real-time responses
+        });
+
+        console.log(`📨 Poll response: ${relevantNewMessages.length} new messages, ${totalMessages} total`);
+        res.json(response);
+
+    } catch (error) {
+        console.error('❌ Polling error:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to poll messages',
+            timestamp: new Date().toISOString(),
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+// Enhanced conversation endpoint with better sorting for dashboard
+app.get('/api/dashboard/conversations', async (req, res) => {
+    try {
+        const { 
+            operator: operatorFilter,
+            status,
+            hasEmail,
+            hasPhone,
+            agentRequested,
+            dateFrom,
+            dateTo,
+            search
+        } = req.query;
+        
+        let query = `
+            SELECT 
+                c.conversation_id,
+                c.operator_id,
+                c.customer_email,
+                c.customer_phone,
+                c.customer_sms_number,
+                c.sms_enabled,
+                c.started_at,
+                c.last_message_at,
+                c.last_operator_message_at,
+                c.message_count,
+                c.agent_requested,
+                c.status,
+                oc.config->>'businessName' as business_name,
+                (SELECT content FROM messages 
+                 WHERE conversation_id = c.conversation_id 
+                 ORDER BY timestamp DESC LIMIT 1) as last_message,
+                -- Calculate urgency score for better sorting
+                CASE 
+                    WHEN c.status = 'new' AND c.agent_requested THEN 1000
+                    WHEN c.status = 'in_progress' THEN 500
+                    WHEN c.status = 'new' THEN 100
+                    ELSE 0
+                END as urgency_score
+            FROM conversations c
+            LEFT JOIN operator_configs oc ON c.operator_id = oc.operator_id
+            WHERE 1=1
+        `;
+        
+        const params = [];
+        let paramCount = 0;
+        
+        // Add filters with proper parameterization
+        if (operatorFilter) {
+            paramCount++;
+            query += ` AND c.operator_id = $${paramCount}`;
+            params.push(operatorFilter);
+        }
+        
+        if (status && status !== 'all') {
+            paramCount++;
+            query += ` AND c.status = $${paramCount}`;
+            params.push(status);
+        }
+        
+        if (hasEmail === 'true') {
+            query += ` AND c.customer_email IS NOT NULL AND c.customer_email != ''`;
+        } else if (hasEmail === 'false') {
+            query += ` AND (c.customer_email IS NULL OR c.customer_email = '')`;
+        }
+        
+        if (hasPhone === 'true') {
+            query += ` AND c.customer_phone IS NOT NULL AND c.customer_phone != ''`;
+        } else if (hasPhone === 'false') {
+            query += ` AND (c.customer_phone IS NULL OR c.customer_phone = '')`;
+        }
+        
+        if (agentRequested === 'true') {
+            query += ` AND c.agent_requested = true`;
+        } else if (agentRequested === 'false') {
+            query += ` AND c.agent_requested = false`;
+        }
+        
+        if (dateFrom) {
+            paramCount++;
+            query += ` AND c.started_at >= $${paramCount}`;
+            params.push(dateFrom);
+        }
+        
+        if (dateTo) {
+            paramCount++;
+            query += ` AND c.started_at <= $${paramCount}`;
+            params.push(dateTo);
+        }
+        
+        if (search) {
+            paramCount++;
+            query += ` AND (
+                c.customer_email ILIKE $${paramCount} OR 
+                c.customer_phone ILIKE $${paramCount} OR
+                oc.config->>'businessName' ILIKE $${paramCount} OR
+                EXISTS (
+                    SELECT 1 FROM messages m 
+                    WHERE m.conversation_id = c.conversation_id 
+                    AND m.content ILIKE $${paramCount}
+                )
+            )`;
+            params.push(`%${search}%`);
+        }
+        
+        // Enhanced ordering: urgency first, then recency
+        query += ` ORDER BY 
+            urgency_score DESC,
+            c.last_message_at DESC 
+            LIMIT 100`;
+        
+        const result = await pool.query(query, params);
+
+        // Add computed fields for better frontend handling
+        const enhancedConversations = result.rows.map(conv => ({
+            ...conv,
+            is_urgent: conv.urgency_score >= 1000,
+            is_active: conv.status === 'in_progress' || conv.last_operator_message_at,
+            needs_response: conv.status === 'new' || (conv.agent_requested && !conv.last_operator_message_at),
+            has_contact: !!(conv.customer_email || conv.customer_phone)
+        }));
 
         res.json({
             success: true,
-            messages: result.rows
+            conversations: enhancedConversations,
+            totalCount: enhancedConversations.length,
+            filters: {
+                operator: operatorFilter,
+                status,
+                hasEmail,
+                hasPhone,
+                agentRequested,
+                dateFrom,
+                dateTo,
+                search
+            }
         });
     } catch (error) {
-        console.error('Error fetching messages:', error);
+        console.error('❌ Error fetching conversations:', error);
         res.status(500).json({ 
             success: false,
-            error: 'Failed to fetch messages' 
+            error: 'Failed to fetch conversations',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 });
@@ -1290,6 +1494,7 @@ app.get('/api/test', (req, res) => {
 });
 
 // Send operator message endpoint with enhanced validation
+// Enhanced operator message sending with immediate feedback
 app.post('/api/dashboard/send-message', validateRequired(['conversationId', 'message']), async (req, res) => {
     const { conversationId, message, operatorId } = req.body;
 
@@ -1304,6 +1509,22 @@ app.post('/api/dashboard/send-message', validateRequired(['conversationId', 'mes
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+
+        // Check if conversation exists
+        const convCheck = await client.query(
+            'SELECT conversation_id, session_key, status FROM conversations WHERE conversation_id = $1',
+            [conversationId]
+        );
+
+        if (convCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({
+                success: false,
+                error: 'Conversation not found'
+            });
+        }
+
+        const conversationData = convCheck.rows[0];
 
         // Check if this is the first operator message in this conversation
         const existingOperatorMessages = await client.query(
@@ -1338,60 +1559,51 @@ app.post('/api/dashboard/send-message', validateRequired(['conversationId', 'mes
             SET last_message_at = NOW(), 
                 last_operator_message_at = NOW(),
                 message_count = message_count + 1,
-                status = CASE WHEN status = 'new' THEN 'in_progress' ELSE status END
+                status = CASE 
+                    WHEN status = 'new' THEN 'in_progress' 
+                    ELSE status 
+                END
             WHERE conversation_id = $1`,
-            [conversationId]
-        );
-
-        // Get conversation details for session management
-        const convResult = await client.query(
-            'SELECT operator_id, session_key FROM conversations WHERE conversation_id = $1',
             [conversationId]
         );
 
         await client.query('COMMIT');
 
-        if (convResult.rows.length > 0) {
-            const { operator_id, session_key } = convResult.rows[0];
-            
-            // Add operator message to in-memory conversation
-            if (!conversations[session_key]) {
-                conversations[session_key] = [];
-                conversations[session_key].lastActivity = Date.now();
-            }
-            
-            // Add system message to memory if first operator message
+        // Update in-memory conversation for immediate polling response
+        const sessionKey = conversationData.session_key;
+        if (conversations[sessionKey]) {
             if (isFirstOperatorMessage) {
-                conversations[session_key].push({
+                conversations[sessionKey].push({
                     role: 'system',
                     content: '👨‍💼 A team member has joined the chat to assist you personally!'
                 });
             }
             
-            // Add the actual operator message
-            conversations[session_key].push({
+            conversations[sessionKey].push({
                 role: 'operator',
                 content: message
             });
 
-            conversations[session_key].lastActivity = Date.now();
-
-            console.log(`💬 Operator message sent to conversation ${conversationId}: ${message}`);
+            conversations[sessionKey].lastActivity = Date.now();
         }
+
+        console.log(`💬 Operator message sent successfully to conversation ${conversationId}`);
 
         res.json({ 
             success: true, 
             message: 'Operator message sent successfully',
             timestamp: new Date().toISOString(),
-            isFirstMessage: isFirstOperatorMessage
+            isFirstMessage: isFirstOperatorMessage,
+            conversationStatus: conversationData.status === 'new' ? 'in_progress' : conversationData.status
         });
 
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Error sending operator message:', error);
+        console.error('❌ Error sending operator message:', error);
         res.status(500).json({ 
             success: false, 
-            error: 'Failed to send operator message' 
+            error: 'Failed to send operator message',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     } finally {
         client.release();
@@ -1628,15 +1840,153 @@ async function sendSMS(toNumber, message, conversationId) {
             }
         }
 // 🆕 ENHANCED: Handle SMS-first phone number collection
-if (alreadyHandedOff && currentConfig.smsEnabled === 'sms-first') {
-    const phoneRegex = /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b|\b\(\d{3}\)\s?\d{3}[-.]?\d{4}\b/;
+// 🆕 ENHANCED: Initial agent request handling with hybrid SMS support
+if (isAgentRequest && !alreadyHandedOff) {
+    await markAgentRequested(sessionKey);
+    conversations[handoffKey] = true;
     
-    if (phoneRegex.test(message)) {
+    const customerContact = customerContacts[sessionKey];
+    const responseTime = currentConfig.responseTime || CONFIG.DEFAULT_RESPONSE_TIME;
+    const contactMethods = currentConfig.contactMethods || CONFIG.DEFAULT_CONTACT_METHODS;
+    const smsEnabled = currentConfig.smsEnabled || 'disabled';
+    
+    let botResponse;
+    
+    if (smsEnabled === 'hybrid') {
+        // 🆕 NEW: Enhanced hybrid mode - give customer choice
+        botResponse = `I'd be happy to connect you with our team! How would you prefer to continue the conversation?
+        
+<div style="margin: 15px 0;">
+    <button class="choice-btn" onclick="selectChatChoice('sms')" style="
+        display: block;
+        width: 100%;
+        margin: 8px 0;
+        padding: 12px;
+        background: #8B5CF6;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+    ">📱 Text me so I can reply on the go</button>
+    
+    <button class="choice-btn" onclick="selectChatChoice('chat')" style="
+        display: block;
+        width: 100%;
+        margin: 8px 0;
+        padding: 12px;
+        background: #10b981;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+    ">💬 Continue chatting here</button>
+</div>
+
+<p style="font-size: 12px; color: #6b7280; margin-top: 10px;">
+    Our team typically responds within ${responseTime}
+</p>
+
+<script>
+window.selectChatChoice = function(choice) {
+    // Disable buttons
+    document.querySelectorAll('.choice-btn').forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+    });
+    
+    if (choice === 'sms') {
+        // Show phone number collection
+        showPhoneCollection();
+    } else {
+        // Continue with regular chat handoff
+        sendMessageToServer('I prefer to continue chatting here');
+    }
+};
+
+window.showPhoneCollection = function() {
+    const choiceContainer = event.target.closest('div');
+    choiceContainer.innerHTML = \`
+        <div style="text-align: center;">
+            <h4 style="margin: 0 0 12px 0; color: #1f2937;">📱 What's your mobile number?</h4>
+            <input type="tel" id="hybridPhoneInput" placeholder="+1 (555) 123-4567" style="
+                width: 100%;
+                padding: 12px;
+                border: 2px solid #e5e7eb;
+                border-radius: 8px;
+                font-size: 16px;
+                margin-bottom: 12px;
+            " onkeypress="if(event.key==='Enter') submitHybridPhone()">
+            <button onclick="submitHybridPhone()" style="
+                width: 100%;
+                padding: 12px;
+                background: #8B5CF6;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-weight: 600;
+                cursor: pointer;
+            ">Send me a text! 📱</button>
+        </div>
+    \`;
+    document.getElementById('hybridPhoneInput').focus();
+};
+
+window.submitHybridPhone = function() {
+    const phoneInput = document.getElementById('hybridPhoneInput');
+    const phone = phoneInput.value.trim();
+    
+    if (!phone) {
+        phoneInput.style.borderColor = '#ef4444';
+        phoneInput.placeholder = 'Please enter your phone number';
+        return;
+    }
+    
+    sendMessageToServer(\`My phone number is \${phone}\`);
+};
+</script>`;
+        
+    } else if (smsEnabled === 'sms-first') {
+        // SMS-first mode remains the same
+        botResponse = `I'd be happy to connect you with our team! What's your mobile number so we can start a text conversation?`;
+        
+    } else {
+        // Regular mode - no SMS
+        botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime} via ${contactMethods}. Could I get your contact information?`;
+    }
+    
+    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+    
+    // Send handoff email if not hybrid mode or if customer chooses chat
+    if (smsEnabled !== 'hybrid' && emailTransporter) {
+        await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+    }
+    
+    return res.json({ 
+        success: true, 
+        response: botResponse,
+        agentRequested: true,
+        smsMode: smsEnabled
+    });
+}
+
+// Enhanced handoff follow-up handling for hybrid mode
+if (alreadyHandedOff) {
+    const customerContact = customerContacts[sessionKey];
+    const responseTime = currentConfig.responseTime || CONFIG.DEFAULT_RESPONSE_TIME;
+    const smsEnabled = currentConfig.smsEnabled || 'disabled';
+    
+    // Handle phone number submission in hybrid mode
+    const phoneRegex = /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b|\b\(\d{3}\)\s?\d{3}[-.]?\d{4}\b/;
+    if (phoneRegex.test(message) && smsEnabled === 'hybrid') {
         const phone = message.match(phoneRegex)[0];
         customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
         await updateCustomerContact(sessionKey, null, phone);
         
-        // Send initial SMS with custom message
+        // Send SMS using SMS-first logic
         const businessName = currentConfig.businessName || 'Our Business';
         const smsFirstMessage = currentConfig.smsFirstMessage || '';
         const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
@@ -1644,26 +1994,83 @@ if (alreadyHandedOff && currentConfig.smsEnabled === 'sms-first') {
         
         const smsResult = await sendSMS(phone, welcomeSMS, conversation.conversation_id);
         
+        let botResponse;
         if (smsResult && smsResult.success) {
-            botResponse = `Perfect! 📱 I've sent you a text at ${phone}. Continue our conversation there for faster mobile replies!`;
-            
-            // Send handoff email if configured
-            if (emailTransporter) {
-                await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
-            }
+            botResponse = `Perfect! 📱 I've sent you a text at ${phone}. Continue our conversation there for mobile chat, and our team will join you shortly!`;
         } else {
-            botResponse = `I have your number (${phone}). Our team will text you shortly at this number! You can also continue chatting here.`;
+            botResponse = `I have your number (${phone}). Our team will text you shortly! You can also continue chatting here if you prefer.`;
+        }
+        
+        // Send handoff email with phone number
+        if (emailTransporter) {
+            await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
         }
         
         conversations[sessionKey].push({ role: 'assistant', content: botResponse });
         await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-        return res.json({ success: true, response: botResponse, smsEnabled: true, smsMode: 'sms-first' });
-    } else {
-        botResponse = `Please share your mobile number so I can connect you via text message! 📱 (Example: 555-123-4567)`;
+        return res.json({ 
+            success: true, 
+            response: botResponse, 
+            smsEnabled: true, 
+            smsMode: 'hybrid',
+            phoneCollected: true
+        });
+    }
+    
+    // Handle "continue chatting here" choice
+    if (lowerMessage.includes('continue chatting') || lowerMessage.includes('chat here') || 
+        lowerMessage.includes('prefer') && lowerMessage.includes('here')) {
+        
+        // Start regular chat handoff
+        if (emailTransporter) {
+            await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+        }
+        
+        const botResponse = `Perfect! Our team will join this chat to assist you personally. They typically respond within ${responseTime}. 
+        
+While you wait, could I get your email or phone number so they can follow up if needed?`;
+        
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ 
+            success: true, 
+            response: botResponse,
+            startPolling: true,
+            twoWayChat: true
+        });
+    }
+    
+    // 🆕 KEEP: Your existing handoff follow-up logic for email/phone collection
+    const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
+    
+    if (emailRegex.test(message)) {
+        const email = message.match(emailRegex)[0];
+        customerContacts[sessionKey] = { ...customerContacts[sessionKey], email };
+        await updateCustomerContact(sessionKey, email, null);
+        
+        if (emailTransporter) {
+            await sendHandoffEmail(currentConfig, conversations[sessionKey], { email }, operatorId);
+        }
+        
+        const botResponse = `Perfect! I've saved your email (${email}) and our team has been notified. They'll reach out within ${responseTime}. Is there anything else I can help you with while you wait?`;
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ success: true, response: botResponse });
+    } else if (phoneRegex.test(message)) {
+        const phone = message.match(phoneRegex)[0];
+        customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
+        await updateCustomerContact(sessionKey, null, phone);
+        
+        if (emailTransporter) {
+            await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
+        }
+        
+        const botResponse = `Perfect! I've saved your phone number (${phone}) and our team has been notified. They'll call you within ${responseTime}. Is there anything else I can help you with while you wait?`;
         conversations[sessionKey].push({ role: 'assistant', content: botResponse });
         await saveMessage(conversation.conversation_id, 'assistant', botResponse);
         return res.json({ success: true, response: botResponse });
     }
+    // ... continue with other existing handoff logic if you have any
 }
         
         // Handle waiver requests
