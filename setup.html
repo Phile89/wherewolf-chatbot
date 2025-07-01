@@ -1169,7 +1169,60 @@
                     </div>
                 </div>
             </div>
-
+           
+            <!-- Add this section after Contact Preferences -->
+<div class="form-section">
+    <div class="section-header" onclick="toggleSection(this)">
+        <h3>📱 SMS Integration</h3>
+        <span class="section-toggle">▼</span>
+    </div>
+    <div class="section-content">
+        <div class="section-description">Enable two-way SMS conversations with customers</div>
+        
+        <div class="form-group">
+            <label for="smsEnabled">
+                Enable SMS Support
+                <span class="info-icon">i
+                    <div class="tooltip">Allow customers to text your business number directly</div>
+                </span>
+            </label>
+            <select id="smsEnabled" onchange="toggleSMSOptions()">
+                <option value="false">Disabled</option>
+                <option value="true">Enabled</option>
+            </select>
+        </div>
+        
+        <div id="smsOptions" style="display: none;">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="smsPhoneNumber">SMS Phone Number</label>
+                    <input type="tel" id="smsPhoneNumber" placeholder="+1 (555) 123-4567" readonly>
+                    <p class="help-text">This number will be assigned after setup</p>
+                </div>
+                <div class="form-group">
+                    <label for="smsAutoResponse">Auto-Response Message</label>
+                    <textarea id="smsAutoResponse" placeholder="Thanks for texting! We'll respond shortly during business hours."></textarea>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="smsBusinessHours">SMS Response Hours</label>
+                <input type="text" id="smsBusinessHours" placeholder="9 AM - 5 PM EST, Monday-Friday">
+            </div>
+            
+            <div class="form-group">
+                <label for="smsKeywords">
+                    SMS Keywords
+                    <span class="info-icon">i
+                        <div class="tooltip">Keywords that trigger specific auto-responses (e.g., HOURS, LOCATION, BOOK)</div>
+                    </span>
+                </label>
+                <textarea id="smsKeywords" placeholder="HOURS: Reply with business hours&#10;LOCATION: Reply with address&#10;BOOK: Send booking link"></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+            
             <!-- Branding -->
             <div class="form-section">
                 <div class="section-header" onclick="toggleSection(this)">
