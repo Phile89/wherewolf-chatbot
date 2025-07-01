@@ -505,7 +505,8 @@ app.get('/api/dashboard/conversations', async (req, res) => {
                 c.message_count,
                 c.agent_requested,
                 c.status,
-                oc.config->>'businessName' as business_name,
+                c.sms_enabled,
+                oc.config->>'businessName' as business_name,,
                 (SELECT content FROM messages 
                  WHERE conversation_id = c.conversation_id 
                  ORDER BY timestamp DESC LIMIT 1) as last_message
