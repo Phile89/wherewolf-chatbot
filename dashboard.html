@@ -804,7 +804,9 @@
     </div>
 
     <script>
-// Place this right before the closing </body> tag
+// =================================================================================
+// MERGED AND CORRECTED SCRIPT
+// =================================================================================
 
 // Global variables
 let conversations = [];
@@ -819,7 +821,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Auto-refresh every 30 seconds
     setInterval(() => {
-        if (!document.hidden) {
+        if (!document.hidden && !selectedConversationId) { // Only refresh list if a chat isn't selected
             loadConversations(buildQueryString());
             loadStats();
         }
@@ -828,15 +830,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Main dashboard loading function
 async function loadDashboard() {
+    const refreshBtn = document.querySelector('.btn-primary');
+    const originalText = refreshBtn.innerHTML;
     try {
-        console.log('📊 Loading dashboard data...');
-        
-        // Load data
+        refreshBtn.innerHTML = '<div class="loading-spinner"></div> Refreshing...';
+        refreshBtn.disabled = true;
+
         await Promise.all([
             loadConversations(),
             loadOperators(),
-            loadStats(),
-            loadFilterStats()
+            loadStats()
         ]);
         
         console.log('✅ Dashboard loaded successfully');
@@ -844,6 +847,9 @@ async function loadDashboard() {
     } catch (error) {
         console.error('Error loading dashboard:', error);
         showError('Failed to connect to server');
+    } finally {
+        refreshBtn.innerHTML = originalText;
+        refreshBtn.disabled = false;
     }
 }
 
@@ -851,19 +857,14 @@ async function loadDashboard() {
 async function loadConversations(queryString = '') {
     try {
         const conversationsList = document.getElementById('conversationsList');
-        conversationsList.innerHTML = `
-            <div class="loading">
-                <div class="loading-spinner"></div>
-                Loading conversations...
-            </div>
-        `;
+        conversationsList.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Loading conversations...</div>';
         
-        const url = queryString ? `/api/dashboard/conversations?${queryString}` : '/api/dashboard/conversations';
+        const url = `/api/dashboard/conversations?${queryString}`;
         const response = await fetch(url);
         const data = await response.json();
         
         if (data.success) {
-            conversations = data.conversations;
+            conversations = data.conversations.sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
             renderConversations(conversations);
             updateStatusCounts(conversations);
         } else {
@@ -875,55 +876,45 @@ async function loadConversations(queryString = '') {
     }
 }
 
-// Render conversations in the list
+// Render conversations in the list (with enhanced UI)
 function renderConversations(conversations) {
     const container = document.getElementById('conversationsList');
-    
+    const panelTitle = document.querySelector('.panel-title');
+    panelTitle.textContent = `Conversations (${conversations.length})`;
+
     if (conversations.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state" style="padding: 40px; text-align: center;">
-                <div class="empty-state-icon">📭</div>
-                <p><strong>No conversations found</strong></p>
-                <p style="font-size: 12px; color: #64748b; margin-top: 8px;">
-                    Try adjusting your filters or wait for new conversations
-                </p>
-            </div>
-        `;
+        container.innerHTML = `<div class="empty-state" style="padding: 40px; text-align: center;"><div class="empty-state-icon">📭</div><p><strong>No conversations found</strong></p><p style="font-size: 12px; color: #64748b; margin-top: 8px;">Try adjusting your filters.</p></div>`;
         return;
     }
 
     container.innerHTML = conversations.map(conv => {
         const lastMessageTime = new Date(conv.last_message_at);
-        const timeDisplay = lastMessageTime.toLocaleString();
+        const timeDisplay = formatRelativeTime(lastMessageTime);
         const status = conv.status || 'new';
         const statusClass = status.replace('_', '-');
-        
-        const messagePreview = conv.last_message ? 
-            (conv.last_message.length > 80 ? 
-                conv.last_message.substring(0, 80) + '...' : 
-                conv.last_message) : 
-            'No messages yet';
+        const isUrgent = status === 'new' && conv.agent_requested;
+        let priorityIndicator = isUrgent ? '<div style="position: absolute; top: 8px; left: 8px; width: 8px; height: 8px; background: #ef4444; border-radius: 50%; animation: pulse 2s infinite;"></div>' : '';
+
+        const messagePreview = conv.last_message ? (conv.last_message.length > 80 ? conv.last_message.substring(0, 80) + '...' : conv.last_message) : 'No messages yet';
 
         return `
-            <div class="conversation-item" 
-                 onclick="selectConversation(${conv.conversation_id})"
+            <div class="conversation-item ${isUrgent ? 'urgent' : ''}" 
+                 onclick="selectConversation('${conv.conversation_id}')"
                  data-conversation-id="${conv.conversation_id}">
+                ${priorityIndicator}
                 <div class="conversation-status ${statusClass}">${status.replace('_', ' ').toUpperCase()}</div>
                 <div class="conversation-header">
-                    <div class="business-name">
-                        ${conv.business_name || 'Unknown Business'}
-                        ${conv.agent_requested ? ' 🚨' : ''}
-                    </div>
+                    <div class="business-name">${conv.business_name || 'Unknown Business'} ${isUrgent ? '🚨' : ''}</div>
                     <div class="conversation-time">${timeDisplay}</div>
                 </div>
                 <div class="conversation-details">
-                    <strong>Operator:</strong> ${conv.operator_id} • 
-                    <strong>Messages:</strong> ${conv.message_count || 0}
+                    <strong>Operator:</strong> ${conv.operator_id} • <strong>Messages:</strong> ${conv.message_count || 0}
                 </div>
                 <div class="conversation-preview">${messagePreview}</div>
                 <div class="conversation-badges">
                     ${conv.customer_email ? '<span class="badge badge-email">📧 Email</span>' : ''}
                     ${conv.customer_phone ? '<span class="badge badge-phone">📞 Phone</span>' : ''}
+                    ${conv.sms_enabled ? '<span class="badge badge-sms">💬 SMS</span>' : ''}
                     ${conv.agent_requested ? '<span class="badge badge-agent">🚨 Agent</span>' : ''}
                 </div>
             </div>
@@ -931,76 +922,51 @@ function renderConversations(conversations) {
     }).join('');
 }
 
+
 // Select a conversation and load its messages
 async function selectConversation(conversationId) {
     selectedConversationId = conversationId;
     
-    // Update UI selection
-    document.querySelectorAll('.conversation-item').forEach(item => {
-        item.classList.remove('selected');
-    });
-    document.querySelector(`[data-conversation-id="${conversationId}"]`).classList.add('selected');
+    document.querySelectorAll('.conversation-item').forEach(item => item.classList.remove('selected'));
+    const selectedElement = document.querySelector(`[data-conversation-id="${conversationId}"]`);
+    if(selectedElement) selectedElement.classList.add('selected');
     
-    // Find conversation data
     const conversation = conversations.find(c => c.conversation_id === conversationId);
     if (!conversation) return;
     
-    // Update chat header
     document.getElementById('chatTitle').textContent = conversation.business_name || 'Unknown Business';
     document.getElementById('chatSubtitle').textContent = `Operator: ${conversation.operator_id} • Status: ${conversation.status}`;
-    
-    // Show chat actions
     document.getElementById('chatActions').style.display = 'flex';
     document.getElementById('statusSelect').value = conversation.status || 'new';
-    
-    // Show input container
     document.getElementById('chatInputContainer').classList.add('active');
     
-    // Load messages
     await loadConversationMessages(conversationId);
 }
 
 // Load messages for a specific conversation
 async function loadConversationMessages(conversationId) {
+    const chatMessages = document.getElementById('chatMessages');
     try {
+        chatMessages.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Loading messages...</div>';
         const response = await fetch(`/api/dashboard/conversation/${conversationId}/messages`);
         const data = await response.json();
         
         if (data.success) {
             renderMessages(data.messages);
         } else {
-            // Fallback - show basic conversation info
-            document.getElementById('chatMessages').innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">💬</div>
-                    <p>Messages will appear here</p>
-                    <p style="font-size: 12px; color: #64748b;">Start typing below to send a message</p>
-                </div>
-            `;
+            chatMessages.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>Could not load messages.</p></div>`;
         }
     } catch (error) {
         console.error('Error loading messages:', error);
-        document.getElementById('chatMessages').innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">💬</div>
-                <p>Ready to respond</p>
-                <p style="font-size: 12px; color: #64748b;">Start typing below to send a message</p>
-            </div>
-        `;
+        chatMessages.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>Error connecting to server.</p></div>`;
     }
 }
 
 // Render messages in chat panel
 function renderMessages(messages) {
     const container = document.getElementById('chatMessages');
-    
     if (!messages || messages.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">💬</div>
-                <p>No messages yet</p>
-            </div>
-        `;
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">💬</div><p>No messages yet</p></div>`;
         return;
     }
     
@@ -1008,18 +974,10 @@ function renderMessages(messages) {
         const messageClass = msg.role === 'user' ? 'user' : 
                            msg.role === 'operator' ? 'operator' : 
                            msg.role === 'system' ? 'system' : 'assistant';
-        
         const timestamp = new Date(msg.timestamp).toLocaleString();
-        
-        return `
-            <div class="message ${messageClass}">
-                <div>${msg.content}</div>
-                <div class="message-time">${timestamp}</div>
-            </div>
-        `;
+        return `<div class="message ${messageClass}"><div>${msg.content}</div><div class="message-time">${timestamp}</div></div>`;
     }).join('');
     
-    // Scroll to bottom
     container.scrollTop = container.scrollHeight;
 }
 
@@ -1031,7 +989,6 @@ async function sendOperatorMessage() {
 
     if (!message || !selectedConversationId) return;
 
-    // Show sending state
     const originalButtonText = sendButton.textContent;
     messageInput.disabled = true;
     sendButton.disabled = true;
@@ -1040,77 +997,38 @@ async function sendOperatorMessage() {
     try {
         const response = await fetch('/api/dashboard/send-message', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                conversationId: selectedConversationId,
-                message: message
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conversationId: selectedConversationId, message: message })
         });
-
         const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to send message');
         
-        if (data.success) {
-            // Clear input
-            messageInput.value = '';
-            
-            // Add message to UI immediately
-            addMessageToUI({
-                role: 'operator',
-                content: message,
-                timestamp: new Date().toISOString()
-            });
-            
-            // Show success
-            sendButton.textContent = '✓ Sent';
-            sendButton.style.background = '#10b981';
-            
-            setTimeout(() => {
-                sendButton.textContent = originalButtonText;
-                sendButton.style.background = '#8B5CF6';
-            }, 1500);
+        messageInput.value = '';
+        addMessageToUI({ role: 'operator', content: message, timestamp: new Date().toISOString() });
 
-        } else {
-            throw new Error(data.error || 'Failed to send message');
-        }
     } catch (error) {
         console.error('Error sending message:', error);
         alert(`Failed to send message: ${error.message}`);
-        
-        sendButton.textContent = '❌ Failed';
-        setTimeout(() => {
-            sendButton.textContent = originalButtonText;
-        }, 3000);
     } finally {
         messageInput.disabled = false;
         sendButton.disabled = false;
+        sendButton.textContent = originalButtonText;
         messageInput.focus();
     }
 }
 
-// Add message to UI
+// Add sent message to UI instantly
 function addMessageToUI(message) {
     const container = document.getElementById('chatMessages');
-    
-    // Remove empty state if present
     const emptyState = container.querySelector('.empty-state');
-    if (emptyState) {
-        emptyState.remove();
-    }
+    if (emptyState) emptyState.remove();
     
-    const messageClass = message.role === 'user' ? 'user' : 
-                       message.role === 'operator' ? 'operator' : 
-                       message.role === 'system' ? 'system' : 'assistant';
-    
+    const messageClass = message.role === 'operator' ? 'operator' : 'user';
     const timestamp = new Date(message.timestamp).toLocaleString();
     
     const messageElement = document.createElement('div');
     messageElement.className = `message ${messageClass}`;
-    messageElement.innerHTML = `
-        <div>${message.content}</div>
-        <div class="message-time">${timestamp}</div>
-    `;
+    messageElement.innerHTML = `<div>${message.content}</div><div class="message-time">${timestamp}</div>`;
     
     container.appendChild(messageElement);
     container.scrollTop = container.scrollHeight;
@@ -1128,36 +1046,20 @@ function handleOperatorKeyPress(event) {
 async function updateConversationStatus() {
     const statusSelect = document.getElementById('statusSelect');
     const newStatus = statusSelect.value;
-    
     if (!selectedConversationId) return;
     
     try {
         const response = await fetch('/api/dashboard/update-status', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                conversationId: selectedConversationId,
-                status: newStatus
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conversationId: selectedConversationId, status: newStatus })
         });
-        
         const data = await response.json();
-        
         if (data.success) {
-            // Update local data
             const conversation = conversations.find(c => c.conversation_id === selectedConversationId);
-            if (conversation) {
-                conversation.status = newStatus;
-            }
-            
-            // Re-render conversations
-            renderConversations(conversations);
-            
-            // Re-select current conversation
-            document.querySelector(`[data-conversation-id="${selectedConversationId}"]`).classList.add('selected');
-            
+            if (conversation) conversation.status = newStatus;
+            renderConversations(conversations); // Re-render to update list item
+            document.querySelector(`[data-conversation-id="${selectedConversationId}"]`)?.classList.add('selected'); // Re-select
             console.log('✅ Status updated successfully');
         } else {
             throw new Error(data.error || 'Failed to update status');
@@ -1165,30 +1067,21 @@ async function updateConversationStatus() {
     } catch (error) {
         console.error('Error updating status:', error);
         alert(`Failed to update status: ${error.message}`);
-        
-        // Reset select to original value
-        const conversation = conversations.find(c => c.conversation_id === selectedConversationId);
-        if (conversation) {
-            statusSelect.value = conversation.status;
-        }
     }
 }
 
-// Load statistics
+// Load general stats
 async function loadStats() {
     try {
         const response = await fetch('/api/dashboard/stats');
         const data = await response.json();
-        
         if (data.success) {
             document.getElementById('totalConversations').textContent = data.stats.total_conversations || 0;
             document.getElementById('agentRequests').textContent = data.stats.agent_requests || 0;
             document.getElementById('withEmail').textContent = data.stats.with_email || 0;
             document.getElementById('activeOperators').textContent = data.stats.active_operators || 0;
         }
-    } catch (error) {
-        console.error('Error loading stats:', error);
-    }
+    } catch (error) { console.error('Error loading stats:', error); }
 }
 
 // Load operators for filter dropdown
@@ -1196,11 +1089,9 @@ async function loadOperators() {
     try {
         const response = await fetch('/api/dashboard/operators');
         const data = await response.json();
-        
         if (data.success) {
             const operatorFilter = document.getElementById('operatorFilter');
             operatorFilter.innerHTML = '<option value="">All Operators</option>';
-            
             data.operators.forEach(operator => {
                 const option = document.createElement('option');
                 option.value = operator.operator_id;
@@ -1208,26 +1099,19 @@ async function loadOperators() {
                 operatorFilter.appendChild(option);
             });
         }
-    } catch (error) {
-        console.error('Error loading operators:', error);
-    }
+    } catch (error) { console.error('Error loading operators:', error); }
 }
 
 // Filter and search functions
 function buildQueryString() {
     const params = new URLSearchParams();
-    
     Object.keys(currentFilters).forEach(key => {
-        if (currentFilters[key]) {
-            params.append(key, currentFilters[key]);
-        }
+        if (currentFilters[key]) params.append(key, currentFilters[key]);
     });
-    
     return params.toString();
 }
 
 function applyFilters() {
-    // Collect filter values
     currentFilters = {
         operator: document.getElementById('operatorFilter').value,
         hasEmail: document.getElementById('hasEmailFilter').value,
@@ -1237,20 +1121,10 @@ function applyFilters() {
         dateTo: document.getElementById('dateToFilter').value,
         search: document.getElementById('searchInput').value
     };
-    
-    // Remove empty filters
-    Object.keys(currentFilters).forEach(key => {
-        if (!currentFilters[key]) {
-            delete currentFilters[key];
-        }
-    });
-    
-    // Apply filters
     loadConversations(buildQueryString());
 }
 
 function clearFilters() {
-    // Clear all filter inputs
     document.getElementById('operatorFilter').value = '';
     document.getElementById('hasEmailFilter').value = '';
     document.getElementById('hasPhoneFilter').value = '';
@@ -1258,111 +1132,68 @@ function clearFilters() {
     document.getElementById('dateFromFilter').value = '';
     document.getElementById('dateToFilter').value = '';
     document.getElementById('searchInput').value = '';
-    
-    // Clear current filters
     currentFilters = {};
-    
-    // Reload conversations
     loadConversations();
 }
 
-// Search with debounce
 function debounceSearch() {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-        applyFilters();
-    }, 500);
+    searchTimeout = setTimeout(applyFilters, 500);
 }
 
 // Status filter functions
 function filterByStatus(status) {
-    // Update active pill
-    document.querySelectorAll('.status-pill').forEach(pill => {
-        pill.classList.remove('active');
-    });
-    event.target.classList.add('active');
+    document.querySelectorAll('.status-pill').forEach(pill => pill.classList.remove('active'));
+    event.currentTarget.classList.add('active'); // Use currentTarget for safety
     
-    // Apply status filter
-    if (status === 'all') {
-        delete currentFilters.status;
-    } else {
-        currentFilters.status = status;
-    }
-    
+    currentFilters.status = (status === 'all') ? '' : status;
     loadConversations(buildQueryString());
 }
 
-// Update status counts
 function updateStatusCounts(conversations) {
-    const statusCounts = {
-        all: conversations.length,
-        new: conversations.filter(c => c.status === 'new').length,
-        in_progress: conversations.filter(c => c.status === 'in_progress').length,
-        resolved: conversations.filter(c => c.status === 'resolved').length,
-        on_hold: conversations.filter(c => c.status === 'on_hold').length
-    };
-    
-    document.getElementById('allCount').textContent = `(${statusCounts.all})`;
-    document.getElementById('newCount').textContent = `(${statusCounts.new})`;
-    document.getElementById('inProgressCount').textContent = `(${statusCounts.in_progress})`;
-    document.getElementById('resolvedCount').textContent = `(${statusCounts.resolved})`;
-    document.getElementById('onHoldCount').textContent = `(${statusCounts.on_hold})`;
-}
-
-// Filter stats loading
-async function loadFilterStats() {
-    try {
-        const response = await fetch('/api/dashboard/filter-stats');
-        const data = await response.json();
-        
-        if (data.success) {
-            updateStatusCounts({
-                length: data.stats.new_count + data.stats.in_progress_count + data.stats.resolved_count + data.stats.on_hold_count,
-                filter: (fn) => {
-                    // Mock filter function for updateStatusCounts
-                    if (fn.toString().includes('new')) return new Array(data.stats.new_count);
-                    if (fn.toString().includes('in_progress')) return new Array(data.stats.in_progress_count);
-                    if (fn.toString().includes('resolved')) return new Array(data.stats.resolved_count);
-                    if (fn.toString().includes('on_hold')) return new Array(data.stats.on_hold_count);
-                    return [];
-                }
-            });
-        }
-    } catch (error) {
-        console.error('Error loading filter stats:', error);
+    const statusCounts = { new: 0, in_progress: 0, resolved: 0, on_hold: 0 };
+    for (const conv of conversations) {
+        statusCounts[conv.status]++;
     }
+    document.getElementById('allCount').textContent = `(${conversations.length})`;
+    document.getElementById('newCount').textContent = `(${statusCounts.new || 0})`;
+    document.getElementById('inProgressCount').textContent = `(${statusCounts.in_progress || 0})`;
+    document.getElementById('resolvedCount').textContent = `(${statusCounts.resolved || 0})`;
+    document.getElementById('onHoldCount').textContent = `(${statusCounts.on_hold || 0})`;
 }
 
 // Toggle filters visibility
 function toggleFilters() {
     const filterContent = document.getElementById('filterContent');
     const toggleText = document.getElementById('filterToggleText');
-    
-    if (filterContent.style.display === 'none') {
-        filterContent.style.display = 'block';
-        toggleText.textContent = 'Hide Filters';
-    } else {
-        filterContent.style.display = 'none';
-        toggleText.textContent = 'Show Filters';
-    }
+    const isHidden = filterContent.style.display === 'none';
+    filterContent.style.display = isHidden ? 'block' : 'none';
+    toggleText.textContent = isHidden ? 'Hide Filters' : 'Show Filters';
 }
 
 // Error handling
 function showError(message) {
     const conversationsList = document.getElementById('conversationsList');
-    conversationsList.innerHTML = `
-        <div class="empty-state" style="padding: 40px; text-align: center;">
-            <div class="empty-state-icon">⚠️</div>
-            <p><strong>Error</strong></p>
-            <p style="font-size: 12px; color: #64748b; margin-top: 8px;">${message}</p>
-            <button class="btn btn-primary" onclick="loadDashboard()" style="margin-top: 12px;">
-                Try Again
-            </button>
-        </div>
-    `;
+    conversationsList.innerHTML = `<div class="empty-state" style="padding: 40px; text-align: center;"><div class="empty-state-icon">⚠️</div><p><strong>Error</strong></p><p style="font-size: 12px; color: #64748b; margin-top: 8px;">${message}</p><button class="btn btn-primary" onclick="loadDashboard()" style="margin-top: 12px;">Try Again</button></div>`;
 }
 
-console.log('🎉 Dashboard JavaScript loaded!');
+// Helper for relative time display
+function formatRelativeTime(date) {
+    const now = new Date();
+    const diffSeconds = Math.round((now - date) / 1000);
+    const diffMinutes = Math.round(diffSeconds / 60);
+    const diffHours = Math.round(diffMinutes / 60);
+    const diffDays = Math.round(diffHours / 24);
+
+    if (diffSeconds < 60) return `${diffSeconds}s ago`;
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return `Yesterday`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+console.log('🎉 Merged Dashboard JavaScript loaded!');
 </script>
 </body>
 </html>
