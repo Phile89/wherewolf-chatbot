@@ -117,7 +117,7 @@ async function initializeDatabase() {
             )
         `);
 
-        // Add missing columns if they don't exist (migration logic)
+        // Add missing columns if they don't exist (fixed migration logic)
         const migrations = [
             {
                 table: 'conversations',
@@ -142,17 +142,19 @@ async function initializeDatabase() {
         ];
 
         for (const migration of migrations) {
-            await client.query(`
-                DO $$ 
-                BEGIN 
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns 
-                        WHERE table_name=$1 AND column_name=$2
-                    ) THEN
-                        EXECUTE 'ALTER TABLE ' || $1 || ' ADD COLUMN ' || $2 || ' ' || $3;
-                    END IF;
-                END $$;
-            `, [migration.table, migration.column, migration.definition]);
+            // Check if column exists first
+            const columnExists = await client.query(`
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = $1 AND column_name = $2
+            `, [migration.table, migration.column]);
+            
+            if (columnExists.rows.length === 0) {
+                // Column doesn't exist, add it using string concatenation to avoid parameter binding issues
+                const alterQuery = `ALTER TABLE ${migration.table} ADD COLUMN ${migration.column} ${migration.definition}`;
+                await client.query(alterQuery);
+                console.log(`✅ Added column ${migration.column} to ${migration.table}`);
+            }
         }
 
         // Create indexes for better performance
