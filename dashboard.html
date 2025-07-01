@@ -372,9 +372,9 @@
             color: #dc2626;
         }
         .badge-sms {
-            background: #dbeafe; /* A blue color for SMS */
-            color: #3b82f6;
-        }
+            background: #dbeafe; /* A blue color for SMS */
+            color: #3b82f6;
+        }
 
         /* Chat Panel */
         .chat-panel {
@@ -778,27 +778,27 @@
                     </div>
                 </div>
                 <div class="chat-input-container" id="chatInputContainer">
-                    <div style="font-size: 13px; color: #64748b; margin-bottom: 8px;">
-                        <strong>👨‍💼 You are responding as the operator</strong>
-                        <span id="responseMethod" style="font-weight: bold;"></span>
-                    </div>
-                    <div class="chat-input-row">
-                        <textarea 
-                            class="chat-input" 
-                            id="operatorMessageInput" 
-                            placeholder="Type your response..."
-                            onkeypress="handleOperatorKeyPress(event)"
-                        ></textarea>
-                        <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <button class="send-btn" id="sendOperatorMessage" onclick="sendOperatorMessage()">
-                                Send Chat
-                            </button>
-                            <button class="send-btn" id="sendSMSMessage" onclick="sendSMSMessage()" style="display: none; background-color: #3b82f6;">
-                                Send SMS
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                    <div style="font-size: 13px; color: #64748b; margin-bottom: 8px;">
+                        <strong>👨‍💼 You are responding as the operator</strong>
+                        <span id="responseMethod" style="font-weight: bold;"></span>
+                    </div>
+                    <div class="chat-input-row">
+                        <textarea 
+                            class="chat-input" 
+                            id="operatorMessageInput" 
+                            placeholder="Type your response..."
+                            onkeypress="handleOperatorKeyPress(event)"
+                        ></textarea>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <button class="send-btn" id="sendOperatorMessage" onclick="sendOperatorMessage()">
+                                Send Chat
+                            </button>
+                            <button class="send-btn" id="sendSMSMessage" onclick="sendSMSMessage()" style="display: none; background-color: #3b82f6;">
+                                Send SMS
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1078,11 +1078,11 @@
                         </div>
                         ${conv.last_message ? `<div class="conversation-preview">${conv.last_message}</div>` : ''}
                        <div class="conversation-badges">
-                            ${conv.customer_email ? '<span class="badge badge-email">📧 Email</span>' : ''}
-                            ${conv.customer_phone ? '<span class="badge badge-phone">📞 Phone</span>' : ''}
-                            ${conv.sms_enabled ? '<span class="badge badge-sms">💬 SMS</span>' : ''}
-                            ${conv.agent_requested ? '<span class="badge badge-agent">🚨 Agent</span>' : ''}
-                        </div>
+                            ${conv.customer_email ? '<span class="badge badge-email">📧 Email</span>' : ''}
+                            ${conv.customer_phone ? '<span class="badge badge-phone">📞 Phone</span>' : ''}
+                            ${conv.sms_enabled ? '<span class="badge badge-sms">💬 SMS</span>' : ''}
+                            ${conv.agent_requested ? '<span class="badge badge-agent">🚨 Agent</span>' : ''}
+                        </div>
                     </div>
                 `;
             }).join('');
@@ -1101,7 +1101,7 @@
             // Find conversation details
             const conversation = conversations.find(c => c.conversation_id === conversationId);
             if (conversation) {
-                // 🆕 Check if SMS is enabled for this conversation
+                // Check if SMS is enabled for this conversation
                 const smsButton = document.getElementById('sendSMSMessage');
                 const responseMethodText = document.getElementById('responseMethod');
                 
@@ -1232,7 +1232,7 @@
                     // Show success feedback
                     sendButton.textContent = '✓ Sent';
                     setTimeout(() => {
-                        sendButton.textContent = 'Send';
+                        sendButton.textContent = 'Send Chat';
                     }, 1000);
 
                     // Update conversation status to in_progress if it was new
@@ -1252,7 +1252,7 @@
                 alert('Failed to send message: ' + error.message);
                 sendButton.textContent = 'Failed - Retry';
                 setTimeout(() => {
-                    sendButton.textContent = 'Send';
+                    sendButton.textContent = 'Send Chat';
                 }, 2000);
             } finally {
                 // Re-enable input
@@ -1261,40 +1261,42 @@
                 messageInput.focus();
             }
         }
-// 🆕 Send SMS message from dashboard
-        async function sendSMSMessage() {
-            const messageInput = document.getElementById('operatorMessageInput');
-            const message = messageInput.value.trim();
-            
-            if (!message || !selectedConversationId) return;
-            
-            try {
-                const response = await fetch('/api/dashboard/send-sms', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        conversationId: selectedConversationId,
-                        message: message
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    messageInput.value = '';
-                    alert('SMS sent successfully!');
-                    // Reload messages to show the sent SMS
-                    await selectConversation(selectedConversationId);
-                } else {
-                    alert('Failed to send SMS: ' + data.error);
-                }
-            } catch (error) {
-                console.error('Error sending SMS:', error);
-                alert('An error occurred while sending the SMS.');
-            }
-        }
+
+        // Send SMS message from dashboard
+        async function sendSMSMessage() {
+            const messageInput = document.getElementById('operatorMessageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message || !selectedConversationId) return;
+            
+            try {
+                const response = await fetch('/api/dashboard/send-sms', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        conversationId: selectedConversationId,
+                        message: message
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    messageInput.value = '';
+                    alert('SMS sent successfully!');
+                    // Reload messages to show the sent SMS
+                    await selectConversation(selectedConversationId);
+                } else {
+                    alert('Failed to send SMS: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error sending SMS:', error);
+                alert('An error occurred while sending the SMS.');
+            }
+        }
+
         // Handle keyboard shortcuts for operator input
         function handleOperatorKeyPress(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
