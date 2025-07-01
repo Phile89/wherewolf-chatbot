@@ -750,15 +750,8 @@
             displayMessage(message, 'user');
             input.value = '';
             
-            // If this is the first message and we haven't collected contact info yet
-            if (isFirstMessage && !hasProvidedContact) {
-                isFirstMessage = false;
-                pendingMessage = message; // Store the message
-                showContactForm(); // Show contact form first
-            } else {
-                // Normal message flow - send directly to server
-                await sendMessageToServer(message);
-            }
+            // Normal message flow - send directly to server (no contact form for regular questions)
+await sendMessageToServer(message);
             
             // Re-enable input
             input.disabled = false;

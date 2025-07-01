@@ -1490,21 +1490,26 @@ app.post('/api/chat', validateRequired(['message', 'operatorId']), async functio
         const lowerMessage = message.toLowerCase();
         const waiverLink = currentConfig.waiverLink || "No waiver link provided.";
 
-        // Agent request detection
         const defaultAgentKeywords = [
-            'agent', 'human', 'speak to someone', 'talk to someone', 
-            'representative', 'person', 'staff', 'manager', 'urgent'
-        ];
+    'agent', 'human', 'speak to someone', 'talk to someone', 
+    'representative', 'person', 'staff', 'manager', 'urgent',
+    'speak with human', 'speak with an agent', 'speak human',
+    'talk to human', 'talk with human', 'real person',
+    'customer service', 'help me', 'support'
+];
         
         let customTriggers = [];
         if (currentConfig.handoffTriggers) {
             customTriggers = currentConfig.handoffTriggers.split(',').map(t => t.trim().toLowerCase());
         }
         
-        const allAgentKeywords = [...defaultAgentKeywords, ...customTriggers];
-        const isAgentRequest = allAgentKeywords.some(keyword => lowerMessage.includes(keyword)) ||
-            lowerMessage.includes('call me') ||
-            (lowerMessage.includes('phone') && lowerMessage.includes('call') && lowerMessage.length < 20);
+       const allAgentKeywords = [...defaultAgentKeywords, ...customTriggers];
+const isAgentRequest = allAgentKeywords.some(keyword => lowerMessage.includes(keyword)) ||
+    lowerMessage.includes('call me') ||
+    (lowerMessage.includes('speak') && lowerMessage.includes('human')) ||
+    (lowerMessage.includes('talk') && lowerMessage.includes('human')) ||
+    (lowerMessage.includes('connect') && lowerMessage.includes('agent')) ||
+    (lowerMessage.includes('phone') && lowerMessage.includes('call') && lowerMessage.length < 20);
 
         const handoffKey = `handoff_${sessionKey}`;
         const alreadyHandedOff = conversations[handoffKey] || false;
