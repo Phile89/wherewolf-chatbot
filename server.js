@@ -522,11 +522,11 @@ app.post('/api/sms/webhook', async (req, res) => {
     }
 });
 
-// Send SMS function with enhanced error handling
+// 🆕 IMPROVED: Enhanced sendSMS function with better error handling
 async function sendSMS(toNumber, message, conversationId) {
     if (!twilioClient) {
         console.error('❌ Twilio not configured');
-        return null;
+        return { success: false, error: 'SMS service not configured' };
     }
     
     const client = await pool.connect();
@@ -545,10 +545,26 @@ async function sendSMS(toNumber, message, conversationId) {
             [conversationId, 'outbound', process.env.TWILIO_PHONE_NUMBER, toNumber, message, result.sid, 'sent']
         );
         
-        return result;
+        return { success: true, result: result };
     } catch (error) {
         console.error('❌ Error sending SMS:', error);
-        return null;
+        
+        // Save failed SMS attempt to database
+        try {
+            await client.query(
+                'INSERT INTO sms_messages (conversation_id, direction, from_number, to_number, message_body, status) VALUES ($1, $2, $3, $4, $5, $6)',
+                [conversationId, 'outbound', process.env.TWILIO_PHONE_NUMBER, toNumber, message, 'failed']
+            );
+        } catch (dbError) {
+            console.error('Error saving failed SMS to database:', dbError);
+        }
+        
+        return { 
+            success: false, 
+            error: error.message,
+            code: error.code,
+            moreInfo: error.moreInfo
+        };
     } finally {
         client.release();
     }
