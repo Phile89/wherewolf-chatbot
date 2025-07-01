@@ -262,7 +262,7 @@ app.post('/api/sms/webhook', async (req, res) => {
         } else {
             // This part may need customization. For now, it creates a new conversation
         // assigned to a default operator ID. You could change 'sms_default'.
-            operatorId = 'sms_default'; 
+            operatorId = 'sms_user'; 
             
             const sessionKey = `sms_${From}_${Date.now()}`;
             const newConv = await pool.query(
