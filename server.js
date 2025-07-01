@@ -13,7 +13,7 @@ console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'Loaded' : 'Missing');
 console.log('PORT:', process.env.PORT || 3000);
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: 'https://wherewolf-chatbot.onrender.com' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
