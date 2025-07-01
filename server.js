@@ -240,6 +240,76 @@ async function sendHandoffEmail(config, conversationHistory, customerContact, op
             conversationText += `${role}: ${msg.content}\n\n`;
         });
 
+        const emailContent = `
+🚨 URGENT: Customer Requesting Human Agent
+
+Business: ${businessName}
+Operator ID: ${operatorId}
+Time: ${new Date().toLocaleString()}
+Expected Response Time: ${responseTime}
+Preferred Contact: ${contactMethods}
+
+📞 CUSTOMER CONTACT:
+Email: ${customerEmail}
+Phone: ${customerPhone}
+
+💬 FULL CONVERSATION:
+${conversationText}
+
+⚡ ACTION REQUIRED:
+Please contact this customer within ${responseTime} using their preferred method: ${contactMethods}
+
+Best regards,
+Wherewolf Enhanced Chatbot System
+        `;
+
+        const mailOptions = {
+            from: process.env.GMAIL_USER,
+            to: process.env.OPERATOR_EMAIL || process.env.GMAIL_USER,
+            subject: `🚨 URGENT Agent Request: ${businessName} - ${customerEmail}`,
+            text: emailContent,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background: ${config.brandColor || '#8B5CF6'}; color: white; padding: 20px; text-align: center;">
+                        <h2>🚨 Urgent Agent Request</h2>
+                        <p style="margin: 0; font-size: 18px;">${businessName}</p>
+                    </div>
+                    <div style="padding: 20px; background: #f9f9f9;">
+                        <h3>Business Details</h3>
+                        <p><strong>Business:</strong> ${businessName}</p>
+                        <p><strong>Operator ID:</strong> ${operatorId}</p>
+                        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+                        <p><strong>Expected Response:</strong> ${responseTime}</p>
+                        <p><strong>Contact Methods:</strong> ${contactMethods}</p>
+                    </div>
+                    <div style="padding: 20px;">
+                        <h3>📞 Customer Contact</h3>
+                        <p><strong>Email:</strong> <a href="mailto:${customerEmail}">${customerEmail}</a></p>
+                        <p><strong>Phone:</strong> <a href="tel:${customerPhone}">${customerPhone}</a></p>
+                    </div>
+                    <div style="padding: 20px; background: #f9f9f9;">
+                        <h3>💬 Conversation History</h3>
+                        <pre style="white-space: pre-wrap; background: white; padding: 15px; border-radius: 5px; font-size: 14px;">${conversationText}</pre>
+                    </div>
+                    <div style="padding: 20px; text-align: center; background: ${config.brandColor || '#8B5CF6'}; color: white;">
+                        <h3>⚡ Action Required</h3>
+                        <p>Please contact this customer within <strong>${responseTime}</strong></p>
+                        <p>Preferred contact method: <strong>${contactMethods}</strong></p>
+                    </div>
+                </div>
+            `
+        };
+
+        const info = await emailTransporter.sendMail(mailOptions);
+        console.log('✅ Enhanced handoff email sent successfully:', info.messageId);
+        console.log(`📬 Sent to: ${process.env.OPERATOR_EMAIL || process.env.GMAIL_USER}`);
+        return true;
+    } catch (error) {
+        console.error('❌ Error sending handoff email:', error);
+        return false;
+    }
+}
+
 // 🆕 NEW: Webhook to receive incoming SMS from Twilio
 app.post('/api/sms/webhook', async (req, res) => {
     const { From, To, Body, MessageSid } = req.body;
@@ -349,76 +419,6 @@ app.post('/api/dashboard/send-sms', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-
-        const emailContent = `
-🚨 URGENT: Customer Requesting Human Agent
-
-Business: ${businessName}
-Operator ID: ${operatorId}
-Time: ${new Date().toLocaleString()}
-Expected Response Time: ${responseTime}
-Preferred Contact: ${contactMethods}
-
-📞 CUSTOMER CONTACT:
-Email: ${customerEmail}
-Phone: ${customerPhone}
-
-💬 FULL CONVERSATION:
-${conversationText}
-
-⚡ ACTION REQUIRED:
-Please contact this customer within ${responseTime} using their preferred method: ${contactMethods}
-
-Best regards,
-Wherewolf Enhanced Chatbot System
-        `;
-
-        const mailOptions = {
-            from: process.env.GMAIL_USER,
-            to: process.env.OPERATOR_EMAIL || process.env.GMAIL_USER,
-            subject: `🚨 URGENT Agent Request: ${businessName} - ${customerEmail}`,
-            text: emailContent,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background: ${config.brandColor || '#8B5CF6'}; color: white; padding: 20px; text-align: center;">
-                        <h2>🚨 Urgent Agent Request</h2>
-                        <p style="margin: 0; font-size: 18px;">${businessName}</p>
-                    </div>
-                    <div style="padding: 20px; background: #f9f9f9;">
-                        <h3>Business Details</h3>
-                        <p><strong>Business:</strong> ${businessName}</p>
-                        <p><strong>Operator ID:</strong> ${operatorId}</p>
-                        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
-                        <p><strong>Expected Response:</strong> ${responseTime}</p>
-                        <p><strong>Contact Methods:</strong> ${contactMethods}</p>
-                    </div>
-                    <div style="padding: 20px;">
-                        <h3>📞 Customer Contact</h3>
-                        <p><strong>Email:</strong> <a href="mailto:${customerEmail}">${customerEmail}</a></p>
-                        <p><strong>Phone:</strong> <a href="tel:${customerPhone}">${customerPhone}</a></p>
-                    </div>
-                    <div style="padding: 20px; background: #f9f9f9;">
-                        <h3>💬 Conversation History</h3>
-                        <pre style="white-space: pre-wrap; background: white; padding: 15px; border-radius: 5px; font-size: 14px;">${conversationText}</pre>
-                    </div>
-                    <div style="padding: 20px; text-align: center; background: ${config.brandColor || '#8B5CF6'}; color: white;">
-                        <h3>⚡ Action Required</h3>
-                        <p>Please contact this customer within <strong>${responseTime}</strong></p>
-                        <p>Preferred contact method: <strong>${contactMethods}</strong></p>
-                    </div>
-                </div>
-            `
-        };
-
-        const info = await emailTransporter.sendMail(mailOptions);
-        console.log('✅ Enhanced handoff email sent successfully:', info.messageId);
-        console.log(`📬 Sent to: ${process.env.OPERATOR_EMAIL || process.env.GMAIL_USER}`);
-        return true;
-    } catch (error) {
-        console.error('❌ Error sending handoff email:', error);
-        return false;
-    }
-}
 
 // Root route redirect
 app.get('/', (req, res) => {
