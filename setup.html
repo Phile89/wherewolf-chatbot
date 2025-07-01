@@ -217,48 +217,52 @@
             letter-spacing: -0.01em;
         }
 
+        /* Enhanced info icon with better tooltips */
         .info-icon {
             margin-left: 8px;
-            width: 18px;
-            height: 18px;
+            width: 20px;
+            height: 20px;
             background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
             border-radius: 50%;
             color: white;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 11px;
-            font-weight: 600;
+            font-size: 12px;
+            font-weight: 700;
             cursor: help;
             position: relative;
-            transition: transform 0.2s ease;
+            transition: all 0.2s ease;
+            vertical-align: middle;
+            flex-shrink: 0;
         }
 
         .info-icon:hover {
             transform: scale(1.1);
+            background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%);
         }
 
         .tooltip {
             position: absolute;
-            bottom: 28px;
+            bottom: 30px;
             left: 50%;
             transform: translateX(-50%) scale(0.9);
             background: #1f2937;
             color: white;
-            padding: 10px 14px;
-            border-radius: 8px;
+            padding: 12px 16px;
+            border-radius: 10px;
             font-size: 13px;
-            white-space: nowrap;
+            white-space: normal;
             opacity: 0;
             pointer-events: none;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             z-index: 1000;
-            max-width: 280px;
-            white-space: normal;
+            max-width: 320px;
             width: max-content;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
             font-weight: 400;
             letter-spacing: 0;
+            line-height: 1.5;
         }
 
         .tooltip::after {
@@ -267,13 +271,23 @@
             top: 100%;
             left: 50%;
             transform: translateX(-50%);
-            border: 6px solid transparent;
+            border: 8px solid transparent;
             border-top-color: #1f2937;
         }
 
         .info-icon:hover .tooltip {
             opacity: 1;
-            transform: translateX(-50%) scale(1) translateY(-4px);
+            transform: translateX(-50%) scale(1) translateY(-6px);
+        }
+
+        .tooltip strong {
+            color: #8B5CF6;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .tooltip br {
+            margin-bottom: 4px;
         }
 
         input, textarea, select {
@@ -302,26 +316,25 @@
             min-height: 100px;
         }
 
-
         .conditional-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(4px);
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 500;
-    color: #6b7280;
-    z-index: 5; /* Reduced from 10 */
-    font-size: 1.1rem;
-    max-width: 100%;
-    max-height: 100%;
-}
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(4px);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+            color: #6b7280;
+            z-index: 5;
+            font-size: 1.1rem;
+            max-width: 100%;
+            max-height: 100%;
+        }
 
         /* Time slots */
         .time-slots {
@@ -602,6 +615,23 @@
             margin-top: 10px;
         }
 
+        /* SMS Fields */
+        #smsFields {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 16px;
+        }
+
+        #smsFields .form-group {
+            margin-bottom: 16px;
+        }
+
+        #smsFields .form-group:last-child {
+            margin-bottom: 0;
+        }
+
         /* Responsive design */
         @media (max-width: 768px) {
             .container {
@@ -627,6 +657,19 @@
 
             .color-options {
                 grid-template-columns: repeat(2, 1fr);
+            }
+
+            .tooltip {
+                max-width: 280px;
+                font-size: 12px;
+                padding: 10px 14px;
+                bottom: 35px;
+            }
+            
+            .info-icon {
+                width: 18px;
+                height: 18px;
+                font-size: 11px;
             }
         }
 
@@ -871,19 +914,29 @@
                             <label for="bookingLink">
                                 Booking System Link
                                 <span class="info-icon">i
-                                    <div class="tooltip">If provided, pricing and schedule questions will be deferred to your booking system</div>
+                                    <div class="tooltip">If you provide a booking system URL, the bot will defer all pricing and scheduling questions to your booking system instead of trying to answer them. This ensures customers get current prices and availability.</div>
                                 </span>
                             </label>
                             <input type="url" id="bookingLink" placeholder="https://your-booking-system.com" oninput="toggleConditionalSections()" onchange="toggleConditionalSections()">
                         </div>
                         <div class="form-group">
-                            <label for="socialMedia">Social Media Links</label>
+                            <label for="socialMedia">
+                                Social Media Links
+                                <span class="info-icon">i
+                                    <div class="tooltip">Your social media handles or URLs. The bot can mention these when customers ask about following you or seeing more photos.<br><strong>Example:</strong> "Instagram: @yourbusiness, Facebook: /yourbusiness"</div>
+                                </span>
+                            </label>
                             <input type="text" id="socialMedia" placeholder="Instagram: @yourbusiness, Facebook: /yourbusiness">
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label for="certifications">Safety Certifications & Licenses</label>
+                        <label for="certifications">
+                            Safety Certifications & Licenses
+                            <span class="info-icon">i
+                                <div class="tooltip">Your safety credentials, licenses, and insurance information. This builds customer confidence.<br><strong>Examples:</strong> "Coast Guard licensed", "First Aid certified", "Fully insured with XYZ Insurance"</div>
+                            </span>
+                        </label>
                         <textarea id="certifications" placeholder="Coast Guard licensed, First Aid certified, Insured with..."></textarea>
                     </div>
                 </div>
@@ -986,7 +1039,7 @@
                             <label for="chatbotTone">
                                 Communication Tone
                                 <span class="info-icon">i
-                                    <div class="tooltip">Friendly: Warm & welcoming | Professional: Courteous & formal | Casual: Relaxed & informal | Enthusiastic: Energetic with emojis</div>
+                                    <div class="tooltip"><strong>Friendly:</strong> Warm & welcoming (default)<br><strong>Professional:</strong> Courteous & formal business language<br><strong>Casual:</strong> Relaxed & informal, like talking to a friend<br><strong>Enthusiastic:</strong> Energetic with emojis and excitement</div>
                                 </span>
                             </label>
                             <select id="chatbotTone">
@@ -1000,7 +1053,7 @@
                             <label for="languageStyle">
                                 Language Style
                                 <span class="info-icon">i
-                                    <div class="tooltip">How formal or casual the language should be</div>
+                                    <div class="tooltip"><strong>Conversational:</strong> Natural, everyday language<br><strong>Formal:</strong> Business-appropriate, proper grammar<br><strong>Local/Regional:</strong> Uses local expressions and terminology</div>
                                 </span>
                             </label>
                             <select id="languageStyle">
@@ -1016,7 +1069,7 @@
                             <label for="expertiseLevel">
                                 Information Level
                                 <span class="info-icon">i
-                                    <div class="tooltip">Basic: Simple answers | Detailed expert: In-depth technical info | Educational: Focus on learning opportunities</div>
+                                    <div class="tooltip"><strong>Basic:</strong> Simple, easy-to-understand answers<br><strong>Detailed expert:</strong> In-depth technical information and specifics<br><strong>Educational:</strong> Focus on teaching and learning opportunities</div>
                                 </span>
                             </label>
                             <select id="expertiseLevel">
@@ -1026,7 +1079,12 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="responseLength">Response Length</label>
+                            <label for="responseLength">
+                                Response Length
+                                <span class="info-icon">i
+                                    <div class="tooltip">How long should the bot's typical responses be?<br><strong>Brief:</strong> 1-2 sentences, quick answers<br><strong>Moderate:</strong> 2-3 sentences, balanced detail<br><strong>Detailed:</strong> 3-4 sentences, comprehensive answers</div>
+                                </span>
+                            </label>
                             <select id="responseLength">
                                 <option>Brief (1-2 sentences)</option>
                                 <option>Moderate (2-3 sentences)</option>
@@ -1055,7 +1113,7 @@
                         <label for="weatherInfo">
                             Weather Information
                             <span class="info-icon">i
-                                <div class="tooltip">How should the bot handle weather questions?</div>
+                                <div class="tooltip"><strong>Defer to human:</strong> Bot says "speak to our team for weather updates"<br><strong>Policy only:</strong> Bot only mentions your weather policy<br><strong>Never discuss:</strong> Bot avoids weather topics completely</div>
                             </span>
                         </label>
                         <select id="weatherInfo">
@@ -1070,7 +1128,7 @@
                             <label for="realTimeInfo">
                                 Real-Time Information
                                 <span class="info-icon">i
-                                    <div class="tooltip">Things that change daily like weather, availability, special conditions</div>
+                                    <div class="tooltip">List topics that change daily that the bot shouldn't guess about.<br><strong>Examples:</strong> Current weather, today's conditions, live availability, water temperature, tide times</div>
                                 </span>
                             </label>
                             <textarea id="realTimeInfo" placeholder="Current weather, today's conditions, live availability, water temperature, tide times"></textarea>
@@ -1079,7 +1137,7 @@
                             <label for="dontAnswerTopics">
                                 Topics to Avoid
                                 <span class="info-icon">i
-                                    <div class="tooltip">Topics the bot should say it doesn't know about</div>
+                                    <div class="tooltip">Topics the bot should never attempt to answer.<br><strong>Examples:</strong> Medical advice, legal matters, specific future dates, personal recommendations outside your expertise</div>
                                 </span>
                             </label>
                             <textarea id="dontAnswerTopics" placeholder="Medical advice, legal matters, specific future dates, personal recommendations"></textarea>
@@ -1090,7 +1148,7 @@
                         <label for="additionalKnowledge">
                             Additional Knowledge
                             <span class="info-icon">i
-                                <div class="tooltip">Specific facts the bot should know (parking info, local tips, etc.)</div>
+                                <div class="tooltip">Specific facts the bot should know about your business.<br><strong>Examples:</strong> "Free parking at Marina Lot B", "Best photo spot is at sunset point", "Dolphins most active in morning"</div>
                             </span>
                         </label>
                         <textarea id="additionalKnowledge" placeholder="Free parking at Marina Lot B, Best photo spot is at sunset point, Dolphins most active in morning"></textarea>
@@ -1098,7 +1156,7 @@
                 </div>
             </div>
 
-            <!-- 🆕 NEW: Contact Preferences with Alert Options -->
+            <!-- Contact Preferences -->
             <div class="form-section">
                 <div class="section-header" onclick="toggleSection(this)">
                     <h3>📞 Contact Preferences</h3>
@@ -1107,12 +1165,11 @@
                 <div class="section-content">
                     <div class="section-description">How and when customers can reach your team</div>
                     
-                    <!-- 🆕 NEW: Alert Preference Section -->
                     <div class="form-group">
                         <label>
                             When customers request to speak with a human, how would you like to be alerted?
                             <span class="info-icon">i
-                                <div class="tooltip">Choose how you want to handle human agent requests from customers</div>
+                                <div class="tooltip"><strong>Let AI handle everything:</strong> No alerts, bot redirects to automated help<br><strong>Email alerts:</strong> Get notified by email, contact customers externally<br><strong>Two-way chat dashboard:</strong> Respond directly in the chat through a web dashboard</div>
                             </span>
                         </label>
                         <div style="margin-top: 15px;">
@@ -1145,7 +1202,12 @@
                     
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="responseTime">Expected Response Time</label>
+                            <label for="responseTime">
+                                Expected Response Time
+                                <span class="info-icon">i
+                                    <div class="tooltip">How quickly you typically respond to customer inquiries. This sets customer expectations.</div>
+                                </span>
+                            </label>
                             <select id="responseTime">
                                 <option>15 minutes</option>
                                 <option>30 minutes</option>
@@ -1155,133 +1217,83 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="contactMethods">Preferred Contact Methods</label>
+                            <label for="contactMethods">
+                                Preferred Contact Methods
+                                <span class="info-icon">i
+                                    <div class="tooltip">How you prefer to contact customers when they request human assistance.<br><strong>Examples:</strong> "Email and phone", "WhatsApp preferred", "Text message only"</div>
+                                </span>
+                            </label>
                             <input type="text" id="contactMethods" placeholder="Email, Phone, WhatsApp">
                         </div>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="operatingHours">Human Support Hours</label>
+                            <label for="operatingHours">
+                                Human Support Hours
+                                <span class="info-icon">i
+                                    <div class="tooltip">When your team is available to respond to customer inquiries. The bot will mention these hours when appropriate.</div>
+                                </span>
+                            </label>
                             <input type="text" id="operatingHours" placeholder="9 AM - 5 PM EST, Monday-Friday">
                         </div>
                         <div class="form-group">
-                            <label for="handoffTriggers">Agent Handoff Keywords</label>
+                            <label for="handoffTriggers">
+                                Agent Handoff Keywords
+                                <span class="info-icon">i
+                                    <div class="tooltip">Additional words that should trigger connecting customers to a human agent.<br><strong>Default triggers:</strong> agent, human, speak to someone, representative, urgent<br><strong>Add your own:</strong> complaint, refund, cancel, booking issue</div>
+                                </span>
+                            </label>
                             <input type="text" id="handoffTriggers" placeholder="urgent, emergency, complaint, refund">
                         </div>
                     </div>
                 </div>
             </div>
            
-            <!-- Add this section after Contact Preferences -->
-<div class="form-section">
-    <div class="section-header" onclick="toggleSection(this)">
-        <h3>📱 SMS Integration</h3>
-        <span class="section-toggle">▼</span>
-    </div>
-    <div class="section-content">
-        <div class="section-description">Enable two-way SMS conversations with customers</div>
-        
-        <!-- Replace everything inside section-content after the description with this: -->
-        
-        <div class="form-group">
-            <label for="smsEnabled">📱 SMS Mode</label>
-            <select id="smsEnabled" onchange="toggleSMSFields()">
-                <option value="disabled">Disabled - No SMS</option>
-                <option value="hybrid">Hybrid - Web Chat + SMS Option</option>
-                <option value="sms-first">SMS Primary - Collect phone numbers first</option>
-            </select>
-        </div>
+            <!-- SMS Integration -->
+            <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>📱 SMS Integration</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">Enable two-way SMS conversations with customers</div>
+                    
+                    <div class="form-group">
+                        <label for="smsEnabled">
+                            📱 SMS Mode
+                            <span class="info-icon">i
+                                <div class="tooltip"><strong>Disabled:</strong> No SMS functionality<br><strong>Hybrid:</strong> Customers can choose between web chat and SMS<br><strong>SMS Primary:</strong> Collect phone numbers first for mobile-first experience</div>
+                            </span>
+                        </label>
+                        <select id="smsEnabled" onchange="toggleSMSFields()">
+                            <option value="disabled">Disabled - No SMS</option>
+                            <option value="hybrid">Hybrid - Web Chat + SMS Option</option>
+                            <option value="sms-first">SMS Primary - Collect phone numbers first</option>
+                        </select>
+                    </div>
 
-        <div id="smsFields" style="display: none; background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-top: 16px;">
-            <div class="form-group">
-                <label for="businessSmsNumber">📞 Your Business SMS Number</label>
-                <input type="tel" id="businessSmsNumber" placeholder="+1 (555) 123-4567">
-                <p class="help-text">Your Twilio phone number that customers will text</p>
+                    <div id="smsFields" style="display: none;">
+                        <div class="form-group">
+                            <label for="businessSmsNumber">📞 Your Business SMS Number</label>
+                            <input type="tel" id="businessSmsNumber" placeholder="+1 (555) 123-4567">
+                            <p class="help-text">Your Twilio phone number that customers will text</p>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="smsHandoffMessage">💬 SMS Invitation Message (Hybrid Mode)</label>
+                            <textarea id="smsHandoffMessage" rows="2" placeholder="💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!"></textarea>
+                            <p class="help-text">Message shown during agent handoff. Use {PHONE_NUMBER} as placeholder.</p>
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="smsFirstMessage">📱 Welcome SMS (SMS-First Mode)</label>
+                            <textarea id="smsFirstMessage" rows="2" placeholder="Hi! This is {BUSINESS_NAME}. Thanks for reaching out! How can we help you today?"></textarea>
+                            <p class="help-text">First message sent via SMS when customer provides phone number. Use {BUSINESS_NAME} as placeholder.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
-            
-            <div class="form-group">
-                <label for="smsHandoffMessage">💬 SMS Invitation Message (Hybrid Mode)</label>
-                <textarea id="smsHandoffMessage" rows="2" placeholder="💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!"></textarea>
-                <p class="help-text">Message shown during agent handoff. Use {PHONE_NUMBER} as placeholder.</p>
-            </div>
-            
-            <div class="form-group" style="margin-bottom: 0;">
-                <label for="smsFirstMessage">📱 Welcome SMS (SMS-First Mode)</label>
-                <textarea id="smsFirstMessage" rows="2" placeholder="Hi! This is {BUSINESS_NAME}. Thanks for reaching out! How can we help you today?"></textarea>
-                <p class="help-text">First message sent via SMS when customer provides phone number. Use {BUSINESS_NAME} as placeholder.</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-function toggleSMSFields() {
-    const smsEnabled = document.getElementById('smsEnabled').value;
-    const smsFields = document.getElementById('smsFields');
-    
-    if (smsEnabled !== 'disabled') {
-        smsFields.style.display = 'block';
-        if (smsEnabled === 'hybrid' && !document.getElementById('smsHandoffMessage').value) {
-            document.getElementById('smsHandoffMessage').value = 
-                "💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!";
-        } else if (smsEnabled === 'sms-first' && !document.getElementById('smsFirstMessage').value) {
-            document.getElementById('smsFirstMessage').value = 
-                "Hi! This is {BUSINESS_NAME}. Thanks for reaching out! How can we help you today?";
-        }
-    } else {
-        smsFields.style.display = 'none';
-    }
-}
-</script>
-
-<script>
-function toggleSMSFields() {
-    const smsEnabled = document.getElementById('smsEnabled').value;
-    const smsFields = document.getElementById('smsFields');
-    
-    if (smsEnabled !== 'disabled') {
-        smsFields.style.display = 'block';
-        // Set default messages based on mode
-        if (smsEnabled === 'hybrid' && !document.getElementById('smsHandoffMessage').value) {
-            document.getElementById('smsHandoffMessage').value = 
-                "💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!";
-        } else if (smsEnabled === 'sms-first' && !document.getElementById('smsFirstMessage').value) {
-            document.getElementById('smsFirstMessage').value = 
-                "Hi! This is {BUSINESS_NAME}. Thanks for reaching out! How can we help you today?";
-        }
-    } else {
-        smsFields.style.display = 'none';
-    }
-}
-</script>
-
-<style>
-.sms-fields {
-    background: #f8fafc;
-    border: 2px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 20px;
-    margin-top: 16px;
-}
-
-.sms-fields .form-group {
-    margin-bottom: 16px;
-}
-
-.sms-fields .form-group:last-child {
-    margin-bottom: 0;
-}
-
-.alert-info {
-    background-color: #e3f2fd;
-    border: 1px solid #90caf9;
-    color: #0d47a1;
-    padding: 12px;
-    border-radius: 6px;
-    font-size: 14px;
-}
-</style>
             
             <!-- Branding -->
             <div class="form-section">
@@ -1430,7 +1442,7 @@ function toggleSMSFields() {
             radio.closest('.color-option').classList.add('selected');
         }
 
-        // 🆕 NEW: Update alert preference selection
+        // Update alert preference selection
         function updateAlertOption(label) {
             // Remove selected class from all options
             document.querySelectorAll('.alert-option').forEach(option => {
@@ -1443,6 +1455,25 @@ function toggleSMSFields() {
             // Check the radio button
             const radio = label.querySelector('input[type="radio"]');
             radio.checked = true;
+        }
+
+        // Toggle SMS fields
+        function toggleSMSFields() {
+            const smsEnabled = document.getElementById('smsEnabled').value;
+            const smsFields = document.getElementById('smsFields');
+            
+            if (smsEnabled !== 'disabled') {
+                smsFields.style.display = 'block';
+                if (smsEnabled === 'hybrid' && !document.getElementById('smsHandoffMessage').value) {
+                    document.getElementById('smsHandoffMessage').value = 
+                        "💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!";
+                } else if (smsEnabled === 'sms-first' && !document.getElementById('smsFirstMessage').value) {
+                    document.getElementById('smsFirstMessage').value = 
+                        "Hi! This is {BUSINESS_NAME}. Thanks for reaching out! How can we help you today?";
+                }
+            } else {
+                smsFields.style.display = 'none';
+            }
         }
 
         // Toggle conditional sections based on booking link
@@ -1480,11 +1511,6 @@ function toggleSMSFields() {
                 }
             }
         }
-        
-        // Backward compatibility
-        function togglePricingSection() {
-            toggleConditionalSections();
-        }
 
         // Update progress bar
         function updateProgress() {
@@ -1494,7 +1520,7 @@ function toggleSMSFields() {
             document.getElementById('progressFill').style.width = progress + '%';
         }
 
-        // 🆕 ENHANCED: Form submission with alert preferences and error checking
+        // Form submission with enhanced error checking
         document.getElementById('chatbotForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
@@ -1576,7 +1602,7 @@ function toggleSMSFields() {
                     certifications: document.getElementById('certifications').value,
                     
                     // Contact Preferences
-                    alertPreference: selectedAlertPreference, // 🆕 NEW
+                    alertPreference: selectedAlertPreference,
                     responseTime: document.getElementById('responseTime').value,
                     contactMethods: document.getElementById('contactMethods').value,
                     operatingHours: document.getElementById('operatingHours').value,

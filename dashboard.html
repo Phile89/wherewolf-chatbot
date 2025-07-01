@@ -804,622 +804,351 @@
     </div>
 
     <script>
-        let conversations = [];
-        let selectedConversationId = null;
-        let currentFilters = {
-            status: 'all'
-        };
-        let searchTimeout = null;
-        let operatorFromUrl = null;
-
-        // Get operator from URL if present
-        const urlParams = new URLSearchParams(window.location.search);
-        operatorFromUrl = urlParams.get('operator');
-
-        // Load initial data
-        document.addEventListener('DOMContentLoaded', function() {
-            // If operator is in URL, set it and update UI
-            if (operatorFromUrl) {
-                document.getElementById('headerSubtitle').textContent = `Monitoring conversations for operator: ${operatorFromUrl}`;
-                // Set the operator filter
-                setTimeout(() => {
-                    const operatorSelect = document.getElementById('operatorFilter');
-                    if (operatorSelect) {
-                        operatorSelect.value = operatorFromUrl;
-                    }
-                }, 500);
-            }
-            
-            loadDashboard();
-            loadFilterStats();
-            setInterval(loadFilterStats, 30000); // Update stats every 30 seconds
-        });
-
-        // Load filter statistics
-        async function loadFilterStats() {
-            try {
-                const response = await fetch('/api/dashboard/filter-stats');
-                const data = await response.json();
+        // Enhanced refresh function with better feedback
+async function loadDashboard() {
+    try {
+        // Show loading state
+        const refreshBtn = document.querySelector('.btn-primary');
+        const originalText = refreshBtn.textContent;
+        refreshBtn.textContent = '🔄 Refreshing...';
+        refreshBtn.disabled = true;
+        
+        // Clear current data
+        selectedConversationId = null;
+        document.getElementById('chatActions').style.display = 'none';
+        document.getElementById('chatInputContainer').classList.remove('active');
+        document.getElementById('chatMessages').innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">💬</div>
+                <p>Select a conversation from the left to view messages</p>
+            </div>
+        `;
+        document.getElementById('chatTitle').textContent = 'Select a conversation';
+        document.getElementById('chatSubtitle').textContent = '';
+        
+        // Apply filters with URL operator if present
+        await applyFilters();
+        
+        // Load unique operators for filter
+        await loadOperators();
+        
+        // Refresh stats
+        await loadFilterStats();
+        
+        // Restore button
+        refreshBtn.textContent = originalText;
+        refreshBtn.disabled = false;
+        
+        console.log('✅ Dashboard refreshed successfully');
+        
+    } catch (error) {
+        console.error('Error loading dashboard:', error);
+        showError('Failed to connect to server');
+        
+        // Restore button on error
+        const refreshBtn = document.querySelector('.btn-primary');
+        refreshBtn.textContent = '❌ Error - Retry';
+        refreshBtn.disabled = false;
+        setTimeout(() => {
+            refreshBtn.textContent = '🔄 Refresh';
+        }, 3000);
+    }
+}
+// Enhanced conversation loading with better prioritization
+async function loadConversations(queryString = '') {
+    try {
+        const conversationsList = document.getElementById('conversationsList');
+        conversationsList.innerHTML = `
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                Loading conversations...
+            </div>
+        `;
+        
+        const url = queryString ? `/api/dashboard/conversations?${queryString}` : '/api/dashboard/conversations';
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            // Enhanced sorting: Priority order
+            conversations = data.conversations.sort((a, b) => {
+                // 1. New conversations with agent requests (highest priority)
+                const aUrgent = a.status === 'new' && a.agent_requested;
+                const bUrgent = b.status === 'new' && b.agent_requested;
+                if (aUrgent && !bUrgent) return -1;
+                if (!aUrgent && bUrgent) return 1;
                 
-                if (data.success) {
-                    // Update status pill counts
-                    document.getElementById('newCount').textContent = `(${data.stats.new_count || 0})`;
-                    document.getElementById('inProgressCount').textContent = `(${data.stats.in_progress_count || 0})`;
-                    document.getElementById('resolvedCount').textContent = `(${data.stats.resolved_count || 0})`;
-                    document.getElementById('onHoldCount').textContent = `(${data.stats.on_hold_count || 0})`;
-                    
-                    const totalCount = (data.stats.new_count || 0) + 
-                                     (data.stats.in_progress_count || 0) + 
-                                     (data.stats.resolved_count || 0) + 
-                                     (data.stats.on_hold_count || 0);
-                    document.getElementById('allCount').textContent = `(${totalCount})`;
-                }
-            } catch (error) {
-                console.error('Error loading filter stats:', error);
-            }
-        }
-
-        // Toggle filter visibility
-        function toggleFilters() {
-            const filterContent = document.getElementById('filterContent');
-            const toggleText = document.getElementById('filterToggleText');
-            
-            if (filterContent.style.display === 'none') {
-                filterContent.style.display = 'block';
-                toggleText.textContent = 'Hide Filters';
-            } else {
-                filterContent.style.display = 'none';
-                toggleText.textContent = 'Show Filters';
-            }
-        }
-
-        // Filter by status
-        function filterByStatus(status) {
-            // Update active status pill
-            document.querySelectorAll('.status-pill').forEach(pill => {
-                pill.classList.remove('active');
+                // 2. Active conversations (in_progress)
+                const aActive = a.status === 'in_progress';
+                const bActive = b.status === 'in_progress';
+                if (aActive && !bActive) return -1;
+                if (!aActive && bActive) return 1;
+                
+                // 3. New conversations (without agent request)
+                const aNew = a.status === 'new';
+                const bNew = b.status === 'new';
+                if (aNew && !bNew) return -1;
+                if (!aNew && bNew) return 1;
+                
+                // 4. Finally by last message time (newest first)
+                return new Date(b.last_message_at) - new Date(a.last_message_at);
             });
             
-            const activePill = document.querySelector(`.status-pill.${status === 'in_progress' ? 'in-progress' : status}`);
-            if (activePill) {
-                activePill.classList.add('active');
-            }
+            renderConversations(conversations);
             
-            currentFilters.status = status;
-            applyFilters();
+            // Update conversation counter
+            updateConversationCounter(conversations.length);
+            
+        } else {
+            showError('Failed to load conversations');
         }
+    } catch (error) {
+        console.error('Error loading conversations:', error);
+        showError('Failed to connect to server');
+    }
+}
 
-        // Apply all filters
-        async function applyFilters() {
-            const params = new URLSearchParams();
-            
-            // Add status filter
-            if (currentFilters.status && currentFilters.status !== 'all') {
-                params.append('status', currentFilters.status);
-            }
-            
-            // Add other filters
-            const operatorFilter = document.getElementById('operatorFilter').value || operatorFromUrl;
-            if (operatorFilter) params.append('operator', operatorFilter);
-            
-            const hasEmailFilter = document.getElementById('hasEmailFilter').value;
-            if (hasEmailFilter) params.append('hasEmail', hasEmailFilter);
-            
-            const hasPhoneFilter = document.getElementById('hasPhoneFilter').value;
-            if (hasPhoneFilter) params.append('hasPhone', hasPhoneFilter);
-            
-            const agentRequestedFilter = document.getElementById('agentRequestedFilter').value;
-            if (agentRequestedFilter) params.append('agentRequested', agentRequestedFilter);
-            
-            const dateFromFilter = document.getElementById('dateFromFilter').value;
-            if (dateFromFilter) params.append('dateFrom', dateFromFilter);
-            
-            const dateToFilter = document.getElementById('dateToFilter').value;
-            if (dateToFilter) params.append('dateTo', dateToFilter);
-            
-            const searchInput = document.getElementById('searchInput').value;
-            if (searchInput) params.append('search', searchInput);
-            
-            await loadConversations(params.toString());
-            
-            // Also update stats with operator filter
-            await loadStats(operatorFilter);
-        }
+// Enhanced conversation rendering with better visual indicators
+function renderConversations(conversations) {
+    const container = document.getElementById('conversationsList');
+    
+    if (conversations.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="padding: 40px; text-align: center;">
+                <div class="empty-state-icon">📭</div>
+                <p><strong>No conversations found</strong></p>
+                <p style="font-size: 12px; color: #64748b; margin-top: 8px;">
+                    Try adjusting your filters or wait for new conversations
+                </p>
+                <button class="btn btn-secondary" onclick="clearFilters()" style="margin-top: 12px;">
+                    Clear All Filters
+                </button>
+            </div>
+        `;
+        return;
+    }
 
-        // Debounced search
-        function debounceSearch() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                applyFilters();
-            }, 500);
-        }
-
-        // Clear all filters
-        function clearFilters() {
-            document.getElementById('operatorFilter').value = operatorFromUrl || '';
-            document.getElementById('hasEmailFilter').value = '';
-            document.getElementById('hasPhoneFilter').value = '';
-            document.getElementById('agentRequestedFilter').value = '';
-            document.getElementById('dateFromFilter').value = '';
-            document.getElementById('dateToFilter').value = '';
-            document.getElementById('searchInput').value = '';
-            
-            filterByStatus('all');
-        }
-
-        // Load dashboard data
-        async function loadDashboard() {
-            try {
-                // Apply filters with URL operator if present
-                await applyFilters();
-                
-                // Load unique operators for filter
-                await loadOperators();
-                
-            } catch (error) {
-                console.error('Error loading dashboard:', error);
-                showError('Failed to connect to server');
-            }
-        }
-
-        // Load stats with operator filter
-        async function loadStats(operatorFilter = null) {
-            try {
-                const url = operatorFilter 
-                    ? `/api/dashboard/stats?operator=${operatorFilter}` 
-                    : '/api/dashboard/stats';
-                    
-                const statsResponse = await fetch(url);
-                const statsData = await statsResponse.json();
-                
-                if (statsData.success) {
-                    updateStats(statsData.stats);
-                }
-            } catch (error) {
-                console.error('Error loading stats:', error);
-            }
-        }
-
-        // Load unique operators
-        async function loadOperators() {
-            try {
-                const response = await fetch('/api/dashboard/conversations');
-                const data = await response.json();
-                
-                if (data.success) {
-                    const operators = [...new Set(data.conversations.map(c => c.operator_id))];
-                    const operatorSelect = document.getElementById('operatorFilter');
-                    
-                    // Keep the current selection
-                    const currentValue = operatorSelect.value || operatorFromUrl;
-                    
-                    operatorSelect.innerHTML = '<option value="">All Operators</option>';
-                    operators.forEach(op => {
-                        const selected = op === currentValue ? 'selected' : '';
-                        operatorSelect.innerHTML += `<option value="${op}" ${selected}>${op}</option>`;
-                    });
-                    
-                    // Restore selection
-                    operatorSelect.value = currentValue || '';
-                }
-            } catch (error) {
-                console.error('Error loading operators:', error);
-            }
-        }
-
-        // Load conversations
-        async function loadConversations(queryString = '') {
-            try {
-                const url = queryString ? `/api/dashboard/conversations?${queryString}` : '/api/dashboard/conversations';
-                const response = await fetch(url);
-                const data = await response.json();
-                
-                if (data.success) {
-                    conversations = data.conversations;
-                    renderConversations(conversations);
-                } else {
-                    showError('Failed to load conversations');
-                }
-            } catch (error) {
-                console.error('Error loading conversations:', error);
-                showError('Failed to connect to server');
-            }
-        }
-
-        // Update stats display
-        function updateStats(stats) {
-            document.getElementById('totalConversations').textContent = stats.total_conversations || 0;
-            document.getElementById('agentRequests').textContent = stats.agent_requests || 0;
-            document.getElementById('withEmail').textContent = stats.with_email || 0;
-            document.getElementById('activeOperators').textContent = stats.active_operators || 0;
-        }
-
-        // Render conversations list
-        function renderConversations(conversations) {
-            const container = document.getElementById('conversationsList');
-            
-            if (conversations.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state" style="padding: 40px; text-align: center;">
-                        <div class="empty-state-icon">📭</div>
-                        <p>No conversations found</p>
-                        <p style="font-size: 12px; color: #64748b; margin-top: 8px;">
-                            Try adjusting your filters or wait for new conversations
-                        </p>
-                    </div>
-                `;
-                return;
-            }
-
-            container.innerHTML = conversations.map(conv => {
-                const lastMessageTime = new Date(conv.last_message_at).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-
-                const status = conv.status || 'new';
-                const statusClass = status.replace('_', '-');
-
-                return `
-                    <div class="conversation-item" 
-                         onclick="selectConversation(${conv.conversation_id})"
-                         data-conversation-id="${conv.conversation_id}">
-                        <div class="conversation-status ${statusClass}">${status.replace('_', ' ').toUpperCase()}</div>
-                        <div class="conversation-header">
-                            <div class="business-name">
-                                ${conv.business_name || 'Unknown Business'}
-                            </div>
-                            <div class="conversation-time">${lastMessageTime}</div>
-                        </div>
-                        <div class="conversation-details">
-                            Operator: ${conv.operator_id}
-                        </div>
-                        ${conv.last_message ? `<div class="conversation-preview">${conv.last_message}</div>` : ''}
-                       <div class="conversation-badges">
-                            ${conv.customer_email ? '<span class="badge badge-email">📧 Email</span>' : ''}
-                            ${conv.customer_phone ? '<span class="badge badge-phone">📞 Phone</span>' : ''}
-                            ${conv.sms_enabled ? '<span class="badge badge-sms">💬 SMS</span>' : ''}
-                            ${conv.agent_requested ? '<span class="badge badge-agent">🚨 Agent</span>' : ''}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        // Select and load conversation messages
-        async function selectConversation(conversationId) {
-            // Update UI selection
-            document.querySelectorAll('.conversation-item').forEach(item => {
-                item.classList.remove('selected');
-            });
-            document.querySelector(`[data-conversation-id="${conversationId}"]`).classList.add('selected');
-
-            selectedConversationId = conversationId;
-            
-            // Find conversation details
-            const conversation = conversations.find(c => c.conversation_id === conversationId);
-            if (conversation) {
-                // Check if SMS is enabled for this conversation
-                const smsButton = document.getElementById('sendSMSMessage');
-                const responseMethodText = document.getElementById('responseMethod');
-                
-                if (conversation.sms_enabled) {
-                    smsButton.style.display = 'block';
-                    responseMethodText.textContent = '- via SMS';
-                } else {
-                    smsButton.style.display = 'none';
-                    responseMethodText.textContent = '- via Chat';
-                }
-
-                updateChatHeader(conversation);
-                
-                // Show status selector
-                document.getElementById('chatActions').style.display = 'block';
-                document.getElementById('statusSelect').value = conversation.status || 'new';
-            }
-
-            // Show operator input
-            document.getElementById('chatInputContainer').classList.add('active');
-
-            // Load messages
-            try {
-                const response = await fetch(`/api/dashboard/conversation/${conversationId}/messages`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    renderMessages(data.messages);
-                } else {
-                    showError('Failed to load messages');
-                }
-            } catch (error) {
-                console.error('Error loading messages:', error);
-                showError('Failed to load messages');
-            }
-        }
-
-        // Update conversation status
-        async function updateConversationStatus() {
-            const newStatus = document.getElementById('statusSelect').value;
-            
-            try {
-                const response = await fetch('/api/dashboard/update-status', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        conversationId: selectedConversationId,
-                        status: newStatus
-                    })
-                });
-
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Update local data
-                    const conv = conversations.find(c => c.conversation_id === selectedConversationId);
-                    if (conv) {
-                        conv.status = newStatus;
-                    }
-                    
-                    // Refresh the list
-                    renderConversations(conversations);
-                    
-                    // Re-select the conversation
-                    document.querySelector(`[data-conversation-id="${selectedConversationId}"]`).classList.add('selected');
-                    
-                    // Refresh stats
-                    loadFilterStats();
-                    
-                    // Show success feedback
-                    const statusSelect = document.getElementById('statusSelect');
-                    statusSelect.style.borderColor = '#10b981';
-                    setTimeout(() => {
-                        statusSelect.style.borderColor = '#e5e7eb';
-                    }, 1000);
-                }
-            } catch (error) {
-                console.error('Error updating status:', error);
-                alert('Failed to update status');
-            }
-        }
-
-        // Send operator message
-        async function sendOperatorMessage() {
-            const messageInput = document.getElementById('operatorMessageInput');
-            const sendButton = document.getElementById('sendOperatorMessage');
-            const message = messageInput.value.trim();
-
-            if (!message || !selectedConversationId) return;
-
-            // Disable input while sending
-            messageInput.disabled = true;
-            sendButton.disabled = true;
-            sendButton.textContent = 'Sending...';
-
-            try {
-                const response = await fetch('/api/dashboard/send-message', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        conversationId: selectedConversationId,
-                        message: message,
-                        operatorId: 'dashboard-operator'
-                    })
-                });
-
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Clear input
-                    messageInput.value = '';
-                    
-                    // Add message to UI immediately
-                    addMessageToUI({
-                        role: 'operator',
-                        content: message,
-                        timestamp: new Date().toISOString()
-                    });
-
-                    // Scroll to bottom
-                    const chatMessages = document.getElementById('chatMessages');
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
-
-                    // Show success feedback
-                    sendButton.textContent = '✓ Sent';
-                    setTimeout(() => {
-                        sendButton.textContent = 'Send Chat';
-                    }, 1000);
-
-                    // Update conversation status to in_progress if it was new
-                    const conv = conversations.find(c => c.conversation_id === selectedConversationId);
-                    if (conv && conv.status === 'new') {
-                        conv.status = 'in_progress';
-                        document.getElementById('statusSelect').value = 'in_progress';
-                        renderConversations(conversations);
-                        document.querySelector(`[data-conversation-id="${selectedConversationId}"]`).classList.add('selected');
-                    }
-
-                } else {
-                    throw new Error(data.error || 'Failed to send message');
-                }
-            } catch (error) {
-                console.error('Error sending operator message:', error);
-                alert('Failed to send message: ' + error.message);
-                sendButton.textContent = 'Failed - Retry';
-                setTimeout(() => {
-                    sendButton.textContent = 'Send Chat';
-                }, 2000);
-            } finally {
-                // Re-enable input
-                messageInput.disabled = false;
-                sendButton.disabled = false;
-                messageInput.focus();
-            }
-        }
-
-        // Send SMS message from dashboard
-        async function sendSMSMessage() {
-            const messageInput = document.getElementById('operatorMessageInput');
-            const message = messageInput.value.trim();
-            
-            if (!message || !selectedConversationId) return;
-            
-            try {
-                const response = await fetch('/api/dashboard/send-sms', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        conversationId: selectedConversationId,
-                        message: message
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    messageInput.value = '';
-                    alert('SMS sent successfully!');
-                    // Reload messages to show the sent SMS
-                    await selectConversation(selectedConversationId);
-                } else {
-                    alert('Failed to send SMS: ' + data.error);
-                }
-            } catch (error) {
-                console.error('Error sending SMS:', error);
-                alert('An error occurred while sending the SMS.');
-            }
-        }
-
-        // Handle keyboard shortcuts for operator input
-        function handleOperatorKeyPress(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendOperatorMessage();
-            }
-        }
-
-        // Add single message to UI (for immediate feedback)
-        function addMessageToUI(message) {
-            const container = document.getElementById('chatMessages');
-            const time = new Date(message.timestamp).toLocaleTimeString('en-US', {
+    container.innerHTML = conversations.map(conv => {
+        const lastMessageTime = new Date(conv.last_message_at);
+        const isToday = isDateToday(lastMessageTime);
+        const isThisWeek = isDateThisWeek(lastMessageTime);
+        
+        let timeDisplay;
+        if (isToday) {
+            timeDisplay = lastMessageTime.toLocaleTimeString('en-US', {
                 hour: '2-digit',
                 minute: '2-digit'
             });
-
-            let roleClass = message.role;
-            let roleLabel = '';
-            
-            if (message.role === 'operator') {
-                roleLabel = ' (You)';
-                roleClass = 'operator';
-            }
-
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${roleClass}`;
-            messageDiv.innerHTML = `
-                <div>${message.content}${roleLabel}</div>
-                <div class="message-time">${time}</div>
-            `;
-            
-            container.appendChild(messageDiv);
+        } else if (isThisWeek) {
+            timeDisplay = lastMessageTime.toLocaleDateString('en-US', {
+                weekday: 'short',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } else {
+            timeDisplay = lastMessageTime.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
         }
 
-        // Update chat header with conversation info
-        function updateChatHeader(conversation) {
-            const title = document.getElementById('chatTitle');
-            const subtitle = document.getElementById('chatSubtitle');
-            
-            title.textContent = conversation.business_name || 'Unknown Business';
-            
-            const details = [];
-            details.push(`Operator: ${conversation.operator_id}`);
-            if (conversation.customer_email) details.push(`Email: ${conversation.customer_email}`);
-            if (conversation.customer_phone) details.push(`Phone: ${conversation.customer_phone}`);
-            details.push(`${conversation.message_count || 0} messages`);
-            
-            subtitle.textContent = details.join(' • ');
+        const status = conv.status || 'new';
+        const statusClass = status.replace('_', '-');
+        
+        // Determine urgency level
+        const isUrgent = status === 'new' && conv.agent_requested;
+        const isActive = status === 'in_progress';
+        const hasRecentActivity = (Date.now() - lastMessageTime.getTime()) < (2 * 60 * 60 * 1000); // 2 hours
+        
+        let priorityIndicator = '';
+        if (isUrgent) {
+            priorityIndicator = '<div style="position: absolute; top: 8px; left: 8px; width: 8px; height: 8px; background: #ef4444; border-radius: 50%; animation: pulse 2s infinite;"></div>';
+        } else if (isActive && hasRecentActivity) {
+            priorityIndicator = '<div style="position: absolute; top: 8px; left: 8px; width: 8px; height: 8px; background: #10b981; border-radius: 50%;"></div>';
         }
 
-        // Render messages in chat panel
-        function renderMessages(messages) {
-            const container = document.getElementById('chatMessages');
-            
-            if (messages.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">💭</div>
-                        <p>No messages in this conversation</p>
-                        <p style="font-size: 12px; color: #64748b; margin-top: 8px;">
-                            Start the conversation by typing a message below
-                        </p>
+        const messagePreview = conv.last_message ? 
+            conv.last_message.length > 80 ? 
+                conv.last_message.substring(0, 80) + '...' : 
+                conv.last_message : 
+            'No messages yet';
+
+        return `
+            <div class="conversation-item ${isUrgent ? 'urgent' : ''}" 
+                 onclick="selectConversation(${conv.conversation_id})"
+                 data-conversation-id="${conv.conversation_id}">
+                ${priorityIndicator}
+                <div class="conversation-status ${statusClass}">${status.replace('_', ' ').toUpperCase()}</div>
+                <div class="conversation-header">
+                    <div class="business-name">
+                        ${conv.business_name || 'Unknown Business'}
+                        ${isUrgent ? ' 🚨' : ''}
+                        ${isActive && hasRecentActivity ? ' 🟢' : ''}
                     </div>
-                `;
-                return;
-            }
-
-            container.innerHTML = messages.map(message => {
-                const time = new Date(message.timestamp).toLocaleTimeString('en-US', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-
-                let roleClass = message.role;
-                let roleLabel = '';
-                
-                // Handle different message types
-                if (message.role === 'operator') {
-                    roleLabel = ' (Operator)';
-                    roleClass = 'operator';
-                } else if (message.role === 'system') {
-                    roleClass = 'system';
-                }
-
-                return `
-                    <div class="message ${roleClass}">
-                        <div>${message.content}${roleLabel}</div>
-                        <div class="message-time">${time}</div>
-                    </div>
-                `;
-            }).join('');
-
-            // Scroll to bottom
-            container.scrollTop = container.scrollHeight;
-        }
-
-        // Show error message
-        function showError(message) {
-            const container = document.getElementById('conversationsList');
-            container.innerHTML = `
-                <div style="padding: 20px; text-align: center; color: #dc2626;">
-                    ❌ ${message}
+                    <div class="conversation-time">${timeDisplay}</div>
                 </div>
-            `;
-        }
+                <div class="conversation-details">
+                    <strong>Operator:</strong> ${conv.operator_id} • 
+                    <strong>Messages:</strong> ${conv.message_count || 0}
+                    ${hasRecentActivity ? ' • <span style="color: #10b981;">Active</span>' : ''}
+                </div>
+                <div class="conversation-preview">${messagePreview}</div>
+                <div class="conversation-badges">
+                    ${conv.customer_email ? '<span class="badge badge-email">📧 Email</span>' : ''}
+                    ${conv.customer_phone ? '<span class="badge badge-phone">📞 Phone</span>' : ''}
+                    ${conv.sms_enabled ? '<span class="badge badge-sms">💬 SMS</span>' : ''}
+                    ${conv.agent_requested ? '<span class="badge badge-agent">🚨 Agent</span>' : ''}
+                    ${conv.last_operator_message_at ? '<span class="badge" style="background: #d1fae5; color: #065f46;">👨‍💼 Operator Active</span>' : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
 
-        // Auto-refresh every 30 seconds
-        setInterval(() => {
-            applyFilters();
-            
-            // Reload current conversation if one is selected
-            if (selectedConversationId) {
-                selectConversation(selectedConversationId);
-            }
-        }, 30000);
+// Helper functions for date handling
+function isDateToday(date) {
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+}
 
-        // Keyboard shortcuts
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'r' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                loadDashboard();
-            }
-        });
+function isDateThisWeek(date) {
+    const today = new Date();
+    const weekAgo = new Date(today.getTime() - (7 * 24 * 60 * 60 * 1000));
+    return date >= weekAgo;
+}
+
+// Update conversation counter
+function updateConversationCounter(count) {
+    const panelTitle = document.querySelector('.panel-title');
+    if (panelTitle) {
+        panelTitle.textContent = `Conversations (${count})`;
+    }
+}
+
+// Enhanced quick filters
+function addQuickFilters() {
+    const quickFiltersHtml = `
+        <div class="quick-filters" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+            <button class="quick-filter-btn active" onclick="applyQuickFilter('all')" data-filter="all">
+                All
+            </button>
+            <button class="quick-filter-btn" onclick="applyQuickFilter('urgent')" data-filter="urgent">
+                🚨 Urgent
+            </button>
+            <button class="quick-filter-btn" onclick="applyQuickFilter('active')" data-filter="active">
+                🟢 Active
+            </button>
+            <button class="quick-filter-btn" onclick="applyQuickFilter('needs_response')" data-filter="needs_response">
+                📬 Needs Response
+            </button>
+            <button class="quick-filter-btn" onclick="applyQuickFilter('has_contact')" data-filter="has_contact">
+                📞 Has Contact
+            </button>
+        </div>
+    `;
+    
+    const panelHeader = document.querySelector('.conversations-panel .panel-header');
+    if (panelHeader && !document.querySelector('.quick-filters')) {
+        panelHeader.insertAdjacentHTML('afterend', quickFiltersHtml);
+    }
+}
+
+// Quick filter functionality
+function applyQuickFilter(filterType) {
+    // Update active button
+    document.querySelectorAll('.quick-filter-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelector(`[data-filter="${filterType}"]`).classList.add('active');
+    
+    let filteredConversations = [...conversations];
+    
+    switch(filterType) {
+        case 'urgent':
+            filteredConversations = conversations.filter(conv => 
+                conv.status === 'new' && conv.agent_requested
+            );
+            break;
+        case 'active':
+            filteredConversations = conversations.filter(conv => 
+                conv.status === 'in_progress' || conv.last_operator_message_at
+            );
+            break;
+        case 'needs_response':
+            filteredConversations = conversations.filter(conv => 
+                conv.status === 'new' || (conv.agent_requested && !conv.last_operator_message_at)
+            );
+            break;
+        case 'has_contact':
+            filteredConversations = conversations.filter(conv => 
+                conv.customer_email || conv.customer_phone
+            );
+            break;
+        case 'all':
+        default:
+            // Show all
+            break;
+    }
+    
+    renderConversations(filteredConversations);
+}
+
+// Add styles for urgent conversations and quick filters
+const additionalStyles = `
+    <style>
+    .conversation-item.urgent {
+        border-left: 4px solid #ef4444 !important;
+        background: #fef2f2 !important;
+    }
+    
+    .quick-filters {
+        padding: 0 24px;
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 16px;
+    }
+    
+    .quick-filter-btn {
+        padding: 6px 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        background: white;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    
+    .quick-filter-btn:hover {
+        border-color: #8B5CF6;
+        color: #8B5CF6;
+    }
+    
+    .quick-filter-btn.active {
+        background: #8B5CF6;
+        color: white;
+        border-color: #8B5CF6;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    </style>
+`;
+
+// Add the styles to the document
+if (!document.getElementById('quick-filter-styles')) {
+    const styleElement = document.createElement('div');
+    styleElement.id = 'quick-filter-styles';
+    styleElement.innerHTML = additionalStyles;
+    document.head.appendChild(styleElement);
+}
+
+// Initialize quick filters after DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(addQuickFilters, 1000);
+});
     </script>
 </body>
 </html>

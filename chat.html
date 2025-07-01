@@ -1070,105 +1070,334 @@ await sendMessageToServer(message);
             sendMessage();
         }
 
-        // Enhanced displayMessage function with operator message support
-        function displayMessage(text, sender) {
-            const messagesContainer = document.getElementById('chatMessages');
-            const messageDiv = document.createElement('div');
+        // Enhanced message display with better operator message handling
+function displayMessage(text, sender) {
+    const messagesContainer = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    
+    // Determine message type and styling
+    let messageClass = `message ${sender}-message`;
+    let displayText = text;
+    
+    if (sender === 'operator') {
+        messageClass = 'message operator-message';
+        
+        // Add notification sound if available
+        try {
+            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmESBkCU2fPFdSYELYDN8+OLOgcZZ7zq559NEAxQp+PwtmUeBC+Gzs/kgCECHm224+KEQQE');
+            audio.volume = 0.1;
+            audio.play().catch(() => {}); // Ignore if sound fails
+        } catch (e) {
+            // Ignore audio errors
+        }
+    } else if (sender === 'system') {
+        messageClass = 'message system-message';
+    }
+    
+    messageDiv.className = messageClass;
+    messageDiv.innerHTML = displayText;
+    messagesContainer.appendChild(messageDiv);
+    
+    // Smooth scroll to bottom with animation
+    setTimeout(() => {
+        messagesContainer.scrollTo({
+            top: messagesContainer.scrollHeight,
+            behavior: 'smooth'
+        });
+    }, 100);
+}
+
+// Enhanced connection monitoring
+function startConnectionMonitoring() {
+    let connectionCheckInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`${serverUrl}/api/test`, { 
+                method: 'HEAD',
+                timeout: 5000 
+            });
             
-            // Determine message type and styling
-            let messageClass = `message ${sender}-message`;
-            let displayText = text;
-            
-            if (sender === 'operator') {
-                messageClass = 'message operator-message';
-                displayText = text;
-            } else if (sender === 'system') {
-                messageClass = 'message system-message';
+            if (!response.ok) {
+                throw new Error('Connection check failed');
             }
             
-            messageDiv.className = messageClass;
-            messageDiv.innerHTML = displayText;
-            messagesContainer.appendChild(messageDiv);
+            // Connection is good
+            if (document.getElementById('connection-status')) {
+                document.getElementById('connection-status').remove();
+            }
             
-            // Smooth scroll to bottom
-            setTimeout(() => {
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }, 100);
-        }
-
-        function showTyping() {
-            document.getElementById('typingIndicator').style.display = 'block';
-            const messagesContainer = document.getElementById('chatMessages');
-            setTimeout(() => {
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }, 100);
-        }
-
-        function hideTyping() {
-            document.getElementById('typingIndicator').style.display = 'none';
-        }
-
-        function handleKeyPress(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
+        } catch (error) {
+            console.warn('⚠️ Connection issue detected:', error);
+            
+            // Show connection warning
+            if (!document.getElementById('connection-status')) {
+                const warning = document.createElement('div');
+                warning.id = 'connection-status';
+                warning.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    background: #fef3c7;
+                    color: #92400e;
+                    padding: 8px;
+                    text-align: center;
+                    font-size: 12px;
+                    z-index: 10003;
+                    border-bottom: 1px solid #f59e0b;
+                `;
+                warning.textContent = '⚠️ Connection issues detected - messages may be delayed';
+                document.body.appendChild(warning);
             }
         }
+    }, 30000); // Check every 30 seconds
+}
 
-        // 🆕 IMPROVED: Faster polling for better responsiveness
-        function startOperatorMessagePolling() {
-            if (pollingInterval) return; // Already polling
+// Start connection monitoring when chat loads
+document.addEventListener('DOMContentLoaded', function() {
+    startConnectionMonitoring();
+});
+
+// Restart polling when page becomes visible
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && lastMessageCount > 0) {
+        console.log('👁️ Page visible again, ensuring polling is active...');
+        if (!pollingInterval) {
+            startOperatorMessagePolling();
+        }
+    }
+});
+
+// Request notification permission
+if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission().then(permission => {
+        console.log('🔔 Notification permission:', permission);
+    });
+}
+
+        // DASHBOARD: Enhanced operator message sending with better error handling
+async function sendOperatorMessage() {
+    const messageInput = document.getElementById('operatorMessageInput');
+    const sendButton = document.getElementById('sendOperatorMessage');
+    const message = messageInput.value.trim();
+
+    if (!message || !selectedConversationId) {
+        if (!message) {
+            messageInput.style.borderColor = '#EF4444';
+            messageInput.placeholder = 'Please enter a message';
+            messageInput.focus();
+            setTimeout(() => {
+                messageInput.style.borderColor = '#e2e8f0';
+                messageInput.placeholder = 'Type your response...';
+            }, 2000);
+        }
+        return;
+    }
+
+    // Show immediate feedback
+    const originalButtonText = sendButton.textContent;
+    messageInput.disabled = true;
+    sendButton.disabled = true;
+    sendButton.textContent = 'Sending...';
+    sendButton.style.background = '#9ca3af';
+
+    try {
+        console.log('📤 Sending operator message:', message);
+        
+        const response = await fetch('/api/dashboard/send-message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                conversationId: selectedConversationId,
+                message: message,
+                operatorId: 'dashboard-operator'
+            })
+        });
+
+        const data = await response.json();
+        console.log('📨 Send response:', data);
+        
+        if (data.success) {
+            // Clear input immediately
+            messageInput.value = '';
             
-            console.log('🔄 Starting FAST operator message polling...');
+            // Add message to UI for immediate feedback
+            addMessageToUI({
+                role: 'operator',
+                content: message,
+                timestamp: new Date().toISOString()
+            });
+
+            // Scroll to bottom
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // Show success feedback
+            sendButton.textContent = '✓ Sent';
+            sendButton.style.background = '#10b981';
             
-            // Poll every 1 second instead of 3 for better responsiveness
-            pollingInterval = setInterval(async () => {
-                try {
-                    const response = await fetch(`${serverUrl}/api/chat/poll-messages`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ 
-                            operatorId: operatorId,
-                            lastMessageCount: lastMessageCount
-                        })
-                    });
+            // Update conversation status if needed
+            const conv = conversations.find(c => c.conversation_id === selectedConversationId);
+            if (conv && conv.status === 'new') {
+                conv.status = 'in_progress';
+                document.getElementById('statusSelect').value = 'in_progress';
+                
+                // Refresh conversation list to show updated status
+                renderConversations(conversations);
+                document.querySelector(`[data-conversation-id="${selectedConversationId}"]`)?.classList.add('selected');
+            }
+
+            // Reset button after delay
+            setTimeout(() => {
+                sendButton.textContent = originalButtonText;
+                sendButton.style.background = '#8B5CF6';
+            }, 1500);
+
+        } else {
+            throw new Error(data.error || 'Failed to send message');
+        }
+    } catch (error) {
+        console.error('❌ Error sending operator message:', error);
+        
+        // Show error feedback
+        sendButton.textContent = '❌ Failed';
+        sendButton.style.background = '#ef4444';
+        
+        // Show error message
+        alert(`Failed to send message: ${error.message}`);
+        
+        // Reset button after delay
+        setTimeout(() => {
+            sendButton.textContent = originalButtonText;
+            sendButton.style.background = '#8B5CF6';
+        }, 3000);
+    } finally {
+        // Always re-enable input
+        messageInput.disabled = false;
+        sendButton.disabled = false;
+        messageInput.focus();
+    }
+}
+
+// CHAT.HTML: Enhanced polling system with better error handling and reconnection
+function startOperatorMessagePolling() {
+    if (pollingInterval) {
+        console.log('🔄 Polling already active, skipping...');
+        return;
+    }
+    
+    console.log('🔄 Starting enhanced operator message polling...');
+    let consecutiveErrors = 0;
+    let pollCount = 0;
+    
+    pollingInterval = setInterval(async () => {
+        try {
+            pollCount++;
+            console.log(`📡 Polling attempt #${pollCount} (lastMessageCount: ${lastMessageCount})`);
+            
+            const response = await fetch(`${serverUrl}/api/chat/poll-messages`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    operatorId: operatorId,
+                    sessionId: 'default',
+                    lastMessageCount: lastMessageCount
+                }),
+                timeout: 10000 // 10 second timeout
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            console.log('📬 Poll response:', data);
+            
+            if (data.success && data.newMessages && data.newMessages.length > 0) {
+                console.log(`📥 Received ${data.newMessages.length} new messages`);
+                
+                data.newMessages.forEach(msg => {
+                    console.log('📨 Processing message:', msg);
                     
-                    if (response.ok) {
-                        const data = await response.json();
+                    if (msg.role === 'operator') {
+                        displayMessage(msg.content, 'operator');
                         
-                        if (data.newMessages && data.newMessages.length > 0) {
-                            console.log('📬 New messages:', data.newMessages.length);
-                            data.newMessages.forEach(msg => {
-                                if (msg.role === 'operator') {
-                                    displayMessage(msg.content, 'operator');
-                                    
-                                    // 🆕 NEW: Show notification for operator messages
-                                    if (document.hidden) {
-                                        showNotification('Team member responded!', msg.content);
-                                    }
-                                } else if (msg.role === 'system') {
-                                    displayMessage(msg.content, 'system');
-                                }
+                        // Show notification if page is hidden
+                        if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+                            new Notification('Team Member Responded!', {
+                                body: msg.content.substring(0, 100),
+                                icon: '/favicon.ico'
                             });
-                            
-                            lastMessageCount = data.totalMessages;
                         }
+                        
+                        // Update typing indicator
+                        const typingIndicator = document.getElementById('typingIndicator');
+                        if (typingIndicator.classList.contains('operator-typing')) {
+                            hideTyping();
+                        }
+                        
+                    } else if (msg.role === 'system') {
+                        displayMessage(msg.content, 'system');
                     }
-                } catch (error) {
-                    console.error('Polling error:', error);
-                    // If polling fails, retry with exponential backoff
-                    setTimeout(() => {
-                        if (pollingInterval) {
-                            clearInterval(pollingInterval);
-                            pollingInterval = null;
-                            startOperatorMessagePolling(); // Restart polling
-                        }
-                    }, 5000);
-                }
-            }, 1000); // 🆕 FIXED: Poll every 1 second for faster responses
+                });
+                
+                lastMessageCount = data.totalMessages;
+                consecutiveErrors = 0; // Reset error count on success
+            }
+            
+            // Show operator typing indicator if appropriate
+            if (data.operatorTyping) {
+                showOperatorTyping();
+            }
+            
+        } catch (error) {
+            consecutiveErrors++;
+            console.error(`❌ Polling error #${consecutiveErrors}:`, error);
+            
+            // If too many consecutive errors, restart polling with exponential backoff
+            if (consecutiveErrors >= 3) {
+                console.log('🔄 Too many errors, restarting polling...');
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+                
+                // Restart with exponential backoff
+                const backoffTime = Math.min(1000 * Math.pow(2, consecutiveErrors - 3), 30000);
+                setTimeout(() => {
+                    if (!pollingInterval) { // Only restart if not manually restarted
+                        startOperatorMessagePolling();
+                    }
+                }, backoffTime);
+                return;
+            }
         }
+    }, 1000); // Poll every second for responsiveness
+}
+
+// Enhanced typing indicators
+function showOperatorTyping() {
+    const typingIndicator = document.getElementById('typingIndicator');
+    typingIndicator.style.display = 'block';
+    typingIndicator.classList.add('operator-typing');
+    
+    const messagesContainer = document.getElementById('chatMessages');
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        if (typingIndicator.classList.contains('operator-typing')) {
+            hideTyping();
+        }
+    }, 5000);
+}
+
+function hideTyping() {
+    const typingIndicator = document.getElementById('typingIndicator');
+    typingIndicator.style.display = 'none';
+    typingIndicator.classList.remove('operator-typing');
+}
 
         // 🆕 NEW: Browser notification function
         function showNotification(title, body) {
