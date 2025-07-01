@@ -1179,49 +1179,106 @@
     <div class="section-content">
         <div class="section-description">Enable two-way SMS conversations with customers</div>
         
+        <!-- Replace everything inside section-content after the description with this: -->
+        
         <div class="form-group">
-            <label for="smsEnabled">
-                Enable SMS Support
-                <span class="info-icon">i
-                    <div class="tooltip">Allow customers to text your business number directly</div>
-                </span>
-            </label>
-            <select id="smsEnabled" onchange="toggleSMSOptions()">
-                <option value="false">Disabled</option>
-                <option value="true">Enabled</option>
+            <label for="smsEnabled">📱 SMS Mode</label>
+            <select id="smsEnabled" onchange="toggleSMSFields()">
+                <option value="disabled">Disabled - No SMS</option>
+                <option value="hybrid">Hybrid - Web Chat + SMS Option</option>
+                <option value="sms-first">SMS Primary - Collect phone numbers first</option>
             </select>
         </div>
-        
-        <div id="smsOptions" style="display: none;">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="smsPhoneNumber">SMS Phone Number</label>
-                    <input type="tel" id="smsPhoneNumber" placeholder="+1 (555) 123-4567" readonly>
-                    <p class="help-text">This number will be assigned after setup</p>
-                </div>
-                <div class="form-group">
-                    <label for="smsAutoResponse">Auto-Response Message</label>
-                    <textarea id="smsAutoResponse" placeholder="Thanks for texting! We'll respond shortly during business hours."></textarea>
-                </div>
+
+        <div id="smsFields" style="display: none; background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-top: 16px;">
+            <div class="form-group">
+                <label for="businessSmsNumber">📞 Your Business SMS Number</label>
+                <input type="tel" id="businessSmsNumber" placeholder="+1 (555) 123-4567">
+                <p class="help-text">Your Twilio phone number that customers will text</p>
             </div>
             
             <div class="form-group">
-                <label for="smsBusinessHours">SMS Response Hours</label>
-                <input type="text" id="smsBusinessHours" placeholder="9 AM - 5 PM EST, Monday-Friday">
+                <label for="smsHandoffMessage">💬 SMS Invitation Message (Hybrid Mode)</label>
+                <textarea id="smsHandoffMessage" rows="2" placeholder="💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!"></textarea>
+                <p class="help-text">Message shown during agent handoff. Use {PHONE_NUMBER} as placeholder.</p>
             </div>
             
-            <div class="form-group">
-                <label for="smsKeywords">
-                    SMS Keywords
-                    <span class="info-icon">i
-                        <div class="tooltip">Keywords that trigger specific auto-responses (e.g., HOURS, LOCATION, BOOK)</div>
-                    </span>
-                </label>
-                <textarea id="smsKeywords" placeholder="HOURS: Reply with business hours&#10;LOCATION: Reply with address&#10;BOOK: Send booking link"></textarea>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="smsFirstMessage">📱 Welcome SMS (SMS-First Mode)</label>
+                <textarea id="smsFirstMessage" rows="2" placeholder="Hi! This is {BUSINESS_NAME}. Thanks for reaching out! How can we help you today?"></textarea>
+                <p class="help-text">First message sent via SMS when customer provides phone number. Use {BUSINESS_NAME} as placeholder.</p>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+function toggleSMSFields() {
+    const smsEnabled = document.getElementById('smsEnabled').value;
+    const smsFields = document.getElementById('smsFields');
+    
+    if (smsEnabled !== 'disabled') {
+        smsFields.style.display = 'block';
+        if (smsEnabled === 'hybrid' && !document.getElementById('smsHandoffMessage').value) {
+            document.getElementById('smsHandoffMessage').value = 
+                "💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!";
+        } else if (smsEnabled === 'sms-first' && !document.getElementById('smsFirstMessage').value) {
+            document.getElementById('smsFirstMessage').value = 
+                "Hi! This is {BUSINESS_NAME}. Thanks for reaching out! How can we help you today?";
+        }
+    } else {
+        smsFields.style.display = 'none';
+    }
+}
+</script>
+
+<script>
+function toggleSMSFields() {
+    const smsEnabled = document.getElementById('smsEnabled').value;
+    const smsFields = document.getElementById('smsFields');
+    
+    if (smsEnabled !== 'disabled') {
+        smsFields.style.display = 'block';
+        // Set default messages based on mode
+        if (smsEnabled === 'hybrid' && !document.getElementById('smsHandoffMessage').value) {
+            document.getElementById('smsHandoffMessage').value = 
+                "💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!";
+        } else if (smsEnabled === 'sms-first' && !document.getElementById('smsFirstMessage').value) {
+            document.getElementById('smsFirstMessage').value = 
+                "Hi! This is {BUSINESS_NAME}. Thanks for reaching out! How can we help you today?";
+        }
+    } else {
+        smsFields.style.display = 'none';
+    }
+}
+</script>
+
+<style>
+.sms-fields {
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 16px;
+}
+
+.sms-fields .form-group {
+    margin-bottom: 16px;
+}
+
+.sms-fields .form-group:last-child {
+    margin-bottom: 0;
+}
+
+.alert-info {
+    background-color: #e3f2fd;
+    border: 1px solid #90caf9;
+    color: #0d47a1;
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 14px;
+}
+</style>
             
             <!-- Branding -->
             <div class="form-section">
@@ -1463,6 +1520,10 @@
                     businessName: document.getElementById('businessName').value,
                     businessType: document.getElementById('businessType').value,
                     location: document.getElementById('location').value,
+                    smsEnabled: document.getElementById('smsEnabled').value,
+                    businessSmsNumber: document.getElementById('businessSmsNumber').value,
+                    smsHandoffMessage: document.getElementById('smsHandoffMessage').value,
+                    smsFirstMessage: document.getElementById('smsFirstMessage').value,
                     
                     // Business Details
                     websiteUrl: document.getElementById('websiteUrl').value,
