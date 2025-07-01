@@ -1493,56 +1493,53 @@ app.post('/api/chat', validateRequired(['message', 'operatorId']), async functio
         const handoffKey = `handoff_${sessionKey}`;
         const alreadyHandedOff = conversations[handoffKey] || false;
 
-        if (isAgentRequest && !alreadyHandedOff) {
-            conversations[handoffKey] = true;
-            await markAgentRequested(sessionKey);
-            
-            const customerContact = customerContacts[sessionKey];
-            const responseTime = currentConfig.responseTime || CONFIG.DEFAULT_RESPONSE_TIME;
-            
-            let botResponse;
-            
-            // Check alert preference for proper response
-            if (currentConfig.alertPreference === 'dashboard') {
-                // Two-way chat mode
-                botResponse = `I'm connecting you with our team right away! 👥 They'll respond directly in this chat within ${responseTime}. Feel free to continue typing your questions.`;
-                
-                if (customerContact && (customerContact.email || customerContact.phone)) {
-                    if (emailTransporter) {
-                        await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-                    }
-                }
-                
-                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                
-                return res.json({ 
-                    success: true, 
-                    response: botResponse,
-                    agentRequested: true,
-                    twoWayChat: true,
-                    startPolling: true
-                });
-            } else {
-                // Regular email/phone contact mode
-                if (customerContact && (customerContact.email || customerContact.phone)) {
-                    if (emailTransporter) {
-                        await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-                    }
-                    botResponse = `I'm connecting you with our team right away! 👥 Someone will reach out within ${responseTime}. You can also continue chatting here and they'll respond directly.`;
-                } else {
-                    botResponse = `I'd love to connect you with our team! 👥 First, I'll need your contact information. What's your email address so our team can reach out within ${responseTime}?`;
-                }
-                
-                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                return res.json({ 
-                    success: true,
-                    response: botResponse, 
-                    agentRequested: true 
-                });
-            }
+        // 🆕 IMPROVED: Enhanced sendSMS function with better error handling
+async function sendSMS(toNumber, message, conversationId) {
+    if (!twilioClient) {
+        console.error('❌ Twilio not configured');
+        return { success: false, error: 'SMS service not configured' };
+    }
+    
+    const client = await pool.connect();
+    try {
+        const result = await twilioClient.messages.create({
+            body: message,
+            from: process.env.TWILIO_PHONE_NUMBER,
+            to: toNumber
+        });
+        
+        console.log(`📤 SMS sent to ${toNumber}: ${result.sid}`);
+
+        // Save outbound SMS to the database
+        await client.query(
+            'INSERT INTO sms_messages (conversation_id, direction, from_number, to_number, message_body, message_sid, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [conversationId, 'outbound', process.env.TWILIO_PHONE_NUMBER, toNumber, message, result.sid, 'sent']
+        );
+        
+        return { success: true, result: result };
+    } catch (error) {
+        console.error('❌ Error sending SMS:', error);
+        
+        // Save failed SMS attempt to database
+        try {
+            await client.query(
+                'INSERT INTO sms_messages (conversation_id, direction, from_number, to_number, message_body, status) VALUES ($1, $2, $3, $4, $5, $6)',
+                [conversationId, 'outbound', process.env.TWILIO_PHONE_NUMBER, toNumber, message, 'failed']
+            );
+        } catch (dbError) {
+            console.error('Error saving failed SMS to database:', dbError);
         }
+        
+        return { 
+            success: false, 
+            error: error.message,
+            code: error.code,
+            moreInfo: error.moreInfo
+        };
+    } finally {
+        client.release();
+    }
+}
 
         // Handle agent handoff follow-ups
         if (alreadyHandedOff) {
@@ -1609,7 +1606,45 @@ app.post('/api/chat', validateRequired(['message', 'operatorId']), async functio
                 return res.json({ success: true, response: botResponse });
             }
         }
-
+// 🆕 ENHANCED: Handle SMS-first phone number collection
+if (alreadyHandedOff && currentConfig.smsEnabled === 'sms-first') {
+    const phoneRegex = /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b|\b\(\d{3}\)\s?\d{3}[-.]?\d{4}\b/;
+    
+    if (phoneRegex.test(message)) {
+        const phone = message.match(phoneRegex)[0];
+        customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
+        await updateCustomerContact(sessionKey, null, phone);
+        
+        // Send initial SMS with custom message
+        const businessName = currentConfig.businessName || 'Our Business';
+        const smsFirstMessage = currentConfig.smsFirstMessage || '';
+        const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
+                          `Hi! This is ${businessName}. Thanks for reaching out! How can we help you today?`;
+        
+        const smsResult = await sendSMS(phone, welcomeSMS, conversation.conversation_id);
+        
+        if (smsResult && smsResult.success) {
+            botResponse = `Perfect! 📱 I've sent you a text at ${phone}. Continue our conversation there for faster mobile replies!`;
+            
+            // Send handoff email if configured
+            if (emailTransporter) {
+                await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
+            }
+        } else {
+            botResponse = `I have your number (${phone}). Our team will text you shortly at this number! You can also continue chatting here.`;
+        }
+        
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ success: true, response: botResponse, smsEnabled: true, smsMode: 'sms-first' });
+    } else {
+        botResponse = `Please share your mobile number so I can connect you via text message! 📱 (Example: 555-123-4567)`;
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ success: true, response: botResponse });
+    }
+}
+        
         // Handle waiver requests
         if (lowerMessage.includes('waiver') || lowerMessage.includes('form') || lowerMessage.includes('sign') || lowerMessage.includes('release')) {
             const botResponse = `Here's your waiver: <a href='${waiverLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR};'>Click here to sign</a>`;
