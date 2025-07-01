@@ -196,7 +196,7 @@ setInterval(() => {
 // Email transporter setup with validation
 let emailTransporter = null;
 if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
-    emailTransporter = nodemailer.createTransporter({
+    emailTransporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
             user: process.env.GMAIL_USER,
