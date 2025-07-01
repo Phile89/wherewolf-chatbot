@@ -1598,6 +1598,10 @@ process.on('SIGINT', async () => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`\n🚀 Enhanced Chatbot server with Knowledge Boundaries running on port ${PORT}`);
+    
+    // 🆕 MOVED HERE: Initialize database AFTER server starts listening
+    initializeDatabase(); 
+
     console.log('📝 Enhanced setup page: /setup');
     console.log('💬 Chat interface: /chat.html');
     console.log('📊 Dashboard: /dashboard');
@@ -1607,4 +1611,3 @@ app.listen(PORT, () => {
     console.log('🗃️ Database:', process.env.DATABASE_URL ? 'Connected' : 'Not configured');
     console.log('✨ New Features: Knowledge boundaries to prevent hallucination');
 });
-// Final deployment test.
