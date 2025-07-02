@@ -811,8 +811,6 @@ let currentFilters = {
     status: 'all'
 };
 
-// COMPLETE DASHBOARD FUNCTIONS - Add these after: let selectedConversationId = null;
-
 // Enhanced conversation loading with better prioritization
 async function loadConversations(queryString = '') {
     const container = document.getElementById('conversationsList');
@@ -827,28 +825,22 @@ async function loadConversations(queryString = '') {
     
     try {
         const url = queryString ? `/api/dashboard/conversations?${queryString}` : '/api/dashboard/conversations';
-        console.log('🔍 Loading from:', url); // DEBUG
+        console.log('🔍 Loading from:', url);
         
         const response = await fetch(url);
-        console.log('📡 Response status:', response.status); // DEBUG
+        console.log('📡 Response status:', response.status);
         
         if (!response.ok) {
             throw new Error(`Server error: ${response.status}`);
         }
         
         const data = await response.json();
-        console.log('📊 Data received:', data); // DEBUG
-        console.log('📊 Conversation count:', data.conversations ? data.conversations.length : 'NO CONVERSATIONS'); // DEBUG
+        console.log('📊 Data received:', data);
         
         if (data.success) {
             conversations = data.conversations || [];
-            
-            // FIXED: Update conversation counter with actual count
             updateConversationCounter(conversations.length);
-            
-            // FIXED: Update status pill counts based on actual data
             updateStatusPillCounts(conversations);
-            
             renderConversations(conversations);
             console.log(`✅ Loaded ${conversations.length} conversations`);
         } else {
@@ -868,7 +860,7 @@ async function loadConversations(queryString = '') {
     }
 }
 
-// FIXED: Update status pill counts based on actual conversation data
+// Update status pill counts based on actual conversation data
 function updateStatusPillCounts(conversations) {
     const statusCounts = {
         all: conversations.length,
@@ -880,7 +872,6 @@ function updateStatusPillCounts(conversations) {
     
     console.log('📊 Status counts:', statusCounts);
     
-    // Update the pill counts
     const allCountElement = document.getElementById('allCount');
     const newCountElement = document.getElementById('newCount');
     const inProgressCountElement = document.getElementById('inProgressCount');
@@ -894,23 +885,11 @@ function updateStatusPillCounts(conversations) {
     if (onHoldCountElement) onHoldCountElement.textContent = `(${statusCounts.on_hold})`;
 }
 
-// FIXED: Update conversation counter with correct count
+// Update conversation counter with correct count
 function updateConversationCounter(count) {
     const panelTitle = document.querySelector('.panel-title');
     if (panelTitle) {
         panelTitle.textContent = `Conversations (${count})`;
-    }
-    
-    // Also update the "All Conversations" pill if it exists
-    const allPill = document.querySelector('.status-pill.all');
-    if (allPill) {
-        const countSpan = allPill.querySelector('span');
-        if (countSpan) {
-            countSpan.textContent = `(${count})`;
-        } else {
-            // Create the count span if it doesn't exist
-            allPill.innerHTML = `All Conversations <span>(${count})</span>`;
-        }
     }
 }
 
@@ -926,15 +905,7 @@ function isDateThisWeek(date) {
     return date >= weekAgo;
 }
 
-// Update conversation counter
-function updateConversationCounter(count) {
-    const panelTitle = document.querySelector('.panel-title');
-    if (panelTitle) {
-        panelTitle.textContent = `Conversations (${count})`;
-    }
-}
-
-// MISSING FUNCTION: renderConversations - Add this to your script
+// Render conversations
 function renderConversations(conversations) {
     const container = document.getElementById('conversationsList');
     
@@ -983,10 +954,9 @@ function renderConversations(conversations) {
         const status = conv.status || 'new';
         const statusClass = status.replace('_', '-');
         
-        // Determine urgency level
         const isUrgent = status === 'new' && conv.agent_requested;
         const isActive = status === 'in_progress';
-        const hasRecentActivity = (Date.now() - lastMessageTime.getTime()) < (2 * 60 * 60 * 1000); // 2 hours
+        const hasRecentActivity = (Date.now() - lastMessageTime.getTime()) < (2 * 60 * 60 * 1000);
         
         let priorityIndicator = '';
         if (isUrgent) {
@@ -1033,82 +1003,14 @@ function renderConversations(conversations) {
     }).join('');
 }
 
-// Enhanced quick filters
-function addQuickFilters() {
-    const quickFiltersHtml = `
-        <div class="quick-filters" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
-            <button class="quick-filter-btn active" onclick="applyQuickFilter('all')" data-filter="all">
-                All
-            </button>
-            <button class="quick-filter-btn" onclick="applyQuickFilter('urgent')" data-filter="urgent">
-                🚨 Urgent
-            </button>
-            <button class="quick-filter-btn" onclick="applyQuickFilter('active')" data-filter="active">
-                🟢 Active
-            </button>
-            <button class="quick-filter-btn" onclick="applyQuickFilter('needs_response')" data-filter="needs_response">
-                📬 Needs Response
-            </button>
-            <button class="quick-filter-btn" onclick="applyQuickFilter('has_contact')" data-filter="has_contact">
-                📞 Has Contact
-            </button>
-        </div>
-    `;
-    
-    const panelHeader = document.querySelector('.conversations-panel .panel-header');
-    if (panelHeader && !document.querySelector('.quick-filters')) {
-        panelHeader.insertAdjacentHTML('afterend', quickFiltersHtml);
-    }
-}
-
-// Quick filter functionality
-function applyQuickFilter(filterType) {
-    // Update active button
-    document.querySelectorAll('.quick-filter-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelector(`[data-filter="${filterType}"]`).classList.add('active');
-    
-    let filteredConversations = [...conversations];
-    
-    switch(filterType) {
-        case 'urgent':
-            filteredConversations = conversations.filter(conv => 
-                conv.status === 'new' && conv.agent_requested
-            );
-            break;
-        case 'active':
-            filteredConversations = conversations.filter(conv => 
-                conv.status === 'in_progress' || conv.last_operator_message_at
-            );
-            break;
-        case 'needs_response':
-            filteredConversations = conversations.filter(conv => 
-                conv.status === 'new' || (conv.agent_requested && !conv.last_operator_message_at)
-            );
-            break;
-        case 'has_contact':
-            filteredConversations = conversations.filter(conv => 
-                conv.customer_email || conv.customer_phone
-            );
-            break;
-        case 'all':
-        default:
-            // Show all
-            break;
-    }
-    
-    renderConversations(filteredConversations);
-}
-
-// MISSING FUNCTION - Add this right after applyQuickFilter
+// Filter by status
 function filterByStatus(status) {
     console.log('🔍 Filtering by status:', status);
     
-    // Remove active class from all status pills
     document.querySelectorAll('.status-pill').forEach(pill => {
         pill.classList.remove('active');
     });
     
-    // Map the status parameter to the correct CSS class
     let statusClass = status;
     if (status === 'in_progress') {
         statusClass = 'in-progress';
@@ -1116,93 +1018,25 @@ function filterByStatus(status) {
         statusClass = 'on-hold';
     }
     
-    // Add active class to the clicked pill
     const activePill = document.querySelector(`.status-pill.${statusClass}`);
     if (activePill) {
         activePill.classList.add('active');
     }
     
-    // Update the filter and reload conversations
     currentFilters.status = status;
     applyFilters();
 }
 
-// MISSING FUNCTION 2: showError
-function showError(message) {
-    console.error('❌ Showing error:', message);
-    const container = document.getElementById('conversationsList');
-    container.innerHTML = `
-        <div style="padding: 40px 20px; text-align: center; color: #dc2626; background: #fef2f2; border-radius: 12px; margin: 20px;">
-            <h3 style="margin: 0 0 16px 0;">❌ Error</h3>
-            <p style="margin: 0 0 16px 0; font-size: 14px;">${message}</p>
-            <button onclick="loadDashboard()" style="background: #8B5CF6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
-                🔄 Try Again
-            </button>
-        </div>
-    `;
-}
-
-
-
-// MISSING FUNCTION 3: loadDashboard
-// FIXED: Enhanced loadDashboard with URL parameter support
-async function loadDashboard() {
-    console.log('📊 Loading dashboard...');
-    
-    try {
-        // Parse URL parameters
-        const urlParams = new URLSearchParams(window.location.search);
-        const operatorParam = urlParams.get('operator');
-        
-        if (operatorParam) {
-            console.log('🔍 Operator filter from URL:', operatorParam);
-            
-            // Set the operator filter dropdown
-            const operatorFilter = document.getElementById('operatorFilter');
-            if (operatorFilter) {
-                // First load the operators to populate the dropdown
-                await loadOperators();
-                
-                // Then set the selected value
-                operatorFilter.value = operatorParam;
-                
-                // Update the current filters
-                currentFilters.operator = operatorParam;
-                
-                // Update the header subtitle
-                const headerSubtitle = document.getElementById('headerSubtitle');
-                if (headerSubtitle) {
-                    headerSubtitle.textContent = `Monitoring conversations for operator: ${operatorParam}`;
-                }
-                
-                console.log('✅ Operator filter applied:', operatorParam);
-            }
-        }
-        
-        // Apply filters (this will use the operator filter if set)
-        await applyFilters();
-        await loadStats();
-        await loadFilterStats();
-        
-        console.log('✅ Dashboard loaded successfully');
-    } catch (error) {
-        console.error('❌ Error loading dashboard:', error);
-        showError('Failed to load dashboard: ' + error.message);
-    }
-}
-
-// ENHANCED: applyFilters function to handle operator filtering
+// Apply filters
 async function applyFilters() {
     console.log('🔧 Applying filters...', currentFilters);
     
     const params = new URLSearchParams();
     
-    // Add status filter
     if (currentFilters.status && currentFilters.status !== 'all') {
         params.append('status', currentFilters.status);
     }
     
-    // Add operator filter (from dropdown OR URL parameter)
     const operatorFilter = document.getElementById('operatorFilter');
     const operatorValue = operatorFilter ? operatorFilter.value : null;
     const urlOperator = new URLSearchParams(window.location.search).get('operator');
@@ -1214,7 +1048,6 @@ async function applyFilters() {
         console.log('📍 Using operator filter:', finalOperator);
     }
     
-    // Add other filters if they exist
     const hasEmailFilter = document.getElementById('hasEmailFilter');
     if (hasEmailFilter && hasEmailFilter.value) {
         params.append('hasEmail', hasEmailFilter.value);
@@ -1249,7 +1082,44 @@ async function applyFilters() {
     await loadConversations(params.toString());
 }
 
-// MISSING FUNCTION 4: loadStats
+// Load dashboard
+async function loadDashboard() {
+    console.log('📊 Loading dashboard...');
+    
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const operatorParam = urlParams.get('operator');
+        
+        if (operatorParam) {
+            console.log('🔍 Operator filter from URL:', operatorParam);
+            
+            const operatorFilter = document.getElementById('operatorFilter');
+            if (operatorFilter) {
+                await loadOperators();
+                operatorFilter.value = operatorParam;
+                currentFilters.operator = operatorParam;
+                
+                const headerSubtitle = document.getElementById('headerSubtitle');
+                if (headerSubtitle) {
+                    headerSubtitle.textContent = `Monitoring conversations for operator: ${operatorParam}`;
+                }
+                
+                console.log('✅ Operator filter applied:', operatorParam);
+            }
+        }
+        
+        await applyFilters();
+        await loadStats();
+        await loadFilterStats();
+        
+        console.log('✅ Dashboard loaded successfully');
+    } catch (error) {
+        console.error('❌ Error loading dashboard:', error);
+        showError('Failed to load dashboard: ' + error.message);
+    }
+}
+
+// Load stats
 async function loadStats() {
     try {
         console.log('📈 Loading stats...');
@@ -1270,7 +1140,6 @@ async function loadStats() {
         }
     } catch (error) {
         console.error('❌ Error loading stats:', error);
-        // Show zeros if stats fail
         document.getElementById('totalConversations').textContent = '0';
         document.getElementById('agentRequests').textContent = '0';
         document.getElementById('withEmail').textContent = '0';
@@ -1278,66 +1147,22 @@ async function loadStats() {
     }
 }
 
-// Add styles for urgent conversations and quick filters
-const additionalStyles = `
-    <style>
-    .conversation-item.urgent {
-        border-left: 4px solid #ef4444 !important;
-        background: #fef2f2 !important;
-    }
-    
-    .quick-filters {
-        padding: 0 24px;
-        background: #f8fafc;
-        border-bottom: 1px solid #e2e8f0;
-        padding-bottom: 16px;
-    }
-    
-    .quick-filter-btn {
-        padding: 6px 12px;
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
-        background: white;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 500;
-        transition: all 0.2s;
-    }
-    
-    .quick-filter-btn:hover {
-        border-color: #8B5CF6;
-        color: #8B5CF6;
-    }
-    
-    .quick-filter-btn.active {
-        background: #8B5CF6;
-        color: white;
-        border-color: #8B5CF6;
-    }
-    
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-    </style>
-`;
-
-// Add the styles to the document
-if (!document.getElementById('quick-filter-styles')) {
-    const styleElement = document.createElement('div');
-    styleElement.id = 'quick-filter-styles';
-    styleElement.innerHTML = additionalStyles;
-    document.head.appendChild(styleElement);
+// Show error
+function showError(message) {
+    console.error('❌ Showing error:', message);
+    const container = document.getElementById('conversationsList');
+    container.innerHTML = `
+        <div style="padding: 40px 20px; text-align: center; color: #dc2626; background: #fef2f2; border-radius: 12px; margin: 20px;">
+            <h3 style="margin: 0 0 16px 0;">❌ Error</h3>
+            <p style="margin: 0 0 16px 0; font-size: 14px;">${message}</p>
+            <button onclick="loadDashboard()" style="background: #8B5CF6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+                🔄 Try Again
+            </button>
+        </div>
+    `;
 }
 
-// Initialize quick filters after DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(addQuickFilters, 1000);
-});
-
-// MISSING FUNCTIONS - Add these to fix the loading issue
-
-// Toggle filter visibility
+// Toggle filters
 function toggleFilters() {
     const filterContent = document.getElementById('filterContent');
     const toggleText = document.getElementById('filterToggleText');
@@ -1383,7 +1208,6 @@ async function loadFilterStats() {
 }
 
 // Load unique operators
-// ENHANCED: Load unique operators for filtering
 async function loadOperators() {
     try {
         console.log('👥 Loading operators...');
@@ -1397,14 +1221,12 @@ async function loadOperators() {
         console.log('👥 Operators response:', data);
         
         if (data.success && data.conversations) {
-            // Get unique operators from conversations
             const operators = [...new Set(data.conversations.map(c => c.operator_id))].filter(Boolean);
             const operatorSelect = document.getElementById('operatorFilter');
             
             if (operatorSelect) {
                 const currentValue = operatorSelect.value;
                 
-                // Clear and rebuild options
                 operatorSelect.innerHTML = '<option value="">All Operators</option>';
                 
                 operators.forEach(op => {
@@ -1414,7 +1236,6 @@ async function loadOperators() {
                     operatorSelect.appendChild(option);
                 });
                 
-                // Restore previous selection or set from URL
                 const urlOperator = new URLSearchParams(window.location.search).get('operator');
                 const targetOperator = currentValue || urlOperator || currentFilters.operator;
                 
@@ -1453,54 +1274,12 @@ function clearFilters() {
     filterByStatus('all');
 }
 
-// Initialize dashboard when page loads
-// FIXED: Initialize dashboard when page loads with URL parameter support
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('📊 Dashboard initializing...');
-    
-    // Parse URL parameters immediately
-    const urlParams = new URLSearchParams(window.location.search);
-    const operatorParam = urlParams.get('operator');
-    
-    if (operatorParam) {
-        console.log('🎯 Operator-specific dashboard requested:', operatorParam);
-        
-        // Store in currentFilters immediately
-        currentFilters.operator = operatorParam;
-        
-        // Update page title
-        document.title = `Dashboard - ${operatorParam} | Wherewolf Chatbot`;
-        
-        // Update header
-        const headerSubtitle = document.getElementById('headerSubtitle');
-        if (headerSubtitle) {
-            headerSubtitle.textContent = `Managing conversations for operator: ${operatorParam}`;
-        }
-    }
-    
-    // Load dashboard with filters applied
-    loadDashboard();
-    
-    // Refresh stats every 30 seconds
-    setInterval(() => {
-        loadFilterStats();
-        
-        // Only refresh conversations if no specific conversation is selected
-        if (!selectedConversationId) {
-            applyFilters();
-        }
-    }, 30000);
-    
-    console.log('✅ Dashboard initialization complete');
-});
-// MISSING FUNCTION: selectConversation
+// Select conversation
 async function selectConversation(conversationId) {
     console.log('🔍 Selecting conversation:', conversationId);
     
-    // Update selected conversation
     selectedConversationId = conversationId;
     
-    // Update visual selection
     document.querySelectorAll('.conversation-item').forEach(item => {
         item.classList.remove('selected');
     });
@@ -1510,43 +1289,53 @@ async function selectConversation(conversationId) {
         selectedItem.classList.add('selected');
     }
     
-    // Find the conversation data
     const conversation = conversations.find(c => c.conversation_id === conversationId);
     if (!conversation) {
         console.error('Conversation not found:', conversationId);
         return;
     }
     
-    // Update chat header
     document.getElementById('chatTitle').textContent = conversation.business_name || 'Unknown Business';
     document.getElementById('chatSubtitle').innerHTML = `
         <strong>Operator:</strong> ${conversation.operator_id} • 
         <strong>Status:</strong> ${(conversation.status || 'new').replace('_', ' ').toUpperCase()} •
-        <strong>Contact:</strong> ${conversation.customer_email || conversation.customer_phone || 'No contact info'}
+        <strong>Contact:</strong> ${conversation.customer_email || conversation.customer_phone || conversation.customer_sms_number || 'No contact info'}
     `;
     
-    // Show chat actions
     document.getElementById('chatActions').style.display = 'flex';
     document.getElementById('statusSelect').value = conversation.status || 'new';
     
-    // Show input container
     document.getElementById('chatInputContainer').classList.add('active');
     
-    // Update response method info
     const responseMethod = document.getElementById('responseMethod');
-    if (conversation.sms_enabled && conversation.customer_phone) {
-        responseMethod.textContent = ' (SMS available)';
-        document.getElementById('sendSMSMessage').style.display = 'block';
+    const smsButton = document.getElementById('sendSMSMessage');
+    const chatButton = document.getElementById('sendOperatorMessage');
+    
+    const hasSMSNumber = conversation.customer_sms_number || conversation.sms_enabled;
+    
+    if (hasSMSNumber) {
+        responseMethod.textContent = ' (SMS available - Ctrl+Enter for SMS)';
+        responseMethod.style.color = '#10b981';
+        smsButton.style.display = 'block';
+        
+        chatButton.textContent = 'Send Chat';
+        smsButton.textContent = 'Send SMS';
+        
+        console.log('📱 SMS enabled for conversation:', conversationId);
     } else {
         responseMethod.textContent = ' (Chat only)';
-        document.getElementById('sendSMSMessage').style.display = 'none';
+        responseMethod.style.color = '#6b7280';
+        smsButton.style.display = 'none';
+        
+        chatButton.textContent = 'Send Message';
+        
+        console.log('💬 Chat only for conversation:', conversationId);
     }
     
-    // Load messages
     await loadMessages(conversationId);
 }
 
-// MISSING FUNCTION: loadMessages
+// Load messages
 async function loadMessages(conversationId) {
     console.log('📨 Loading messages for conversation:', conversationId);
     
@@ -1586,7 +1375,7 @@ async function loadMessages(conversationId) {
     }
 }
 
-// MISSING FUNCTION: renderMessages
+// Render messages
 function renderMessages(messages) {
     const chatContainer = document.getElementById('chatMessages');
     
@@ -1619,11 +1408,10 @@ function renderMessages(messages) {
         `;
     }).join('');
     
-    // Scroll to bottom
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
-// MISSING FUNCTION: updateConversationStatus - FIXED VERSION
+// Update conversation status
 async function updateConversationStatus() {
     if (!selectedConversationId) {
         console.log('❌ No conversation selected');
@@ -1648,21 +1436,16 @@ async function updateConversationStatus() {
             const data = await response.json();
             console.log('✅ Status updated successfully:', data);
             
-            // Update the conversation in the list immediately
             const conversationElement = document.querySelector(`[data-conversation-id="${selectedConversationId}"]`);
             if (conversationElement) {
                 const statusBadge = conversationElement.querySelector('.conversation-status');
                 if (statusBadge) {
-                    // Remove old status classes
                     statusBadge.classList.remove('new', 'in-progress', 'resolved', 'on-hold');
-                    // Add new status class
                     statusBadge.classList.add(newStatus.replace('_', '-'));
-                    // Update text
                     statusBadge.textContent = newStatus.replace('_', ' ').toUpperCase();
                 }
             }
             
-            // Refresh the conversation list to show updated counts
             setTimeout(() => {
                 applyFilters();
                 loadFilterStats();
@@ -1678,6 +1461,296 @@ async function updateConversationStatus() {
         alert(`Error updating status: ${error.message}`);
     }
 }
+
+// Enhanced operator message sending with SMS support
+async function sendOperatorMessage() {
+    if (!selectedConversationId) {
+        alert('Please select a conversation first');
+        return;
+    }
+    
+    const messageInput = document.getElementById('operatorMessageInput');
+    const message = messageInput.value.trim();
+    
+    if (!message) {
+        alert('Please enter a message');
+        return;
+    }
+    
+    const sendButton = document.getElementById('sendOperatorMessage');
+    const originalText = sendButton.textContent;
+    
+    try {
+        sendButton.disabled = true;
+        sendButton.textContent = 'Sending...';
+        
+        console.log('📤 Sending operator message:', { conversationId: selectedConversationId, message });
+        
+        const response = await fetch('/api/dashboard/send-message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                conversationId: selectedConversationId,
+                message: message,
+                operatorId: 'dashboard_user'
+            })
+        });
+        
+        const data = await response.json();
+        console.log('📨 Send message response:', data);
+        
+        if (data.success) {
+            messageInput.value = '';
+            
+            sendButton.textContent = 'Sent! ✓';
+            sendButton.style.background = '#10b981';
+            
+            setTimeout(() => {
+                loadMessages(selectedConversationId);
+            }, 500);
+            
+            setTimeout(() => {
+                sendButton.textContent = originalText;
+                sendButton.style.background = '';
+                sendButton.disabled = false;
+            }, 2000);
+            
+        } else {
+            throw new Error(data.error || 'Failed to send message');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error sending operator message:', error);
+        alert('Failed to send message: ' + error.message);
+        
+        sendButton.textContent = originalText;
+        sendButton.disabled = false;
+    }
+}
+
+// Enhanced SMS sending with proper validation and feedback
+async function sendSMSMessage() {
+    if (!selectedConversationId) {
+        alert('Please select a conversation first');
+        return;
+    }
+    
+    const messageInput = document.getElementById('operatorMessageInput');
+    const message = messageInput.value.trim();
+    
+    if (!message) {
+        alert('Please enter a message to send via SMS');
+        return;
+    }
+    
+    const smsButton = document.getElementById('sendSMSMessage');
+    const originalText = smsButton.textContent;
+    
+    try {
+        smsButton.disabled = true;
+        smsButton.textContent = 'Sending SMS...';
+        
+        console.log('📱 Sending SMS message:', { conversationId: selectedConversationId, message });
+        
+        const response = await fetch('/api/dashboard/send-sms', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                conversationId: selectedConversationId,
+                message: message
+            })
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        console.log('📱 SMS response:', data);
+        
+        if (data.success) {
+            messageInput.value = '';
+            
+            smsButton.textContent = 'SMS Sent! ✓';
+            smsButton.style.background = '#10b981';
+            
+            showNotification('📱 SMS sent successfully!', 'success');
+            
+            setTimeout(() => {
+                loadMessages(selectedConversationId);
+            }, 500);
+            
+            setTimeout(() => {
+                smsButton.textContent = originalText;
+                smsButton.style.background = '';
+                smsButton.disabled = false;
+            }, 3000);
+            
+        } else {
+            throw new Error(data.error || 'Failed to send SMS');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error sending SMS:', error);
+        
+        let errorMessage = 'Failed to send SMS';
+        if (error.message.includes('not configured')) {
+            errorMessage = 'SMS service not configured. Please check Twilio settings.';
+        } else if (error.message.includes('not found')) {
+            errorMessage = 'No SMS number found for this conversation.';
+        } else if (error.message.includes('HTTP')) {
+            errorMessage = `Server error: ${error.message}`;
+        } else {
+            errorMessage = error.message;
+        }
+        
+        showNotification('❌ ' + errorMessage, 'error');
+        
+        smsButton.textContent = originalText;
+        smsButton.disabled = false;
+        smsButton.style.background = '';
+    }
+}
+
+// Enhanced operator key press handling
+function handleOperatorKeyPress(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        
+        const smsButton = document.getElementById('sendSMSMessage');
+        const chatButton = document.getElementById('sendOperatorMessage');
+        
+        if (event.ctrlKey && smsButton && smsButton.style.display !== 'none') {
+            sendSMSMessage();
+        } else {
+            sendOperatorMessage();
+        }
+    }
+}
+
+// Notification system
+function showNotification(message, type = 'info') {
+    const existingNotification = document.getElementById('dashboard-notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    
+    const notification = document.createElement('div');
+    notification.id = 'dashboard-notification';
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        max-width: 400px;
+        padding: 16px 20px;
+        border-radius: 12px;
+        font-weight: 600;
+        z-index: 10000;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        animation: slideInRight 0.3s ease-out;
+        cursor: pointer;
+    `;
+    
+    switch (type) {
+        case 'success':
+            notification.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            notification.style.color = 'white';
+            break;
+        case 'error':
+            notification.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+            notification.style.color = 'white';
+            break;
+        case 'warning':
+            notification.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+            notification.style.color = 'white';
+            break;
+        default:
+            notification.style.background = 'linear-gradient(135deg, #8B5CF6, #7C3AED)';
+            notification.style.color = 'white';
+    }
+    
+    notification.textContent = message;
+    
+    notification.addEventListener('click', () => {
+        notification.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+    });
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.style.animation = 'slideOutRight 0.3s ease-out';
+            setTimeout(() => notification.remove(), 300);
+        }
+    }, 5000);
+}
+
+// Add CSS animations for notifications
+if (!document.getElementById('notification-styles')) {
+    const style = document.createElement('style');
+    style.id = 'notification-styles';
+    style.textContent = `
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes slideOutRight {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+
+        .conversation-item.urgent {
+            border-left: 4px solid #ef4444 !important;
+            background: #fef2f2 !important;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// Initialize dashboard when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📊 Dashboard initializing...');
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const operatorParam = urlParams.get('operator');
+    
+    if (operatorParam) {
+        console.log('🎯 Operator-specific dashboard requested:', operatorParam);
+        
+        currentFilters.operator = operatorParam;
+        
+        document.title = `Dashboard - ${operatorParam} | Wherewolf Chatbot`;
+        
+        const headerSubtitle = document.getElementById('headerSubtitle');
+        if (headerSubtitle) {
+            headerSubtitle.textContent = `Managing conversations for operator: ${operatorParam}`;
+        }
+    }
+    
+    loadDashboard();
+    
+    setInterval(() => {
+        loadFilterStats();
+        
+        if (!selectedConversationId) {
+            applyFilters();
+        }
+    }, 30000);
+    
+    console.log('✅ Dashboard initialization complete');
+});
 
 </script>
 </body>

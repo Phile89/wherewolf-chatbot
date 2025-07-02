@@ -740,256 +740,306 @@
             input.focus();
         }
 
-        function showContactForm() {
-            const businessName = businessConfig.businessName || 'our business';
-            const responseTime = businessConfig.responseTime || '30 minutes';
-            const smsEnabled = businessConfig.smsEnabled || 'disabled';
-            
-            let formContent = '';
+        // 🔧 FIXED: Enhanced contact form with better UX
+function showContactForm() {
+    const businessName = businessConfig.businessName || 'our business';
+    const responseTime = businessConfig.responseTime || '30 minutes';
+    const smsEnabled = businessConfig.smsEnabled || 'disabled';
+    
+    // Check if contact form already exists
+    if (document.querySelector('.contact-form')) {
+        console.log('Contact form already shown');
+        return;
+    }
+    
+    let formContent = '';
+    
+    if (smsEnabled === 'sms-first') {
+        formContent = `
+            <h4>📱 Let's connect via text!</h4>
+            <p>What's your mobile number? We'll send you a quick text so you can chat with us on the go.</p>
+            <div class="form-row">
+                <input 
+                    type="tel" 
+                    id="contactPhone" 
+                    placeholder="+1 (555) 123-4567" 
+                    onkeypress="if(event.key==='Enter') submitContact()"
+                    style="font-size: 16px;"
+                >
+                <input 
+                    type="email" 
+                    id="contactEmail" 
+                    placeholder="Email (optional)" 
+                    onkeypress="if(event.key==='Enter') submitContact()"
+                >
+            </div>
+            <div class="form-buttons">
+                <button class="submit-btn" onclick="submitContact()">Send SMS →</button>
+                <button class="skip-btn" onclick="skipContact()">Continue here instead</button>
+            </div>
+            <p class="help-text">We'll send you a text message to start the conversation on your mobile device</p>
+        `;
+    } else {
+        formContent = `
+            <h4>👋 Quick question first!</h4>
+            <p>Could we get your email so we can send you ${businessConfig.businessType || 'tour'} info and follow up if needed? We typically respond within ${responseTime}.</p>
+            <div class="form-row">
+                <input 
+                    type="email" 
+                    id="contactEmail" 
+                    placeholder="your@email.com" 
+                    onkeypress="if(event.key==='Enter') submitContact()"
+                >
+                <input 
+                    type="tel" 
+                    id="contactPhone" 
+                    placeholder="Phone (optional)" 
+                    onkeypress="if(event.key==='Enter') submitContact()"
+                >
+            </div>
+            <div class="form-buttons">
+                <button class="submit-btn" onclick="submitContact()">Continue →</button>
+                <button class="skip-btn" onclick="skipContact()">Skip for now</button>
+            </div>
+            <p class="help-text">We'll use this to send you ${businessConfig.businessType || 'tour'} details and follow up if you have questions later</p>
+        `;
+    }
+    
+    const contactFormHtml = `
+        <div class="message bot-message" id="contactFormMessage">
+            <div class="contact-form">
+                ${formContent}
+            </div>
+        </div>
+    `;
+    
+    const messagesContainer = document.getElementById('chatMessages');
+    messagesContainer.insertAdjacentHTML('beforeend', contactFormHtml);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    // Focus appropriate field after form appears
+    setTimeout(() => {
+        if (smsEnabled === 'sms-first') {
+            const phoneInput = document.getElementById('contactPhone');
+            if (phoneInput) phoneInput.focus();
+        } else {
+            const emailInput = document.getElementById('contactEmail');
+            if (emailInput) emailInput.focus();
+        }
+    }, 100);
+}
+
+        // 🔧 FIXED: Enhanced contact submission with better validation
+async function submitContact() {
+    const emailInput = document.getElementById('contactEmail');
+    const phoneInput = document.getElementById('contactPhone');
+    
+    if (!emailInput || !phoneInput) {
+        console.error('Contact form inputs not found');
+        return;
+    }
+    
+    const email = emailInput.value.trim();
+    const phone = phoneInput.value.trim();
+    const smsEnabled = businessConfig.smsEnabled || 'disabled';
+    
+    // Validation based on SMS mode
+    if (smsEnabled === 'sms-first') {
+        const phoneRegex = /^\+?[\s\-\(\)]*([0-9][\s\-\(\)]*){10,}$/;
+        if (!phone || !phoneRegex.test(phone)) {
+            phoneInput.style.borderColor = '#EF4444';
+            phoneInput.placeholder = 'Please enter a valid phone number';
+            phoneInput.value = '';
+            phoneInput.focus();
+            return;
+        }
+    } else {
+        // Email mode - require email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(email)) {
+            emailInput.style.borderColor = '#EF4444';
+            emailInput.placeholder = 'Please enter a valid email';
+            emailInput.value = '';
+            emailInput.focus();
+            return;
+        }
+    }
+    
+    // Mark as provided to prevent showing again
+    hasProvidedContact = true;
+    
+    try {
+        const response = await fetch(`${serverUrl}/contact-info`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                email: email || null, 
+                phone: phone || null, 
+                operatorId: operatorId,
+                sessionId: 'default'
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to save contact info');
+        }
+        
+        console.log('📧 Contact info saved:', { email, phone, operatorId });
+        
+        // Replace form with success message
+        const contactFormMessage = document.getElementById('contactFormMessage');
+        if (contactFormMessage) {
+            let successMessage = '';
             
             if (smsEnabled === 'sms-first') {
-                formContent = `
-                    <h4>📱 Let's connect via text!</h4>
-                    <p>What's your mobile number? We'll send you a quick text so you can chat with us on the go.</p>
-                    <div class="form-row">
-                        <input 
-                            type="tel" 
-                            id="contactPhone" 
-                            placeholder="+1 (555) 123-4567" 
-                            onkeypress="if(event.key==='Enter') submitContact()"
-                            style="font-size: 16px;"
-                        >
-                        <input 
-                            type="email" 
-                            id="contactEmail" 
-                            placeholder="Email (optional)" 
-                            onkeypress="if(event.key==='Enter') submitContact()"
-                        >
-                    </div>
-                    <div class="form-buttons">
-                        <button class="submit-btn" onclick="submitContact()">Send SMS →</button>
-                        <button class="skip-btn" onclick="skipContact()">Continue here instead</button>
-                    </div>
-                    <p class="help-text">We'll send you a text message to start the conversation on your mobile device</p>
-                `;
+                successMessage = '✨ Perfect! Now let me help you with your question, and we\'ll send you a text shortly...';
             } else {
-                formContent = `
-                    <h4>👋 Quick question first!</h4>
-                    <p>Could we get your email so we can send you ${businessConfig.businessType || 'tour'} info and follow up if needed? We typically respond within ${responseTime}.</p>
-                    <div class="form-row">
-                        <input 
-                            type="email" 
-                            id="contactEmail" 
-                            placeholder="your@email.com" 
-                            onkeypress="if(event.key==='Enter') submitContact()"
-                        >
-                        <input 
-                            type="tel" 
-                            id="contactPhone" 
-                            placeholder="Phone (optional)" 
-                            onkeypress="if(event.key==='Enter') submitContact()"
-                        >
-                    </div>
-                    <div class="form-buttons">
-                        <button class="submit-btn" onclick="submitContact()">Continue →</button>
-                        <button class="skip-btn" onclick="skipContact()">Skip for now</button>
-                    </div>
-                    <p class="help-text">We'll use this to send you ${businessConfig.businessType || 'tour'} details and follow up if you have questions later</p>
-                `;
+                successMessage = '✨ Perfect! Now let me help you with your question...';
             }
             
-            const contactFormHtml = `
-                <div class="message bot-message">
-                    <div class="contact-form">
-                        ${formContent}
-                    </div>
+            contactFormMessage.innerHTML = `
+                <div style="
+                    color: #059669; 
+                    font-weight: 600; 
+                    font-size: 14px;
+                    text-align: center;
+                    padding: 16px;
+                    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+                    border-radius: 12px;
+                    border: 1px solid #a7f3d0;
+                ">
+                    ${successMessage}
                 </div>
             `;
+        }
+        
+        // Process pending message after brief delay
+        setTimeout(async () => {
+            if (pendingMessage) {
+                await sendMessageToServer(pendingMessage);
+                pendingMessage = null;
+            }
+        }, 1500);
+        
+    } catch (error) {
+        console.error('Error saving contact:', error);
+        // Fall back to skip behavior
+        skipContact();
+    }
+}
+
+// 🔧 FIXED: Enhanced skip function
+function skipContact() {
+    hasProvidedContact = true;
+    
+    const contactFormMessage = document.getElementById('contactFormMessage');
+    if (contactFormMessage) {
+        contactFormMessage.remove();
+    }
+    
+    // Process pending message immediately
+    if (pendingMessage) {
+        sendMessageToServer(pendingMessage);
+        pendingMessage = null;
+    }
+}
+
+        // FIXED: Enhanced sendMessageToServer function with proper contact form handling
+async function sendMessageToServer(message) {
+    showTyping();
+    
+    try {
+        console.log('📤 Sending message:', message);
+        const response = await fetch(`${serverUrl}/api/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                message: message,
+                operatorId: operatorId 
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📨 Server response:', data);
+        hideTyping();
+        
+        if (data.skipBotResponse) {
+            console.log('💬 Operator is active - no bot response needed');
+            return;
+        }
+        
+        if (data.operatorJoined) {
+            displayMessage('👨‍💼 A team member has joined the chat to assist you personally!', 'system');
+        }
+        
+        if (data.response) {
+            displayMessage(data.response, data.fromOperator ? 'operator' : 'bot');
             
-            const messagesContainer = document.getElementById('chatMessages');
-            messagesContainer.insertAdjacentHTML('beforeend', contactFormHtml);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            
+            // Execute any JavaScript that might be in the response
             setTimeout(() => {
-                if (smsEnabled === 'sms-first') {
-                    document.getElementById('contactPhone').focus();
-                } else {
-                    document.getElementById('contactEmail').focus();
-                }
+                const scripts = document.querySelectorAll('.bot-message script');
+                scripts.forEach(script => {
+                    try {
+                        eval(script.innerHTML);
+                    } catch (e) {
+                        console.log('Script execution skipped:', e);
+                    }
+                });
             }, 100);
         }
 
-        async function submitContact() {
-            const email = document.getElementById('contactEmail').value;
-            const phone = document.getElementById('contactPhone').value;
-            const smsEnabled = businessConfig.smsEnabled || 'disabled';
+        // 🔧 FIXED: Proper contact form handling
+        if (data.showContactForm) {
+            console.log('📋 Showing contact form...');
             
-            if (smsEnabled === 'sms-first') {
-                const phoneRegex = /^\+?[\s\-\(\)]*([0-9][\s\-\(\)]*){10,}$/;
-                if (!phone || !phoneRegex.test(phone)) {
-                    const phoneInput = document.getElementById('contactPhone');
-                    phoneInput.style.borderColor = '#EF4444';
-                    phoneInput.placeholder = 'Please enter a valid phone number';
-                    phoneInput.value = '';
-                    phoneInput.focus();
-                    return;
-                }
-            } else {
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (!email || !emailRegex.test(email)) {
-                    const emailInput = document.getElementById('contactEmail');
-                    emailInput.style.borderColor = '#EF4444';
-                    emailInput.placeholder = 'Please enter a valid email';
-                    emailInput.value = '';
-                    emailInput.focus();
-                    return;
-                }
+            // Store pending message if provided
+            if (data.pendingMessage) {
+                pendingMessage = data.pendingMessage;
             }
             
-            hasProvidedContact = true;
+            // Show contact form after a brief delay
+            setTimeout(() => {
+                showContactForm();
+            }, 500);
+        }
+        
+        if (data.agentRequested || data.operatorJoined || data.startPolling || data.twoWayChat || data.continuePolling) {
+            console.log('🔄 Starting/continuing message polling...');
+            startOperatorMessagePolling();
             
-            try {
-                await fetch(`${serverUrl}/contact-info`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        email, 
-                        phone, 
-                        operatorId: operatorId,
-                        sessionId: 'default'
-                    })
-                });
-                
-                console.log('📧 Contact info saved:', { email, phone, operatorId });
-                
-                const lastMessage = document.querySelector('.message:last-child');
-                let successMessage = '';
-                
-                if (smsEnabled === 'sms-first') {
-                    successMessage = '✨ Perfect! Now let me help you with your question, and we\'ll send you a text shortly...';
-                } else {
-                    successMessage = '✨ Perfect! Now let me help you with your question...';
-                }
-                
-                lastMessage.innerHTML = `
-                    <div style="
-                        color: #059669; 
-                        font-weight: 600; 
-                        font-size: 14px;
-                        text-align: center;
-                        padding: 16px;
-                        background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-                        border-radius: 12px;
-                        border: 1px solid #a7f3d0;
-                    ">
-                        ${successMessage}
-                    </div>
-                `;
-                
-                setTimeout(async () => {
-                    if (pendingMessage) {
-                        await sendMessageToServer(pendingMessage);
-                        pendingMessage = null;
-                    }
-                }, 1500);
-                
-            } catch (error) {
-                console.error('Error saving contact:', error);
-                skipContact();
+            if (data.smsEnabled && data.smsMode === 'hybrid') {
+                setTimeout(() => {
+                    showSMSNotification('💬 Two-way chat active! You can also text us if you prefer mobile messaging.', '#8B5CF6');
+                }, 2000);
+            } else if (data.smsEnabled && data.smsMode === 'sms-first') {
+                setTimeout(() => {
+                    showSMSNotification('📱 SMS conversation started! Continue on your mobile device.', '#10b981');
+                }, 2000);
+            } else if (data.twoWayChat) {
+                setTimeout(() => {
+                    showSMSNotification('💬 Two-way chat active - team member will respond here!', '#8B5CF6');
+                }, 2000);
+            } else if (data.agentRequested) {
+                setTimeout(() => {
+                    showSMSNotification('👨‍💼 Team member will contact you soon...', '#10b981');
+                }, 2000);
             }
         }
-
-        function skipContact() {
-            hasProvidedContact = true;
-            const lastMessage = document.querySelector('.message:last-child');
-            lastMessage.remove();
-            
-            if (pendingMessage) {
-                sendMessageToServer(pendingMessage);
-                pendingMessage = null;
-            }
-        }
-
-        async function sendMessageToServer(message) {
-            showTyping();
-            
-            try {
-                console.log('📤 Sending message:', message);
-                const response = await fetch(`${serverUrl}/api/chat`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        message: message,
-                        operatorId: operatorId 
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Server error: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                console.log('📨 Server response:', data);
-                hideTyping();
-                
-                if (data.skipBotResponse) {
-                    console.log('💬 Operator is active - no bot response needed');
-                    return;
-                }
-                
-                if (data.operatorJoined) {
-                    displayMessage('👨‍💼 A team member has joined the chat to assist you personally!', 'system');
-                }
-                
-                if (data.response) {
-    displayMessage(data.response, data.fromOperator ? 'operator' : 'bot');
-    
-    // Execute any JavaScript that might be in the response
-    setTimeout(() => {
-        const scripts = document.querySelectorAll('.bot-message script');
-        scripts.forEach(script => {
-            try {
-                eval(script.innerHTML);
-            } catch (e) {
-                console.log('Script execution skipped:', e);
-            }
-        });
-    }, 100);
+        
+    } catch (error) {
+        console.error('💥 Chat error:', error);
+        hideTyping();
+        displayMessage('Sorry, I\'m having connection issues. Please try again or contact us directly.', 'bot');
+    }
 }
-                
-                if (data.agentRequested || data.operatorJoined || data.startPolling || data.twoWayChat || data.continuePolling) {
-                    console.log('🔄 Starting/continuing message polling...');
-                    startOperatorMessagePolling();
-                    
-                    if (data.smsEnabled && data.smsMode === 'hybrid') {
-                        setTimeout(() => {
-                            showSMSNotification('💬 Two-way chat active! You can also text us if you prefer mobile messaging.', '#8B5CF6');
-                        }, 2000);
-                    } else if (data.smsEnabled && data.smsMode === 'sms-first') {
-                        setTimeout(() => {
-                            showSMSNotification('📱 SMS conversation started! Continue on your mobile device.', '#10b981');
-                        }, 2000);
-                    } else if (data.twoWayChat) {
-                        setTimeout(() => {
-                            showSMSNotification('💬 Two-way chat active - team member will respond here!', '#8B5CF6');
-                        }, 2000);
-                    } else if (data.agentRequested) {
-                        setTimeout(() => {
-                            showSMSNotification('👨‍💼 Team member will contact you soon...', '#10b981');
-                        }, 2000);
-                    }
-                }
-                
-            } catch (error) {
-                console.error('💥 Chat error:', error);
-                hideTyping();
-                displayMessage('Sorry, I\'m having connection issues. Please try again or contact us directly.', 'bot');
-            }
-        }
 
         function showSMSNotification(message, color = '#8B5CF6') {
             const existing = document.getElementById('sms-notification');
