@@ -804,6 +804,13 @@
     </div>
 
     <script>
+        
+let conversations = [];
+let selectedConversationId = null;
+let currentFilters = {
+    status: 'all'
+};
+
 // Enhanced refresh function with better feedback
 async function loadDashboard() {
     try {
@@ -1113,6 +1120,103 @@ function filterByStatus(status) {
     // Update the filter and reload conversations
     currentFilters.status = status;
     applyFilters();
+}
+
+// MISSING FUNCTION 1: applyFilters
+async function applyFilters() {
+    console.log('🔧 Applying filters...', currentFilters);
+    
+    const params = new URLSearchParams();
+    
+    // Add status filter
+    if (currentFilters.status && currentFilters.status !== 'all') {
+        params.append('status', currentFilters.status);
+    }
+    
+    // Add other filters if they exist
+    const operatorFilter = document.getElementById('operatorFilter');
+    if (operatorFilter && operatorFilter.value) {
+        params.append('operator', operatorFilter.value);
+    }
+    
+    const hasEmailFilter = document.getElementById('hasEmailFilter');
+    if (hasEmailFilter && hasEmailFilter.value) {
+        params.append('hasEmail', hasEmailFilter.value);
+    }
+    
+    const hasPhoneFilter = document.getElementById('hasPhoneFilter');
+    if (hasPhoneFilter && hasPhoneFilter.value) {
+        params.append('hasPhone', hasPhoneFilter.value);
+    }
+    
+    const agentRequestedFilter = document.getElementById('agentRequestedFilter');
+    if (agentRequestedFilter && agentRequestedFilter.value) {
+        params.append('agentRequested', agentRequestedFilter.value);
+    }
+    
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput && searchInput.value) {
+        params.append('search', searchInput.value);
+    }
+    
+    await loadConversations(params.toString());
+}
+
+// MISSING FUNCTION 2: showError
+function showError(message) {
+    console.error('❌ Showing error:', message);
+    const container = document.getElementById('conversationsList');
+    container.innerHTML = `
+        <div style="padding: 40px 20px; text-align: center; color: #dc2626; background: #fef2f2; border-radius: 12px; margin: 20px;">
+            <h3 style="margin: 0 0 16px 0;">❌ Error</h3>
+            <p style="margin: 0 0 16px 0; font-size: 14px;">${message}</p>
+            <button onclick="loadDashboard()" style="background: #8B5CF6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+                🔄 Try Again
+            </button>
+        </div>
+    `;
+}
+
+// MISSING FUNCTION 3: loadDashboard
+async function loadDashboard() {
+    console.log('📊 Loading dashboard...');
+    try {
+        await applyFilters();
+        await loadStats();
+        console.log('✅ Dashboard loaded successfully');
+    } catch (error) {
+        console.error('❌ Error loading dashboard:', error);
+        showError('Failed to load dashboard: ' + error.message);
+    }
+}
+
+// MISSING FUNCTION 4: loadStats
+async function loadStats() {
+    try {
+        console.log('📈 Loading stats...');
+        const response = await fetch('/api/dashboard/stats');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📊 Stats loaded:', data);
+        
+        if (data.success) {
+            document.getElementById('totalConversations').textContent = data.stats.total_conversations || 0;
+            document.getElementById('agentRequests').textContent = data.stats.agent_requests || 0;
+            document.getElementById('withEmail').textContent = data.stats.with_email || 0;
+            document.getElementById('activeOperators').textContent = data.stats.active_operators || 0;
+        }
+    } catch (error) {
+        console.error('❌ Error loading stats:', error);
+        // Show zeros if stats fail
+        document.getElementById('totalConversations').textContent = '0';
+        document.getElementById('agentRequests').textContent = '0';
+        document.getElementById('withEmail').textContent = '0';
+        document.getElementById('activeOperators').textContent = '0';
+    }
 }
 
 // Add styles for urgent conversations and quick filters
