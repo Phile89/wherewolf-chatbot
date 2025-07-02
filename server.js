@@ -1836,16 +1836,28 @@ app.get('/api/dashboard/conversations/:id/messages', async (req, res) => {
     }
 });
 
-// Update conversation status
+// ===========================================
+// STEP 1: FIND AND REPLACE THIS EXACT ENDPOINT IN YOUR SERVER.JS
+// ===========================================
+
+// FIND this line in your server.js (around line 1800-2000):
+// app.post('/api/dashboard/conversations/:id/status', async (req, res) => {
+
+// REPLACE the entire function with this fixed version:
+
 app.post('/api/dashboard/conversations/:id/status', async (req, res) => {
+    const conversationId = req.params.id;
+    const { status } = req.body;
+    
+    console.log('🔍 STATUS UPDATE REQUEST:');
+    console.log('  - Conversation ID:', conversationId);
+    console.log('  - New Status:', status);
+    console.log('  - Request Body:', req.body);
+    
     try {
-        const conversationId = req.params.id;
-        const { status } = req.body;
-        
-        console.log('🔄 Updating conversation status:', conversationId, 'to', status);
-        
-        // Validate conversationId is a number
-        if (!/^\d+$/.test(conversationId)) {
+        // Validate conversationId
+        if (!conversationId || !/^\d+$/.test(conversationId)) {
+            console.error('❌ Invalid conversation ID:', conversationId);
             return res.status(400).json({
                 success: false,
                 error: 'Invalid conversation ID format'
@@ -1854,43 +1866,166 @@ app.post('/api/dashboard/conversations/:id/status', async (req, res) => {
         
         // Validate status
         const validStatuses = ['new', 'in_progress', 'resolved', 'on_hold'];
-        if (!validStatuses.includes(status)) {
+        if (!status || !validStatuses.includes(status)) {
+            console.error('❌ Invalid status:', status);
             return res.status(400).json({
                 success: false,
                 error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
             });
         }
         
-        const result = await pool.query(`
-            UPDATE conversations 
-            SET status = $1, updated_at = NOW() 
-            WHERE conversation_id = $2 
-            RETURNING *
-        `, [status, conversationId]);
+        console.log('✅ Validation passed, updating database...');
+        
+        // Update the database
+        const result = await pool.query(
+            'UPDATE conversations SET status = $1 WHERE conversation_id = $2 RETURNING conversation_id, status',
+            [status, parseInt(conversationId)]
+        );
+        
+        console.log('📊 Database query result:', result.rows);
         
         if (result.rows.length === 0) {
+            console.error('❌ No conversation found with ID:', conversationId);
             return res.status(404).json({
                 success: false,
                 error: 'Conversation not found'
             });
         }
         
-        console.log('✅ Status updated successfully');
+        console.log('✅ Status updated successfully!');
         
         res.json({
             success: true,
-            conversation: result.rows[0]
+            conversation: result.rows[0],
+            message: `Status updated to ${status}`
         });
         
     } catch (error) {
-        console.error('❌ Error updating conversation status:', error);
+        console.error('❌ DATABASE ERROR in status update:');
+        console.error('  - Error message:', error.message);
+        console.error('  - Error code:', error.code);
+        console.error('  - Error detail:', error.detail);
+        console.error('  - Full error:', error);
+        
         res.status(500).json({
             success: false,
-            error: 'Failed to update conversation status'
+            error: 'Failed to update conversation status',
+            details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }
 });
 
+// ===========================================
+// STEP 2: ADD THIS DEBUG ENDPOINT (temporary)
+// ===========================================
+
+// Add this RIGHT AFTER the status update endpoint:
+app.get('/api/debug/conversation/:id', async (req, res) => {
+    try {
+        const conversationId = req.params.id;
+        console.log('🔍 Debugging conversation:', conversationId);
+        
+        const result = await pool.query(
+            'SELECT conversation_id, status, operator_id, started_at FROM conversations WHERE conversation_id = $1',
+            [parseInt(conversationId)]
+        );
+        
+        res.json({
+            success: true,
+            conversation: result.rows[0] || null,
+            exists: result.rows.length > 0
+        });
+    } catch (error) {
+        console.error('❌ Debug query failed:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ===========================================
+// STEP 3: ADD DATABASE CONNECTION CHECK
+// ===========================================
+
+// Add this endpoint to test your database:
+app.get('/api/debug/db-test', async (req, res) => {
+    try {
+        console.log('🧪 Testing database connection...');
+        
+        // Test basic query
+        const timeResult = await pool.query('SELECT NOW() as current_time');
+        console.log('✅ Database time query successful:', timeResult.rows[0]);
+        
+        // Test conversations table
+        const countResult = await pool.query('SELECT COUNT(*) as total FROM conversations');
+        console.log('✅ Conversations count query successful:', countResult.rows[0]);
+        
+        // Test update query (safe - no actual change)
+        const testResult = await pool.query(
+            'SELECT conversation_id, status FROM conversations WHERE conversation_id = (SELECT MIN(conversation_id) FROM conversations)'
+        );
+        
+        res.json({
+            success: true,
+            message: 'Database connection is working',
+            tests: {
+                timeQuery: timeResult.rows[0],
+                conversationCount: countResult.rows[0],
+                sampleConversation: testResult.rows[0] || 'No conversations found'
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Database test failed:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Database test failed',
+            details: error.message
+        });
+    }
+});
+
+// ===========================================
+// STEP 4: FRONTEND DEBUGGING (add to your dashboard)
+// ===========================================
+
+// Add this function to your dashboard HTML/JS to test the endpoint:
+function debugStatusUpdate() {
+    // Test with conversation 46 (the one that's failing)
+    const testConversationId = 46;
+    
+    console.log('🧪 Testing status update endpoint...');
+    
+    // First, check if the conversation exists
+    fetch(`/api/debug/conversation/${testConversationId}`)
+        .then(r => r.json())
+        .then(data => {
+            console.log('📊 Conversation exists check:', data);
+            
+            if (!data.exists) {
+                console.error('❌ Conversation 46 does not exist!');
+                return;
+            }
+            
+            // Now test the status update
+            return fetch(`/api/dashboard/conversations/${testConversationId}/status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'resolved' })
+            });
+        })
+        .then(r => r.json())
+        .then(data => {
+            console.log('📡 Status update result:', data);
+        })
+        .catch(err => {
+            console.error('❌ Test failed:', err);
+        });
+}
+
+// Run this in your browser console to test:
+// debugStatusUpdate();
 // Enhanced operator message sending with immediate feedback
 app.post('/api/dashboard/send-message', validateRequired(['conversationId', 'message']), async (req, res) => {
     const { conversationId, message, operatorId } = req.body;
