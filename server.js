@@ -180,6 +180,14 @@ async function initializeDatabase() {
     }
 }
 
+// Add this function after initializeDatabase() and before the conversation management functions
+function normalizePhoneNumber(phone) {
+    if (!phone) return null;
+    // Remove all non-digits and add + prefix
+    const digits = phone.replace(/\D/g, '');
+    return digits.startsWith('1') ? `+${digits}` : `+1${digits}`;
+}
+
 // In-memory conversation history for immediate responses (with cleanup)
 const conversations = {};
 const customerContacts = {};
@@ -467,57 +475,31 @@ app.post('/api/sms/webhook', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // In your chat endpoint, replace the phone handling with this:
-
-// FIXED: Consistent phone normalization function
-const normalizePhone = (phone) => {
-    if (!phone) return '';
-    // Remove all non-digits, then remove leading 1 if present
-    let normalized = phone.replace(/\D/g, '');
-    if (normalized.startsWith('1') && normalized.length === 11) {
-        normalized = normalized.substring(1); // Remove leading 1
-    }
-    return normalized;
-};
-
-// Handle contact info submission
-const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
-const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
-
-if (phoneRegex.test(message) && !hasContactInfo && !alreadyHandedOff && !isAgentRequest) {
-    const phoneMatch = message.match(phoneRegex)[0];
-    const normalizedPhone = normalizePhone(phoneMatch);
-    
-    // Store the original format for display, normalized for matching
-    customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone: phoneMatch };
-    await updateCustomerContact(sessionKey, null, phoneMatch);
-    
-    console.log(`📞 Phone collected: ${phoneMatch} -> normalized: ${normalizedPhone}`);
-    
-    const thankYouResponse = `Perfect! I've saved your phone number (${phoneMatch}). Now, how can I help you today?`;
-    conversations[sessionKey].push({ role: 'assistant', content: thankYouResponse });
-    await saveMessage(conversation.conversation_id, 'assistant', thankYouResponse);
-    return res.json({ success: true, response: thankYouResponse });
-}
+        // Use your existing normalizePhone function
+        const normalizePhone = (phone) => {
+            if (!phone) return '';
+            let normalized = phone.replace(/\D/g, '');
+            if (normalized.startsWith('1') && normalized.length === 11) {
+                normalized = normalized.substring(1);
+            }
+            return normalized;
+        };
         
         const normalizedFrom = normalizePhone(From);
         console.log(`📱 Normalized phone: ${From} -> ${normalizedFrom}`);
         
-        // SMART MERGING: Check for ANY existing conversation with this phone number
+        // FIXED: Get all conversations with phone numbers and check properly
         let convResult = await client.query(`
             SELECT conversation_id, operator_id, session_key, customer_phone, customer_sms_number
             FROM conversations 
-            WHERE conversation_id IN (
-                SELECT conversation_id FROM conversations 
-                WHERE customer_phone IS NOT NULL 
-                   OR customer_sms_number IS NOT NULL
-            )
+            WHERE (customer_phone IS NOT NULL AND customer_phone != '') 
+               OR (customer_sms_number IS NOT NULL AND customer_sms_number != '')
             ORDER BY last_message_at DESC
         `);
         
         let existingConversation = null;
         
-        // Check each conversation for phone number match
+        // Check each conversation for phone number match using JavaScript
         for (const conv of convResult.rows) {
             const normalizedCustomerPhone = normalizePhone(conv.customer_phone);
             const normalizedCustomerSms = normalizePhone(conv.customer_sms_number);
@@ -563,26 +545,24 @@ if (phoneRegex.test(message) && !hasContactInfo && !alreadyHandedOff && !isAgent
             console.log(`📱 Created new SMS conversation ${conversationId}`);
         }
         
-        // Save SMS message to the sms_messages table
+        // Rest of your SMS saving code stays the same...
         await client.query(
             'INSERT INTO sms_messages (conversation_id, direction, from_number, to_number, message_body, message_sid, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
             [conversationId, 'inbound', From, To, Body, MessageSid, 'received']
         );
         
-        // Save as a regular message for the dashboard to display
         await client.query(
             'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
             [conversationId, 'user', `📱 SMS from ${From}: ${Body}`]
         );
 
-        // Update conversation
         await client.query(
             'UPDATE conversations SET last_message_at = NOW(), message_count = message_count + 1 WHERE conversation_id = $1',
             [conversationId]
         );
 
         await client.query('COMMIT');
-        res.status(200).send('<Response></Response>'); // Acknowledge to Twilio
+        res.status(200).send('<Response></Response>');
         
     } catch (error) {
         await client.query('ROLLBACK');
