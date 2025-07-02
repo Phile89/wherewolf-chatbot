@@ -1335,6 +1335,163 @@ document.addEventListener('DOMContentLoaded', function() {
     loadFilterStats();
     setInterval(loadFilterStats, 30000); // Update every 30 seconds
 });
+// MISSING FUNCTION: selectConversation
+async function selectConversation(conversationId) {
+    console.log('🔍 Selecting conversation:', conversationId);
+    
+    // Update selected conversation
+    selectedConversationId = conversationId;
+    
+    // Update visual selection
+    document.querySelectorAll('.conversation-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    
+    const selectedItem = document.querySelector(`[data-conversation-id="${conversationId}"]`);
+    if (selectedItem) {
+        selectedItem.classList.add('selected');
+    }
+    
+    // Find the conversation data
+    const conversation = conversations.find(c => c.conversation_id === conversationId);
+    if (!conversation) {
+        console.error('Conversation not found:', conversationId);
+        return;
+    }
+    
+    // Update chat header
+    document.getElementById('chatTitle').textContent = conversation.business_name || 'Unknown Business';
+    document.getElementById('chatSubtitle').innerHTML = `
+        <strong>Operator:</strong> ${conversation.operator_id} • 
+        <strong>Status:</strong> ${(conversation.status || 'new').replace('_', ' ').toUpperCase()} •
+        <strong>Contact:</strong> ${conversation.customer_email || conversation.customer_phone || 'No contact info'}
+    `;
+    
+    // Show chat actions
+    document.getElementById('chatActions').style.display = 'flex';
+    document.getElementById('statusSelect').value = conversation.status || 'new';
+    
+    // Show input container
+    document.getElementById('chatInputContainer').classList.add('active');
+    
+    // Update response method info
+    const responseMethod = document.getElementById('responseMethod');
+    if (conversation.sms_enabled && conversation.customer_phone) {
+        responseMethod.textContent = ' (SMS available)';
+        document.getElementById('sendSMSMessage').style.display = 'block';
+    } else {
+        responseMethod.textContent = ' (Chat only)';
+        document.getElementById('sendSMSMessage').style.display = 'none';
+    }
+    
+    // Load messages
+    await loadMessages(conversationId);
+}
+
+// MISSING FUNCTION: loadMessages
+async function loadMessages(conversationId) {
+    console.log('📨 Loading messages for conversation:', conversationId);
+    
+    const chatContainer = document.getElementById('chatMessages');
+    chatContainer.innerHTML = `
+        <div class="loading">
+            <div class="loading-spinner"></div>
+            Loading messages...
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`/api/dashboard/conversations/${conversationId}/messages`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📨 Messages loaded:', data);
+        
+        if (data.success) {
+            renderMessages(data.messages || []);
+        } else {
+            throw new Error(data.error || 'Failed to load messages');
+        }
+    } catch (error) {
+        console.error('❌ Error loading messages:', error);
+        chatContainer.innerHTML = `
+            <div style="padding: 20px; text-align: center; color: #dc2626;">
+                <p>❌ Failed to load messages</p>
+                <button onclick="loadMessages(${conversationId})" style="background: #8B5CF6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 8px;">
+                    🔄 Retry
+                </button>
+            </div>
+        `;
+    }
+}
+
+// MISSING FUNCTION: renderMessages
+function renderMessages(messages) {
+    const chatContainer = document.getElementById('chatMessages');
+    
+    if (messages.length === 0) {
+        chatContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">💬</div>
+                <p>No messages yet</p>
+                <p style="font-size: 12px; color: #64748b;">This conversation hasn't started yet.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    chatContainer.innerHTML = messages.map(msg => {
+        const messageTime = new Date(msg.timestamp).toLocaleString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            month: 'short',
+            day: 'numeric'
+        });
+        
+        const messageClass = msg.sender_type || 'user';
+        
+        return `
+            <div class="message ${messageClass}">
+                <div>${msg.content}</div>
+                <div class="message-time">${messageTime}</div>
+            </div>
+        `;
+    }).join('');
+    
+    // Scroll to bottom
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+// MISSING FUNCTION: updateConversationStatus
+async function updateConversationStatus() {
+    if (!selectedConversationId) return;
+    
+    const newStatus = document.getElementById('statusSelect').value;
+    console.log('🔄 Updating status to:', newStatus);
+    
+    try {
+        const response = await fetch(`/api/dashboard/conversations/${selectedConversationId}/status`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ status: newStatus })
+        });
+        
+        if (response.ok) {
+            console.log('✅ Status updated successfully');
+            // Refresh the conversation list to show updated status
+            await applyFilters();
+        } else {
+            console.error('❌ Failed to update status');
+        }
+    } catch (error) {
+        console.error('❌ Error updating status:', error);
+    }
+}
 
 </script>
 </body>
