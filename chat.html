@@ -946,8 +946,20 @@
                 }
                 
                 if (data.response) {
-                    displayMessage(data.response, data.fromOperator ? 'operator' : 'bot');
-                }
+    displayMessage(data.response, data.fromOperator ? 'operator' : 'bot');
+    
+    // Execute any JavaScript that might be in the response
+    setTimeout(() => {
+        const scripts = document.querySelectorAll('.bot-message script');
+        scripts.forEach(script => {
+            try {
+                eval(script.innerHTML);
+            } catch (e) {
+                console.log('Script execution skipped:', e);
+            }
+        });
+    }, 100);
+}
                 
                 if (data.agentRequested || data.operatorJoined || data.startPolling || data.twoWayChat || data.continuePolling) {
                     console.log('🔄 Starting/continuing message polling...');
@@ -1195,6 +1207,98 @@
                 fetch(`${serverUrl}/api/test`, { method: 'HEAD' }).catch(() => {});
             }
         }, 30000);
+
+        // MISSING FUNCTIONS for hybrid chat buttons
+window.selectChatChoice = function(choice) {
+    console.log('Choice selected:', choice);
+    
+    // Disable buttons to prevent double-clicks
+    document.querySelectorAll('.choice-btn').forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+    });
+    
+    if (choice === 'sms') {
+        // Show phone number collection
+        showPhoneCollection();
+    } else {
+        // Continue with regular chat handoff
+        sendMessageToServer('I prefer to continue chatting here');
+    }
+};
+
+window.showPhoneCollection = function() {
+    // Find the button container and replace it with phone input
+    const choiceContainer = document.querySelector('.choice-btn').closest('div');
+    if (choiceContainer) {
+        choiceContainer.innerHTML = `
+            <div style="text-align: center; margin: 15px 0;">
+                <h4 style="margin: 0 0 12px 0; color: #1f2937;">📱 What's your mobile number?</h4>
+                <input type="tel" id="hybridPhoneInput" placeholder="+1 (555) 123-4567" style="
+                    width: 100%;
+                    padding: 12px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    margin-bottom: 12px;
+                " onkeypress="if(event.key==='Enter') submitHybridPhone()">
+                <button onclick="submitHybridPhone()" style="
+                    width: 100%;
+                    padding: 12px;
+                    background: #8B5CF6;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-weight: 600;
+                    cursor: pointer;
+                ">Send me a text! 📱</button>
+            </div>
+        `;
+        
+        // Focus on the phone input
+        setTimeout(() => {
+            const phoneInput = document.getElementById('hybridPhoneInput');
+            if (phoneInput) {
+                phoneInput.focus();
+            }
+        }, 100);
+    }
+};
+
+window.submitHybridPhone = function() {
+    const phoneInput = document.getElementById('hybridPhoneInput');
+    if (!phoneInput) {
+        console.error('Phone input not found');
+        return;
+    }
+    
+    const phone = phoneInput.value.trim();
+    
+    if (!phone) {
+        phoneInput.style.borderColor = '#ef4444';
+        phoneInput.placeholder = 'Please enter your phone number';
+        phoneInput.focus();
+        return;
+    }
+    
+    // Validate phone number format
+    const phoneRegex = /^\+?[\s\-\(\)]*([0-9][\s\-\(\)]*){10,}$/;
+    if (!phoneRegex.test(phone)) {
+        phoneInput.style.borderColor = '#ef4444';
+        phoneInput.placeholder = 'Please enter a valid phone number';
+        phoneInput.value = '';
+        phoneInput.focus();
+        return;
+    }
+    
+    // Send the phone number as a message
+    console.log('Submitting phone number:', phone);
+    sendMessageToServer(`My phone number is ${phone}`);
+};
+
+// Also add this helper function for debugging
+window.sendMessageToServer = window.sendMessageToServer || sendMessageToServer;
 
         console.log('🎉 Enhanced chat script loaded successfully!');
     </script>
