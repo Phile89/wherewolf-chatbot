@@ -800,7 +800,6 @@ app.get('/api/dashboard/conversations', async (req, res) => {
 });
 
 // COMPLETE REPLACEMENT for the poll-messages endpoint in server.js
-// COMPLETE REPLACEMENT for the poll-messages endpoint in server.js
 // Enhanced and more efficient poll-messages endpoint with better error handling
 
 app.post('/api/chat/poll-messages', validateRequired(['operatorId']), async (req, res) => {
@@ -2318,6 +2317,103 @@ app.post('/api/dashboard/update-status', validateRequired(['conversationId', 'st
         res.status(500).json({ 
             success: false,
             error: 'Failed to update status' 
+        });
+    }
+});
+
+// MISSING ENDPOINT 1: Get messages for a specific conversation
+app.get('/api/dashboard/conversations/:id/messages', async (req, res) => {
+    try {
+        const conversationId = req.params.id;
+        console.log('📨 Getting messages for conversation:', conversationId);
+        
+        // Validate conversationId is a number
+        if (!/^\d+$/.test(conversationId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid conversation ID format'
+            });
+        }
+        
+        const result = await pool.query(`
+            SELECT 
+                message_id,
+                conversation_id,
+                role as sender_type,
+                content,
+                timestamp
+            FROM messages 
+            WHERE conversation_id = $1 
+            ORDER BY timestamp ASC
+        `, [conversationId]);
+        
+        console.log(`✅ Found ${result.rows.length} messages for conversation ${conversationId}`);
+        
+        res.json({
+            success: true,
+            messages: result.rows
+        });
+        
+    } catch (error) {
+        console.error('❌ Error getting conversation messages:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get conversation messages'
+        });
+    }
+});
+
+// MISSING ENDPOINT 2: Update conversation status
+app.post('/api/dashboard/conversations/:id/status', async (req, res) => {
+    try {
+        const conversationId = req.params.id;
+        const { status } = req.body;
+        
+        console.log('🔄 Updating conversation status:', conversationId, 'to', status);
+        
+        // Validate conversationId is a number
+        if (!/^\d+$/.test(conversationId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid conversation ID format'
+            });
+        }
+        
+        // Validate status
+        const validStatuses = ['new', 'in_progress', 'resolved', 'on_hold'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+            });
+        }
+        
+        const result = await pool.query(`
+            UPDATE conversations 
+            SET status = $1, updated_at = NOW() 
+            WHERE conversation_id = $2 
+            RETURNING *
+        `, [status, conversationId]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Conversation not found'
+            });
+        }
+        
+        console.log('✅ Status updated successfully');
+        
+        res.json({
+            success: true,
+            conversation: result.rows[0]
+        });
+        
+    } catch (error) {
+        console.error('❌ Error updating conversation status:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update conversation status'
         });
     }
 });
