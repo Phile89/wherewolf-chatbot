@@ -813,103 +813,107 @@ let currentFilters = {
 
 loadConversations
 
-// Enhanced conversation rendering with better visual indicators
-function renderConversations(conversations) {
+// COMPLETE DASHBOARD FUNCTIONS - Add these after: let selectedConversationId = null;
+
+// Enhanced conversation loading with better prioritization
+async function loadConversations(queryString = '') {
     const container = document.getElementById('conversationsList');
     
-    if (conversations.length === 0) {
+    // Show loading state
+    container.innerHTML = `
+        <div class="loading">
+            <div class="loading-spinner"></div>
+            Loading conversations...
+        </div>
+    `;
+    
+    try {
+        const url = queryString ? `/api/dashboard/conversations?${queryString}` : '/api/dashboard/conversations';
+        console.log('🔍 Loading from:', url); // DEBUG
+        
+        const response = await fetch(url);
+        console.log('📡 Response status:', response.status); // DEBUG
+        
+        if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📊 Data received:', data); // DEBUG
+        console.log('📊 Conversation count:', data.conversations ? data.conversations.length : 'NO CONVERSATIONS'); // DEBUG
+        
+        if (data.success) {
+            conversations = data.conversations || [];
+            
+            // FIXED: Update conversation counter with actual count
+            updateConversationCounter(conversations.length);
+            
+            // FIXED: Update status pill counts based on actual data
+            updateStatusPillCounts(conversations);
+            
+            renderConversations(conversations);
+            console.log(`✅ Loaded ${conversations.length} conversations`);
+        } else {
+            throw new Error(data.error || 'Failed to load conversations');
+        }
+    } catch (error) {
+        console.error('❌ Error loading conversations:', error);
         container.innerHTML = `
-            <div class="empty-state" style="padding: 40px; text-align: center;">
-                <div class="empty-state-icon">📭</div>
-                <p><strong>No conversations found</strong></p>
-                <p style="font-size: 12px; color: #64748b; margin-top: 8px;">
-                    Try adjusting your filters or wait for new conversations
-                </p>
-                <button class="btn btn-secondary" onclick="clearFilters()" style="margin-top: 12px;">
-                    Clear All Filters
+            <div style="padding: 40px 20px; text-align: center; color: #dc2626;">
+                <h3>❌ Loading Error</h3>
+                <p>${error.message}</p>
+                <button onclick="loadDashboard()" style="background: #8B5CF6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 10px;">
+                    🔄 Try Again
                 </button>
             </div>
         `;
-        return;
     }
+}
 
-    container.innerHTML = conversations.map(conv => {
-        const lastMessageTime = new Date(conv.last_message_at);
-        const isToday = isDateToday(lastMessageTime);
-        const isThisWeek = isDateThisWeek(lastMessageTime);
-        
-        let timeDisplay;
-        if (isToday) {
-            timeDisplay = lastMessageTime.toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        } else if (isThisWeek) {
-            timeDisplay = lastMessageTime.toLocaleDateString('en-US', {
-                weekday: 'short',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+// FIXED: Update status pill counts based on actual conversation data
+function updateStatusPillCounts(conversations) {
+    const statusCounts = {
+        all: conversations.length,
+        new: conversations.filter(c => c.status === 'new').length,
+        in_progress: conversations.filter(c => c.status === 'in_progress').length,
+        resolved: conversations.filter(c => c.status === 'resolved').length,
+        on_hold: conversations.filter(c => c.status === 'on_hold').length
+    };
+    
+    console.log('📊 Status counts:', statusCounts);
+    
+    // Update the pill counts
+    const allCountElement = document.getElementById('allCount');
+    const newCountElement = document.getElementById('newCount');
+    const inProgressCountElement = document.getElementById('inProgressCount');
+    const resolvedCountElement = document.getElementById('resolvedCount');
+    const onHoldCountElement = document.getElementById('onHoldCount');
+    
+    if (allCountElement) allCountElement.textContent = `(${statusCounts.all})`;
+    if (newCountElement) newCountElement.textContent = `(${statusCounts.new})`;
+    if (inProgressCountElement) inProgressCountElement.textContent = `(${statusCounts.in_progress})`;
+    if (resolvedCountElement) resolvedCountElement.textContent = `(${statusCounts.resolved})`;
+    if (onHoldCountElement) onHoldCountElement.textContent = `(${statusCounts.on_hold})`;
+}
+
+// FIXED: Update conversation counter with correct count
+function updateConversationCounter(count) {
+    const panelTitle = document.querySelector('.panel-title');
+    if (panelTitle) {
+        panelTitle.textContent = `Conversations (${count})`;
+    }
+    
+    // Also update the "All Conversations" pill if it exists
+    const allPill = document.querySelector('.status-pill.all');
+    if (allPill) {
+        const countSpan = allPill.querySelector('span');
+        if (countSpan) {
+            countSpan.textContent = `(${count})`;
         } else {
-            timeDisplay = lastMessageTime.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            // Create the count span if it doesn't exist
+            allPill.innerHTML = `All Conversations <span>(${count})</span>`;
         }
-
-        const status = conv.status || 'new';
-        const statusClass = status.replace('_', '-');
-        
-        // Determine urgency level
-        const isUrgent = status === 'new' && conv.agent_requested;
-        const isActive = status === 'in_progress';
-        const hasRecentActivity = (Date.now() - lastMessageTime.getTime()) < (2 * 60 * 60 * 1000); // 2 hours
-        
-        let priorityIndicator = '';
-        if (isUrgent) {
-            priorityIndicator = '<div style="position: absolute; top: 8px; left: 8px; width: 8px; height: 8px; background: #ef4444; border-radius: 50%; animation: pulse 2s infinite;"></div>';
-        } else if (isActive && hasRecentActivity) {
-            priorityIndicator = '<div style="position: absolute; top: 8px; left: 8px; width: 8px; height: 8px; background: #10b981; border-radius: 50%;"></div>';
-        }
-
-        const messagePreview = conv.last_message ? 
-            conv.last_message.length > 80 ? 
-                conv.last_message.substring(0, 80) + '...' : 
-                conv.last_message : 
-            'No messages yet';
-
-        return `
-            <div class="conversation-item ${isUrgent ? 'urgent' : ''}" 
-                 onclick="selectConversation(${conv.conversation_id})"
-                 data-conversation-id="${conv.conversation_id}">
-                ${priorityIndicator}
-                <div class="conversation-status ${statusClass}">${status.replace('_', ' ').toUpperCase()}</div>
-                <div class="conversation-header">
-                    <div class="business-name">
-                        ${conv.business_name || 'Unknown Business'}
-                        ${isUrgent ? ' 🚨' : ''}
-                        ${isActive && hasRecentActivity ? ' 🟢' : ''}
-                    </div>
-                    <div class="conversation-time">${timeDisplay}</div>
-                </div>
-                <div class="conversation-details">
-                    <strong>Operator:</strong> ${conv.operator_id} • 
-                    <strong>Messages:</strong> ${conv.message_count || 0}
-                    ${hasRecentActivity ? ' • <span style="color: #10b981;">Active</span>' : ''}
-                </div>
-                <div class="conversation-preview">${messagePreview}</div>
-                <div class="conversation-badges">
-                    ${conv.customer_email ? '<span class="badge badge-email">📧 Email</span>' : ''}
-                    ${conv.customer_phone ? '<span class="badge badge-phone">📞 Phone</span>' : ''}
-                    ${conv.sms_enabled ? '<span class="badge badge-sms">💬 SMS</span>' : ''}
-                    ${conv.agent_requested ? '<span class="badge badge-agent">🚨 Agent</span>' : ''}
-                    ${conv.last_operator_message_at ? '<span class="badge" style="background: #d1fae5; color: #065f46;">👨‍💼 Operator Active</span>' : ''}
-                </div>
-            </div>
-        `;
-    }).join('');
+    }
 }
 
 // Helper functions for date handling
