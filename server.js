@@ -1807,7 +1807,7 @@ async function sendSMS(toNumber, message, conversationId) {
                 conversations[sessionKey].push({ role: 'assistant', content: botResponse });
                 await saveMessage(conversation.conversation_id, 'assistant', botResponse);
                 return res.json({ success: true, response: botResponse });
-            } else if (lowerMessage.includes('phone') || lowerMessage.includes('call')) {
+            } else if ((lowerMessage.includes('phone') || lowerMessage.includes('call')) && smsEnabled !== 'hybrid') {
                 if (customerContact && customerContact.phone) {
                     const botResponse = `Perfect! Our team will call you at ${customerContact.phone} within ${responseTime}. Is there anything else I can help you with while you wait?`;
                     conversations[sessionKey].push({ role: 'assistant', content: botResponse });
@@ -1943,7 +1943,7 @@ window.submitHybridPhone = function() {
         return;
     }
     
-    sendMessageToServer(\`My phone number is \${phone}\`);
+    sendMessageToServer(phone);
 };
 </script>`;
         
