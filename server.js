@@ -1979,7 +1979,7 @@ if (alreadyHandedOff) {
     const smsEnabled = currentConfig.smsEnabled || 'disabled';
     
     // Handle phone number submission in hybrid mode
-    const phoneRegex = /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b|\b\(\d{3}\)\s?\d{3}[-.]?\d{4}\b/;
+    const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
     if (phoneRegex.test(message) && smsEnabled === 'hybrid') {
         const phone = message.match(phoneRegex)[0];
         customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
