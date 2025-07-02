@@ -457,7 +457,7 @@ Wherewolf Enhanced Chatbot System
     }
 }
 
-// SMS webhook endpoint - SIMPLIFIED VERSION
+// SMS webhook endpoint - FIXED PHONE NORMALIZATION
 app.post('/api/sms/webhook', async (req, res) => {
     const { From, To, Body, MessageSid } = req.body;
     
@@ -467,11 +467,38 @@ app.post('/api/sms/webhook', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // SIMPLIFIED: Normalize phone numbers in JavaScript first
-        const normalizePhone = (phone) => {
-            if (!phone) return '';
-            return phone.replace(/\+1/, '').replace(/\D/g, ''); // Remove +1 and all non-digits
-        };
+        // In your chat endpoint, replace the phone handling with this:
+
+// FIXED: Consistent phone normalization function
+const normalizePhone = (phone) => {
+    if (!phone) return '';
+    // Remove all non-digits, then remove leading 1 if present
+    let normalized = phone.replace(/\D/g, '');
+    if (normalized.startsWith('1') && normalized.length === 11) {
+        normalized = normalized.substring(1); // Remove leading 1
+    }
+    return normalized;
+};
+
+// Handle contact info submission
+const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
+const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
+
+if (phoneRegex.test(message) && !hasContactInfo && !alreadyHandedOff && !isAgentRequest) {
+    const phoneMatch = message.match(phoneRegex)[0];
+    const normalizedPhone = normalizePhone(phoneMatch);
+    
+    // Store the original format for display, normalized for matching
+    customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone: phoneMatch };
+    await updateCustomerContact(sessionKey, null, phoneMatch);
+    
+    console.log(`📞 Phone collected: ${phoneMatch} -> normalized: ${normalizedPhone}`);
+    
+    const thankYouResponse = `Perfect! I've saved your phone number (${phoneMatch}). Now, how can I help you today?`;
+    conversations[sessionKey].push({ role: 'assistant', content: thankYouResponse });
+    await saveMessage(conversation.conversation_id, 'assistant', thankYouResponse);
+    return res.json({ success: true, response: thankYouResponse });
+}
         
         const normalizedFrom = normalizePhone(From);
         console.log(`📱 Normalized phone: ${From} -> ${normalizedFrom}`);
@@ -495,9 +522,14 @@ app.post('/api/sms/webhook', async (req, res) => {
             const normalizedCustomerPhone = normalizePhone(conv.customer_phone);
             const normalizedCustomerSms = normalizePhone(conv.customer_sms_number);
             
+            console.log(`🔍 Checking conversation ${conv.conversation_id}:`);
+            console.log(`   Customer phone: ${conv.customer_phone} -> ${normalizedCustomerPhone}`);
+            console.log(`   Customer SMS: ${conv.customer_sms_number} -> ${normalizedCustomerSms}`);
+            console.log(`   Incoming: ${From} -> ${normalizedFrom}`);
+            
             if (normalizedCustomerPhone === normalizedFrom || normalizedCustomerSms === normalizedFrom) {
                 existingConversation = conv;
-                console.log(`📱 Found matching conversation ${conv.conversation_id} for phone ${normalizedFrom}`);
+                console.log(`✅ MATCH FOUND! Merging into conversation ${conv.conversation_id}`);
                 break;
             }
         }
