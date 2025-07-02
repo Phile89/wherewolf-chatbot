@@ -857,55 +857,48 @@ async function loadDashboard() {
 
 // Enhanced conversation loading with better prioritization
 async function loadConversations(queryString = '') {
+    const container = document.getElementById('conversationsList');
+    
+    // Show loading state
+    container.innerHTML = `
+        <div class="loading">
+            <div class="loading-spinner"></div>
+            Loading conversations...
+        </div>
+    `;
+    
     try {
-        const conversationsList = document.getElementById('conversationsList');
-        conversationsList.innerHTML = `
-            <div class="loading">
-                <div class="loading-spinner"></div>
-                Loading conversations...
-            </div>
-        `;
-        
         const url = queryString ? `/api/dashboard/conversations?${queryString}` : '/api/dashboard/conversations';
+        console.log('🔍 Loading from:', url); // DEBUG
+        
         const response = await fetch(url);
+        console.log('📡 Response status:', response.status); // DEBUG
+        
+        if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+        }
+        
         const data = await response.json();
+        console.log('📊 Data received:', data); // DEBUG
         
         if (data.success) {
-            // Enhanced sorting: Priority order
-            conversations = data.conversations.sort((a, b) => {
-                // 1. New conversations with agent requests (highest priority)
-                const aUrgent = a.status === 'new' && a.agent_requested;
-                const bUrgent = b.status === 'new' && b.agent_requested;
-                if (aUrgent && !bUrgent) return -1;
-                if (!aUrgent && bUrgent) return 1;
-                
-                // 2. Active conversations (in_progress)
-                const aActive = a.status === 'in_progress';
-                const bActive = b.status === 'in_progress';
-                if (aActive && !bActive) return -1;
-                if (!aActive && bActive) return 1;
-                
-                // 3. New conversations (without agent request)
-                const aNew = a.status === 'new';
-                const bNew = b.status === 'new';
-                if (aNew && !bNew) return -1;
-                if (!aNew && bNew) return 1;
-                
-                // 4. Finally by last message time (newest first)
-                return new Date(b.last_message_at) - new Date(a.last_message_at);
-            });
-            
+            conversations = data.conversations || [];
             renderConversations(conversations);
-            
-            // Update conversation counter
-            updateConversationCounter(conversations.length);
-            
+            console.log(`✅ Loaded ${conversations.length} conversations`);
         } else {
-            showError('Failed to load conversations');
+            throw new Error(data.error || 'Failed to load conversations');
         }
     } catch (error) {
-        console.error('Error loading conversations:', error);
-        showError('Failed to connect to server');
+        console.error('❌ Error loading conversations:', error);
+        container.innerHTML = `
+            <div style="padding: 40px 20px; text-align: center; color: #dc2626;">
+                <h3>❌ Loading Error</h3>
+                <p>${error.message}</p>
+                <button onclick="loadDashboard()" style="background: #8B5CF6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 10px;">
+                    🔄 Try Again
+                </button>
+            </div>
+        `;
     }
 }
 
@@ -1092,6 +1085,34 @@ function applyQuickFilter(filterType) {
     }
     
     renderConversations(filteredConversations);
+}
+
+// MISSING FUNCTION - Add this right after applyQuickFilter
+function filterByStatus(status) {
+    console.log('🔍 Filtering by status:', status);
+    
+    // Remove active class from all status pills
+    document.querySelectorAll('.status-pill').forEach(pill => {
+        pill.classList.remove('active');
+    });
+    
+    // Map the status parameter to the correct CSS class
+    let statusClass = status;
+    if (status === 'in_progress') {
+        statusClass = 'in-progress';
+    } else if (status === 'on_hold') {
+        statusClass = 'on-hold';
+    }
+    
+    // Add active class to the clicked pill
+    const activePill = document.querySelector(`.status-pill.${statusClass}`);
+    if (activePill) {
+        activePill.classList.add('active');
+    }
+    
+    // Update the filter and reload conversations
+    currentFilters.status = status;
+    applyFilters();
 }
 
 // Add styles for urgent conversations and quick filters
