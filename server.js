@@ -457,7 +457,7 @@ Wherewolf Enhanced Chatbot System
     }
 }
 
-// SMS webhook endpoint
+// SMS webhook endpoint - FIXED VERSION
 app.post('/api/sms/webhook', async (req, res) => {
     const { From, To, Body, MessageSid } = req.body;
     
@@ -467,43 +467,49 @@ app.post('/api/sms/webhook', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // SMART MERGING: First check for ANY existing conversation with this phone number
-let convResult = await client.query(`
-    SELECT conversation_id, operator_id, session_key
-    FROM conversations 
-    WHERE (customer_phone = $1 OR customer_sms_number = $1)
-    ORDER BY last_message_at DESC 
-    LIMIT 1
-`, [From]);
+        // FIXED: Normalize phone numbers for comparison
+        const normalizedFrom = From.replace(/\+1/, '').replace(/\D/g, ''); // Remove +1 and all non-digits
+        
+        // SMART MERGING: Check for ANY existing conversation with this phone number (normalized)
+        let convResult = await client.query(`
+            SELECT conversation_id, operator_id, session_key
+            FROM conversations 
+            WHERE (
+                REGEXP_REPLACE(COALESCE(customer_phone, ''), '\\D', '', 'g') = $1 OR 
+                REGEXP_REPLACE(COALESCE(customer_sms_number, ''), '\\D', '', 'g') = $1
+            )
+            ORDER BY last_message_at DESC 
+            LIMIT 1
+        `, [normalizedFrom]);
 
-let conversationId;
-let operatorId;
+        let conversationId;
+        let operatorId;
 
-if (convResult.rows.length > 0) {
-    // Found existing conversation - MERGE into it!
-    conversationId = convResult.rows[0].conversation_id;
-    operatorId = convResult.rows[0].operator_id;
-    
-    // Enable SMS on this existing conversation
-    await client.query(`
-        UPDATE conversations 
-        SET customer_sms_number = $1, sms_enabled = true, last_message_at = NOW()
-        WHERE conversation_id = $2
-    `, [From, conversationId]);
-    
-    console.log(`📱 SMS merged into existing conversation ${conversationId}`);
-    
-} else {
-    // No existing conversation found - create new one
-    operatorId = 'sms_user';
-    const sessionKey = `sms_${From}_${Date.now()}`;
-    const newConv = await client.query(
-        'INSERT INTO conversations (operator_id, session_key, customer_phone, customer_sms_number, sms_enabled, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING conversation_id',
-        [operatorId, sessionKey, From, From, true, 'new']
-    );
-    conversationId = newConv.rows[0].conversation_id;
-    console.log(`📱 Created new SMS conversation ${conversationId}`);
-}
+        if (convResult.rows.length > 0) {
+            // Found existing conversation - MERGE into it!
+            conversationId = convResult.rows[0].conversation_id;
+            operatorId = convResult.rows[0].operator_id;
+            
+            // Enable SMS on this existing conversation
+            await client.query(`
+                UPDATE conversations 
+                SET customer_sms_number = $1, sms_enabled = true, last_message_at = NOW()
+                WHERE conversation_id = $2
+            `, [From, conversationId]);
+            
+            console.log(`📱 SMS merged into existing conversation ${conversationId} for operator ${operatorId}`);
+            
+        } else {
+            // No existing conversation found - create new one
+            operatorId = 'sms_user';
+            const sessionKey = `sms_${normalizedFrom}_${Date.now()}`;
+            const newConv = await client.query(
+                'INSERT INTO conversations (operator_id, session_key, customer_phone, customer_sms_number, sms_enabled, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING conversation_id',
+                [operatorId, sessionKey, From, From, true, 'new']
+            );
+            conversationId = newConv.rows[0].conversation_id;
+            console.log(`📱 Created new SMS conversation ${conversationId}`);
+        }
         
         // Save SMS message to the sms_messages table
         await client.query(

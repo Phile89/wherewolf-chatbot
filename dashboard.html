@@ -1129,16 +1129,108 @@ function showError(message) {
 
 
 // MISSING FUNCTION 3: loadDashboard
+// FIXED: Enhanced loadDashboard with URL parameter support
 async function loadDashboard() {
     console.log('📊 Loading dashboard...');
+    
     try {
+        // Parse URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const operatorParam = urlParams.get('operator');
+        
+        if (operatorParam) {
+            console.log('🔍 Operator filter from URL:', operatorParam);
+            
+            // Set the operator filter dropdown
+            const operatorFilter = document.getElementById('operatorFilter');
+            if (operatorFilter) {
+                // First load the operators to populate the dropdown
+                await loadOperators();
+                
+                // Then set the selected value
+                operatorFilter.value = operatorParam;
+                
+                // Update the current filters
+                currentFilters.operator = operatorParam;
+                
+                // Update the header subtitle
+                const headerSubtitle = document.getElementById('headerSubtitle');
+                if (headerSubtitle) {
+                    headerSubtitle.textContent = `Monitoring conversations for operator: ${operatorParam}`;
+                }
+                
+                console.log('✅ Operator filter applied:', operatorParam);
+            }
+        }
+        
+        // Apply filters (this will use the operator filter if set)
         await applyFilters();
         await loadStats();
+        await loadFilterStats();
+        
         console.log('✅ Dashboard loaded successfully');
     } catch (error) {
         console.error('❌ Error loading dashboard:', error);
         showError('Failed to load dashboard: ' + error.message);
     }
+}
+
+// ENHANCED: applyFilters function to handle operator filtering
+async function applyFilters() {
+    console.log('🔧 Applying filters...', currentFilters);
+    
+    const params = new URLSearchParams();
+    
+    // Add status filter
+    if (currentFilters.status && currentFilters.status !== 'all') {
+        params.append('status', currentFilters.status);
+    }
+    
+    // Add operator filter (from dropdown OR URL parameter)
+    const operatorFilter = document.getElementById('operatorFilter');
+    const operatorValue = operatorFilter ? operatorFilter.value : null;
+    const urlOperator = new URLSearchParams(window.location.search).get('operator');
+    
+    const finalOperator = operatorValue || urlOperator || currentFilters.operator;
+    
+    if (finalOperator) {
+        params.append('operator', finalOperator);
+        console.log('📍 Using operator filter:', finalOperator);
+    }
+    
+    // Add other filters if they exist
+    const hasEmailFilter = document.getElementById('hasEmailFilter');
+    if (hasEmailFilter && hasEmailFilter.value) {
+        params.append('hasEmail', hasEmailFilter.value);
+    }
+    
+    const hasPhoneFilter = document.getElementById('hasPhoneFilter');
+    if (hasPhoneFilter && hasPhoneFilter.value) {
+        params.append('hasPhone', hasPhoneFilter.value);
+    }
+    
+    const agentRequestedFilter = document.getElementById('agentRequestedFilter');
+    if (agentRequestedFilter && agentRequestedFilter.value) {
+        params.append('agentRequested', agentRequestedFilter.value);
+    }
+    
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput && searchInput.value) {
+        params.append('search', searchInput.value);
+    }
+    
+    const dateFromFilter = document.getElementById('dateFromFilter');
+    if (dateFromFilter && dateFromFilter.value) {
+        params.append('dateFrom', dateFromFilter.value);
+    }
+    
+    const dateToFilter = document.getElementById('dateToFilter');
+    if (dateToFilter && dateToFilter.value) {
+        params.append('dateTo', dateToFilter.value);
+    }
+    
+    console.log('📡 Final filter params:', params.toString());
+    await loadConversations(params.toString());
 }
 
 // MISSING FUNCTION 4: loadStats
@@ -1275,9 +1367,10 @@ async function loadFilterStats() {
 }
 
 // Load unique operators
+// ENHANCED: Load unique operators for filtering
 async function loadOperators() {
     try {
-        console.log('Loading operators...');
+        console.log('👥 Loading operators...');
         const response = await fetch('/api/dashboard/conversations');
         
         if (!response.ok) {
@@ -1285,24 +1378,40 @@ async function loadOperators() {
         }
         
         const data = await response.json();
-        console.log('Operators response:', data);
+        console.log('👥 Operators response:', data);
         
         if (data.success && data.conversations) {
-            const operators = [...new Set(data.conversations.map(c => c.operator_id))];
+            // Get unique operators from conversations
+            const operators = [...new Set(data.conversations.map(c => c.operator_id))].filter(Boolean);
             const operatorSelect = document.getElementById('operatorFilter');
             
-            const currentValue = operatorSelect.value;
+            if (operatorSelect) {
+                const currentValue = operatorSelect.value;
+                
+                // Clear and rebuild options
+                operatorSelect.innerHTML = '<option value="">All Operators</option>';
+                
+                operators.forEach(op => {
+                    const option = document.createElement('option');
+                    option.value = op;
+                    option.textContent = op;
+                    operatorSelect.appendChild(option);
+                });
+                
+                // Restore previous selection or set from URL
+                const urlOperator = new URLSearchParams(window.location.search).get('operator');
+                const targetOperator = currentValue || urlOperator || currentFilters.operator;
+                
+                if (targetOperator && operators.includes(targetOperator)) {
+                    operatorSelect.value = targetOperator;
+                    console.log('✅ Operator filter set to:', targetOperator);
+                }
+            }
             
-            operatorSelect.innerHTML = '<option value="">All Operators</option>';
-            operators.forEach(op => {
-                const selected = op === currentValue ? 'selected' : '';
-                operatorSelect.innerHTML += `<option value="${op}" ${selected}>${op}</option>`;
-            });
-            
-            operatorSelect.value = currentValue || '';
+            console.log('👥 Loaded operators:', operators);
         }
     } catch (error) {
-        console.error('Error loading operators:', error);
+        console.error('❌ Error loading operators:', error);
     }
 }
 
@@ -1329,11 +1438,44 @@ function clearFilters() {
 }
 
 // Initialize dashboard when page loads
+// FIXED: Initialize dashboard when page loads with URL parameter support
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Dashboard loading...');
+    console.log('📊 Dashboard initializing...');
+    
+    // Parse URL parameters immediately
+    const urlParams = new URLSearchParams(window.location.search);
+    const operatorParam = urlParams.get('operator');
+    
+    if (operatorParam) {
+        console.log('🎯 Operator-specific dashboard requested:', operatorParam);
+        
+        // Store in currentFilters immediately
+        currentFilters.operator = operatorParam;
+        
+        // Update page title
+        document.title = `Dashboard - ${operatorParam} | Wherewolf Chatbot`;
+        
+        // Update header
+        const headerSubtitle = document.getElementById('headerSubtitle');
+        if (headerSubtitle) {
+            headerSubtitle.textContent = `Managing conversations for operator: ${operatorParam}`;
+        }
+    }
+    
+    // Load dashboard with filters applied
     loadDashboard();
-    loadFilterStats();
-    setInterval(loadFilterStats, 30000); // Update every 30 seconds
+    
+    // Refresh stats every 30 seconds
+    setInterval(() => {
+        loadFilterStats();
+        
+        // Only refresh conversations if no specific conversation is selected
+        if (!selectedConversationId) {
+            applyFilters();
+        }
+    }, 30000);
+    
+    console.log('✅ Dashboard initialization complete');
 });
 // MISSING FUNCTION: selectConversation
 async function selectConversation(conversationId) {
@@ -1465,12 +1607,15 @@ function renderMessages(messages) {
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
-// MISSING FUNCTION: updateConversationStatus
+// MISSING FUNCTION: updateConversationStatus - FIXED VERSION
 async function updateConversationStatus() {
-    if (!selectedConversationId) return;
+    if (!selectedConversationId) {
+        console.log('❌ No conversation selected');
+        return;
+    }
     
     const newStatus = document.getElementById('statusSelect').value;
-    console.log('🔄 Updating status to:', newStatus);
+    console.log('🔄 Updating status to:', newStatus, 'for conversation:', selectedConversationId);
     
     try {
         const response = await fetch(`/api/dashboard/conversations/${selectedConversationId}/status`, {
@@ -1481,15 +1626,40 @@ async function updateConversationStatus() {
             body: JSON.stringify({ status: newStatus })
         });
         
+        console.log('📡 Status update response:', response.status);
+        
         if (response.ok) {
-            console.log('✅ Status updated successfully');
-            // Refresh the conversation list to show updated status
-            await applyFilters();
+            const data = await response.json();
+            console.log('✅ Status updated successfully:', data);
+            
+            // Update the conversation in the list immediately
+            const conversationElement = document.querySelector(`[data-conversation-id="${selectedConversationId}"]`);
+            if (conversationElement) {
+                const statusBadge = conversationElement.querySelector('.conversation-status');
+                if (statusBadge) {
+                    // Remove old status classes
+                    statusBadge.classList.remove('new', 'in-progress', 'resolved', 'on-hold');
+                    // Add new status class
+                    statusBadge.classList.add(newStatus.replace('_', '-'));
+                    // Update text
+                    statusBadge.textContent = newStatus.replace('_', ' ').toUpperCase();
+                }
+            }
+            
+            // Refresh the conversation list to show updated counts
+            setTimeout(() => {
+                applyFilters();
+                loadFilterStats();
+            }, 500);
+            
         } else {
-            console.error('❌ Failed to update status');
+            const errorData = await response.json();
+            console.error('❌ Failed to update status:', errorData);
+            alert(`Failed to update status: ${errorData.error || 'Unknown error'}`);
         }
     } catch (error) {
         console.error('❌ Error updating status:', error);
+        alert(`Error updating status: ${error.message}`);
     }
 }
 
