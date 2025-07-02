@@ -1794,7 +1794,7 @@ async function sendSMS(toNumber, message, conversationId) {
                 conversations[sessionKey].push({ role: 'assistant', content: botResponse });
                 await saveMessage(conversation.conversation_id, 'assistant', botResponse);
                 return res.json({ success: true, response: botResponse });
-            } else if (phoneRegex.test(message)) {
+            } else if (phoneRegex.test(message) && smsEnabled !== 'hybrid') {
                 const phone = message.match(phoneRegex)[0];
                 customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
                 await updateCustomerContact(sessionKey, null, phone);
