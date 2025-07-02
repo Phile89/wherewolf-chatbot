@@ -4,10 +4,13 @@ const axios = require('axios');
 const path = require('path');
 const nodemailer = require('nodemailer');
 const { Pool } = require('pg');
-require('dotenv').config();
 const twilio = require('twilio');
+require('dotenv').config();
 
-// Configuration constants
+// ===========================================
+// CONFIGURATION & CONSTANTS
+// ===========================================
+
 const CONFIG = {
     MAX_CONVERSATION_LENGTH: 20,
     POLL_INTERVAL_HOURS: 1,
@@ -18,10 +21,16 @@ const CONFIG = {
     DEFAULT_BRAND_COLOR: '#8B5CF6'
 };
 
-console.log('CLAUDE_API_KEY:', process.env.CLAUDE_API_KEY ? 'Loaded' : 'Missing');
-console.log('GMAIL_USER:', process.env.GMAIL_USER ? 'Loaded' : 'Missing');
-console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'Loaded' : 'Missing');
+console.log('🚀 Starting Enhanced Chatbot Server...');
+console.log('CLAUDE_API_KEY:', process.env.CLAUDE_API_KEY ? '✅ Loaded' : '❌ Missing');
+console.log('GMAIL_USER:', process.env.GMAIL_USER ? '✅ Loaded' : '❌ Missing');
+console.log('DATABASE_URL:', process.env.DATABASE_URL ? '✅ Loaded' : '❌ Missing');
+console.log('TWILIO_ACCOUNT_SID:', process.env.TWILIO_ACCOUNT_SID ? '✅ Loaded' : '❌ Missing');
 console.log('PORT:', process.env.PORT || 3000);
+
+// ===========================================
+// EXPRESS APP SETUP
+// ===========================================
 
 const app = express();
 
@@ -41,6 +50,10 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Serve static files from the root directory
 app.use(express.static(__dirname));
 
+// ===========================================
+// DATABASE SETUP
+// ===========================================
+
 // Enhanced database connection with better error handling
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -54,6 +67,100 @@ const pool = new Pool({
 pool.on('error', (err) => {
     console.error('❌ Unexpected database error:', err);
 });
+
+// ===========================================
+// EXTERNAL SERVICES SETUP
+// ===========================================
+
+// Email transporter setup with validation
+let emailTransporter = null;
+if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
+    emailTransporter = nodemailer.createTransporter({
+        service: 'gmail',
+        auth: {
+            user: process.env.GMAIL_USER,
+            pass: process.env.GMAIL_PASS
+        }
+    });
+    
+    // Verify email configuration
+    emailTransporter.verify((error, success) => {
+        if (error) {
+            console.log('❌ Email service verification failed:', error);
+            emailTransporter = null;
+        } else {
+            console.log('✅ Email service verified and ready');
+        }
+    });
+} else {
+    console.log('⚠️ Email service not configured (missing credentials)');
+}
+
+// Initialize Twilio client with validation
+const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
+    ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+    : null;
+
+if (twilioClient) {
+    console.log('✅ Twilio service configured');
+} else {
+    console.log('⚠️ Twilio service not configured (missing credentials)');
+}
+
+// ===========================================
+// IN-MEMORY STORAGE
+// ===========================================
+
+// In-memory conversation history for immediate responses (with cleanup)
+const conversations = {};
+const customerContacts = {};
+
+// Cleanup old conversations from memory periodically
+setInterval(() => {
+    const cutoffTime = Date.now() - (24 * 60 * 60 * 1000); // 24 hours
+    Object.keys(conversations).forEach(key => {
+        if (!conversations[key].lastActivity || conversations[key].lastActivity < cutoffTime) {
+            delete conversations[key];
+            delete customerContacts[key];
+        }
+    });
+}, 60 * 60 * 1000); // Run every hour
+
+// ===========================================
+// UTILITY FUNCTIONS
+// ===========================================
+
+// Add this function after initializeDatabase() and before the conversation management functions
+function normalizePhoneNumber(phone) {
+    if (!phone) return null;
+    // Remove all non-digits and add + prefix
+    const digits = phone.replace(/\D/g, '');
+    return digits.startsWith('1') ? `+${digits}` : `+1${digits}`;
+}
+
+// Input validation middleware
+function validateRequired(fields) {
+    return (req, res, next) => {
+        const missing = fields.filter(field => !req.body[field]);
+        if (missing.length > 0) {
+            return res.status(400).json({
+                success: false,
+                error: `Missing required fields: ${missing.join(', ')}`
+            });
+        }
+        next();
+    };
+}
+
+function extractPhoneFromMessage(message) {
+    const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
+    const match = message.match(phoneRegex);
+    return match ? match[0] : null;
+}
+
+// ===========================================
+// DATABASE INITIALIZATION WITH MIGRATIONS
+// ===========================================
 
 // Initialize database tables with all required tables and columns
 async function initializeDatabase() {
@@ -180,77 +287,9 @@ async function initializeDatabase() {
     }
 }
 
-// Add this function after initializeDatabase() and before the conversation management functions
-function normalizePhoneNumber(phone) {
-    if (!phone) return null;
-    // Remove all non-digits and add + prefix
-    const digits = phone.replace(/\D/g, '');
-    return digits.startsWith('1') ? `+${digits}` : `+1${digits}`;
-}
-
-// In-memory conversation history for immediate responses (with cleanup)
-const conversations = {};
-const customerContacts = {};
-
-// Cleanup old conversations from memory periodically
-setInterval(() => {
-    const cutoffTime = Date.now() - (24 * 60 * 60 * 1000); // 24 hours
-    Object.keys(conversations).forEach(key => {
-        if (!conversations[key].lastActivity || conversations[key].lastActivity < cutoffTime) {
-            delete conversations[key];
-            delete customerContacts[key];
-        }
-    });
-}, 60 * 60 * 1000); // Run every hour
-
-// Email transporter setup with validation
-let emailTransporter = null;
-if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
-    emailTransporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.GMAIL_USER,
-            pass: process.env.GMAIL_PASS
-        }
-    });
-    
-    // Verify email configuration
-    emailTransporter.verify((error, success) => {
-        if (error) {
-            console.log('❌ Email service verification failed:', error);
-            emailTransporter = null;
-        } else {
-            console.log('✅ Email service verified and ready');
-        }
-    });
-} else {
-    console.log('⚠️ Email service not configured (missing credentials)');
-}
-
-// Initialize Twilio client with validation
-const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
-    ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-    : null;
-
-if (twilioClient) {
-    console.log('✅ Twilio service configured');
-} else {
-    console.log('⚠️ Twilio service not configured (missing credentials)');
-}
-
-// Input validation middleware
-function validateRequired(fields) {
-    return (req, res, next) => {
-        const missing = fields.filter(field => !req.body[field]);
-        if (missing.length > 0) {
-            return res.status(400).json({
-                success: false,
-                error: `Missing required fields: ${missing.join(', ')}`
-            });
-        }
-        next();
-    };
-}
+// ===========================================
+// DATABASE FUNCTIONS
+// ===========================================
 
 // Enhanced database functions with better error handling
 async function getOrCreateConversation(operatorId, sessionKey) {
@@ -367,6 +406,57 @@ async function markAgentRequested(sessionKey) {
     }
 }
 
+// Database function to save operator config
+async function saveOperatorConfig(operatorId, config) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        await client.query(
+            `INSERT INTO operator_configs (operator_id, config, updated_at) 
+             VALUES ($1, $2, NOW()) 
+             ON CONFLICT (operator_id) 
+             DO UPDATE SET config = $2, updated_at = NOW()`,
+            [operatorId, JSON.stringify(config)]
+        );
+
+        await client.query('COMMIT');
+        console.log(`✅ Config saved to database for operator ${operatorId}`);
+        return true;
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Database save error:', error);
+        return false;
+    } finally {
+        client.release();
+    }
+}
+
+// Database function to get operator config
+async function getOperatorConfig(operatorId) {
+    try {
+        const result = await pool.query(
+            'SELECT config FROM operator_configs WHERE operator_id = $1',
+            [operatorId]
+        );
+        
+        if (result.rows.length > 0) {
+            console.log(`✅ Config loaded from database for operator ${operatorId}`);
+            return result.rows[0].config;
+        } else {
+            console.log(`❌ Config not found in database for operator ${operatorId}`);
+            return null;
+        }
+    } catch (error) {
+        console.error('❌ Database read error:', error);
+        return null;
+    }
+}
+
+// ===========================================
+// EMAIL & SMS FUNCTIONS
+// ===========================================
+
 // Enhanced function to send handoff email with better error handling
 async function sendHandoffEmail(config, conversationHistory, customerContact, operatorId) {
     if (!emailTransporter) {
@@ -465,114 +555,6 @@ Wherewolf Enhanced Chatbot System
     }
 }
 
-// SMS webhook endpoint - FIXED PHONE NORMALIZATION
-app.post('/api/sms/webhook', async (req, res) => {
-    const { From, To, Body, MessageSid } = req.body;
-    
-    console.log(`📱 Incoming SMS from ${From}: ${Body}`);
-    
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-
-        // Use your existing normalizePhone function
-        const normalizePhone = (phone) => {
-            if (!phone) return '';
-            let normalized = phone.replace(/\D/g, '');
-            if (normalized.startsWith('1') && normalized.length === 11) {
-                normalized = normalized.substring(1);
-            }
-            return normalized;
-        };
-        
-        const normalizedFrom = normalizePhone(From);
-        console.log(`📱 Normalized phone: ${From} -> ${normalizedFrom}`);
-        
-        // FIXED: Get all conversations with phone numbers and check properly
-        let convResult = await client.query(`
-            SELECT conversation_id, operator_id, session_key, customer_phone, customer_sms_number
-            FROM conversations 
-            WHERE (customer_phone IS NOT NULL AND customer_phone != '') 
-               OR (customer_sms_number IS NOT NULL AND customer_sms_number != '')
-            ORDER BY last_message_at DESC
-        `);
-        
-        let existingConversation = null;
-        
-        // Check each conversation for phone number match using JavaScript
-        for (const conv of convResult.rows) {
-            const normalizedCustomerPhone = normalizePhone(conv.customer_phone);
-            const normalizedCustomerSms = normalizePhone(conv.customer_sms_number);
-            
-            console.log(`🔍 Checking conversation ${conv.conversation_id}:`);
-            console.log(`   Customer phone: ${conv.customer_phone} -> ${normalizedCustomerPhone}`);
-            console.log(`   Customer SMS: ${conv.customer_sms_number} -> ${normalizedCustomerSms}`);
-            console.log(`   Incoming: ${From} -> ${normalizedFrom}`);
-            
-            if (normalizedCustomerPhone === normalizedFrom || normalizedCustomerSms === normalizedFrom) {
-                existingConversation = conv;
-                console.log(`✅ MATCH FOUND! Merging into conversation ${conv.conversation_id}`);
-                break;
-            }
-        }
-
-        let conversationId;
-        let operatorId;
-
-        if (existingConversation) {
-            // Found existing conversation - MERGE into it!
-            conversationId = existingConversation.conversation_id;
-            operatorId = existingConversation.operator_id;
-            
-            // Enable SMS on this existing conversation
-            await client.query(`
-                UPDATE conversations 
-                SET customer_sms_number = $1, sms_enabled = true, last_message_at = NOW()
-                WHERE conversation_id = $2
-            `, [From, conversationId]);
-            
-            console.log(`📱 SMS merged into existing conversation ${conversationId} for operator ${operatorId}`);
-            
-        } else {
-            // No existing conversation found - create new one
-            operatorId = 'sms_user';
-            const sessionKey = `sms_${normalizedFrom}_${Date.now()}`;
-            const newConv = await client.query(
-                'INSERT INTO conversations (operator_id, session_key, customer_phone, customer_sms_number, sms_enabled, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING conversation_id',
-                [operatorId, sessionKey, From, From, true, 'new']
-            );
-            conversationId = newConv.rows[0].conversation_id;
-            console.log(`📱 Created new SMS conversation ${conversationId}`);
-        }
-        
-        // Rest of your SMS saving code stays the same...
-        await client.query(
-            'INSERT INTO sms_messages (conversation_id, direction, from_number, to_number, message_body, message_sid, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-            [conversationId, 'inbound', From, To, Body, MessageSid, 'received']
-        );
-        
-        await client.query(
-            'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
-            [conversationId, 'user', `📱 SMS from ${From}: ${Body}`]
-        );
-
-        await client.query(
-            'UPDATE conversations SET last_message_at = NOW(), message_count = message_count + 1 WHERE conversation_id = $1',
-            [conversationId]
-        );
-
-        await client.query('COMMIT');
-        res.status(200).send('<Response></Response>');
-        
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('Error processing incoming SMS:', error);
-        res.status(500).send('Error processing SMS');
-    } finally {
-        client.release();
-    }
-});
-
 // 🆕 IMPROVED: Enhanced sendSMS function with better error handling
 async function sendSMS(toNumber, message, conversationId) {
     if (!twilioClient) {
@@ -621,639 +603,9 @@ async function sendSMS(toNumber, message, conversationId) {
     }
 }
 
-// Dashboard endpoint to send SMS
-app.post('/api/dashboard/send-sms', validateRequired(['conversationId', 'message']), async (req, res) => {
-    const { conversationId, message } = req.body;
-    
-    try {
-        const convResult = await pool.query(
-            'SELECT customer_sms_number FROM conversations WHERE conversation_id = $1',
-            [conversationId]
-        );
-        
-        if (convResult.rows.length === 0 || !convResult.rows[0].customer_sms_number) {
-            return res.status(404).json({ 
-                success: false,
-                error: 'Conversation or SMS number not found' 
-            });
-        }
-        
-        const customerSmsNumber = convResult.rows[0].customer_sms_number;
-        const smsResult = await sendSMS(customerSmsNumber, message, conversationId);
-        
-        if (smsResult) {
-            // Save as a regular message for dashboard display
-            await saveMessage(conversationId, 'operator', `📤 SMS to ${customerSmsNumber}: ${message}`);
-            res.json({ 
-                success: true, 
-                messageSid: smsResult.sid 
-            });
-        } else {
-            res.status(500).json({ 
-                success: false,
-                error: 'Failed to send SMS' 
-            });
-        }
-        
-    } catch (error) {
-        console.error('Error in dashboard send SMS endpoint:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Internal server error' 
-        });
-    }
-});
-
-// Root route redirect
-app.get('/', (req, res) => {
-    res.redirect('/setup');
-});
-
-// Serve setup page
-app.get('/setup', (req, res) => {
-    res.sendFile(path.join(__dirname, 'setup.html'));
-});
-
-// Serve chat page
-app.get('/chat.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'chat.html'));
-});
-
-// Serve dashboard page
-app.get('/dashboard', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dashboard.html'));
-});
-
-// Database function to save operator config
-async function saveOperatorConfig(operatorId, config) {
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-
-        await client.query(
-            `INSERT INTO operator_configs (operator_id, config, updated_at) 
-             VALUES ($1, $2, NOW()) 
-             ON CONFLICT (operator_id) 
-             DO UPDATE SET config = $2, updated_at = NOW()`,
-            [operatorId, JSON.stringify(config)]
-        );
-
-        await client.query('COMMIT');
-        console.log(`✅ Config saved to database for operator ${operatorId}`);
-        return true;
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('❌ Database save error:', error);
-        return false;
-    } finally {
-        client.release();
-    }
-}
-
-// Database function to get operator config
-async function getOperatorConfig(operatorId) {
-    try {
-        const result = await pool.query(
-            'SELECT config FROM operator_configs WHERE operator_id = $1',
-            [operatorId]
-        );
-        
-        if (result.rows.length > 0) {
-            console.log(`✅ Config loaded from database for operator ${operatorId}`);
-            return result.rows[0].config;
-        } else {
-            console.log(`❌ Config not found in database for operator ${operatorId}`);
-            return null;
-        }
-    } catch (error) {
-        console.error('❌ Database read error:', error);
-        return null;
-    }
-}
-
-// Dashboard API - Get all conversations (FIXED VERSION)
-app.get('/api/dashboard/conversations', async (req, res) => {
-    try {
-        const { 
-            operator: operatorFilter,
-            status,
-            hasEmail,
-            hasPhone,
-            agentRequested,
-            dateFrom,
-            dateTo,
-            search
-        } = req.query;
-        
-        let query = `
-            SELECT 
-                c.conversation_id,
-                c.operator_id,
-                c.customer_email,
-                c.customer_phone,
-                c.customer_sms_number,
-                c.sms_enabled,
-                c.started_at,
-                c.last_message_at,
-                c.last_operator_message_at,
-                c.message_count,
-                c.agent_requested,
-                c.status,
-                oc.config->>'businessName' as business_name,
-                (SELECT content FROM messages 
-                 WHERE conversation_id = c.conversation_id 
-                 ORDER BY timestamp DESC LIMIT 1) as last_message
-            FROM conversations c
-            LEFT JOIN operator_configs oc ON c.operator_id = oc.operator_id
-            WHERE 1=1
-        `;
-        
-        const params = [];
-        let paramCount = 0;
-        
-        // Add filters with proper parameterization
-        if (operatorFilter) {
-            paramCount++;
-            query += ` AND c.operator_id = $${paramCount}`;
-            params.push(operatorFilter);
-        }
-        
-        if (status && status !== 'all') {
-            paramCount++;
-            query += ` AND c.status = $${paramCount}`;
-            params.push(status);
-        }
-        
-        if (hasEmail === 'true') {
-            query += ` AND c.customer_email IS NOT NULL`;
-        } else if (hasEmail === 'false') {
-            query += ` AND c.customer_email IS NULL`;
-        }
-        
-        if (hasPhone === 'true') {
-            query += ` AND c.customer_phone IS NOT NULL`;
-        } else if (hasPhone === 'false') {
-            query += ` AND c.customer_phone IS NULL`;
-        }
-        
-        if (agentRequested === 'true') {
-            query += ` AND c.agent_requested = true`;
-        } else if (agentRequested === 'false') {
-            query += ` AND c.agent_requested = false`;
-        }
-        
-        if (dateFrom) {
-            paramCount++;
-            query += ` AND c.started_at >= $${paramCount}`;
-            params.push(dateFrom);
-        }
-        
-        if (dateTo) {
-            paramCount++;
-            query += ` AND c.started_at <= $${paramCount}`;
-            params.push(dateTo);
-        }
-        
-        if (search) {
-            paramCount++;
-            query += ` AND (
-                c.customer_email ILIKE $${paramCount} OR 
-                c.customer_phone ILIKE $${paramCount} OR
-                oc.config->>'businessName' ILIKE $${paramCount} OR
-                EXISTS (
-                    SELECT 1 FROM messages m 
-                    WHERE m.conversation_id = c.conversation_id 
-                    AND m.content ILIKE $${paramCount}
-                )
-            )`;
-            params.push(`%${search}%`);
-        }
-        
-        // Order by priority: new with agent requests first, then by last message
-        query += ` ORDER BY 
-            CASE WHEN c.status = 'new' AND c.agent_requested THEN 0 ELSE 1 END,
-            c.last_message_at DESC 
-            LIMIT 100`;
-        
-        const result = await pool.query(query, params);
-
-        res.json({
-            success: true,
-            conversations: result.rows
-        });
-    } catch (error) {
-        console.error('Error fetching conversations:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Failed to fetch conversations' 
-        });
-    }
-});
-
-// COMPLETE REPLACEMENT for the poll-messages endpoint in server.js
-// Enhanced and more efficient poll-messages endpoint with better error handling
-
-app.post('/api/chat/poll-messages', validateRequired(['operatorId']), async (req, res) => {
-    const { operatorId, sessionId = 'default', lastMessageCount = 0 } = req.body;
-
-    const sessionKey = `${operatorId}_${sessionId}`;
-
-    try {
-        console.log(`📡 Polling request: ${sessionKey}, lastCount: ${lastMessageCount}`);
-
-        // Get conversation from database
-        const convResult = await pool.query(
-            'SELECT conversation_id, last_message_at, last_operator_message_at FROM conversations WHERE session_key = $1',
-            [sessionKey]
-        );
-
-        if (convResult.rows.length === 0) {
-            return res.json({ 
-                success: true,
-                newMessages: [], 
-                totalMessages: 0,
-                hasOperatorMessages: false,
-                lastPolled: new Date().toISOString()
-            });
-        }
-
-        const conversation = convResult.rows[0];
-        const conversationId = conversation.conversation_id;
-
-        // Get all messages for this conversation
-        const messagesResult = await pool.query(`
-            SELECT 
-                role, 
-                content, 
-                timestamp,
-                message_id
-            FROM messages 
-            WHERE conversation_id = $1 
-            ORDER BY timestamp ASC, message_id ASC
-        `, [conversationId]);
-
-        const allMessages = messagesResult.rows;
-        const totalMessages = allMessages.length;
-
-        // Determine which messages are new
-        const newMessages = allMessages.slice(lastMessageCount);
-
-        // Filter for operator and system messages only for the client
-        const relevantNewMessages = newMessages.filter(msg => 
-            msg.role === 'operator' || msg.role === 'system'
-        );
-
-        // Check if there are any operator messages at all
-        const hasOperatorMessages = allMessages.some(msg => msg.role === 'operator');
-
-        // Enhanced response with more metadata
-        const response = {
-            success: true,
-            newMessages: relevantNewMessages.map(msg => ({
-                role: msg.role,
-                content: msg.content,
-                timestamp: msg.timestamp
-            })),
-            totalMessages: totalMessages,
-            hasOperatorMessages: hasOperatorMessages,
-            lastPolled: new Date().toISOString(),
-            conversationId: conversationId,
-            lastOperatorMessageAt: conversation.last_operator_message_at
-        };
-
-        // Set appropriate cache headers for real-time polling
-        res.set({
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'X-Accel-Buffering': 'no' // Disable nginx buffering for real-time responses
-        });
-
-        console.log(`📨 Poll response: ${relevantNewMessages.length} new messages, ${totalMessages} total`);
-        res.json(response);
-
-    } catch (error) {
-        console.error('❌ Polling error:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Failed to poll messages',
-            timestamp: new Date().toISOString(),
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-});
-
-// Enhanced conversation endpoint with better sorting for dashboard
-app.get('/api/dashboard/conversations', async (req, res) => {
-    try {
-        const { 
-            operator: operatorFilter,
-            status,
-            hasEmail,
-            hasPhone,
-            agentRequested,
-            dateFrom,
-            dateTo,
-            search
-        } = req.query;
-        
-        let query = `
-            SELECT 
-                c.conversation_id,
-                c.operator_id,
-                c.customer_email,
-                c.customer_phone,
-                c.customer_sms_number,
-                c.sms_enabled,
-                c.started_at,
-                c.last_message_at,
-                c.last_operator_message_at,
-                c.message_count,
-                c.agent_requested,
-                c.status,
-                oc.config->>'businessName' as business_name,
-                (SELECT content FROM messages 
-                 WHERE conversation_id = c.conversation_id 
-                 ORDER BY timestamp DESC LIMIT 1) as last_message,
-                -- Calculate urgency score for better sorting
-                CASE 
-                    WHEN c.status = 'new' AND c.agent_requested THEN 1000
-                    WHEN c.status = 'in_progress' THEN 500
-                    WHEN c.status = 'new' THEN 100
-                    ELSE 0
-                END as urgency_score
-            FROM conversations c
-            LEFT JOIN operator_configs oc ON c.operator_id = oc.operator_id
-            WHERE 1=1
-        `;
-        
-        const params = [];
-        let paramCount = 0;
-        
-        // Add filters with proper parameterization
-        if (operatorFilter) {
-            paramCount++;
-            query += ` AND c.operator_id = $${paramCount}`;
-            params.push(operatorFilter);
-        }
-        
-        if (status && status !== 'all') {
-            paramCount++;
-            query += ` AND c.status = $${paramCount}`;
-            params.push(status);
-        }
-        
-        if (hasEmail === 'true') {
-            query += ` AND c.customer_email IS NOT NULL AND c.customer_email != ''`;
-        } else if (hasEmail === 'false') {
-            query += ` AND (c.customer_email IS NULL OR c.customer_email = '')`;
-        }
-        
-        if (hasPhone === 'true') {
-            query += ` AND c.customer_phone IS NOT NULL AND c.customer_phone != ''`;
-        } else if (hasPhone === 'false') {
-            query += ` AND (c.customer_phone IS NULL OR c.customer_phone = '')`;
-        }
-        
-        if (agentRequested === 'true') {
-            query += ` AND c.agent_requested = true`;
-        } else if (agentRequested === 'false') {
-            query += ` AND c.agent_requested = false`;
-        }
-        
-        if (dateFrom) {
-            paramCount++;
-            query += ` AND c.started_at >= $${paramCount}`;
-            params.push(dateFrom);
-        }
-        
-        if (dateTo) {
-            paramCount++;
-            query += ` AND c.started_at <= $${paramCount}`;
-            params.push(dateTo);
-        }
-        
-        if (search) {
-            paramCount++;
-            query += ` AND (
-                c.customer_email ILIKE $${paramCount} OR 
-                c.customer_phone ILIKE $${paramCount} OR
-                oc.config->>'businessName' ILIKE $${paramCount} OR
-                EXISTS (
-                    SELECT 1 FROM messages m 
-                    WHERE m.conversation_id = c.conversation_id 
-                    AND m.content ILIKE $${paramCount}
-                )
-            )`;
-            params.push(`%${search}%`);
-        }
-        
-        // Enhanced ordering: urgency first, then recency
-        query += ` ORDER BY 
-            urgency_score DESC,
-            c.last_message_at DESC 
-            LIMIT 100`;
-        
-        const result = await pool.query(query, params);
-
-        // Add computed fields for better frontend handling
-        const enhancedConversations = result.rows.map(conv => ({
-            ...conv,
-            is_urgent: conv.urgency_score >= 1000,
-            is_active: conv.status === 'in_progress' || conv.last_operator_message_at,
-            needs_response: conv.status === 'new' || (conv.agent_requested && !conv.last_operator_message_at),
-            has_contact: !!(conv.customer_email || conv.customer_phone)
-        }));
-
-        res.json({
-            success: true,
-            conversations: enhancedConversations,
-            totalCount: enhancedConversations.length,
-            filters: {
-                operator: operatorFilter,
-                status,
-                hasEmail,
-                hasPhone,
-                agentRequested,
-                dateFrom,
-                dateTo,
-                search
-            }
-        });
-    } catch (error) {
-        console.error('❌ Error fetching conversations:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Failed to fetch conversations',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-});
-
-// Dashboard API - Get stats (FIXED VERSION)
-app.get('/api/dashboard/stats', async (req, res) => {
-    try {
-        const operatorFilter = req.query.operator;
-        
-        let statsQuery;
-        let statsParams = [];
-        
-        if (operatorFilter) {
-            statsQuery = `
-                SELECT 
-                    COUNT(*) as total_conversations,
-                    COUNT(*) FILTER (WHERE agent_requested = true) as agent_requests,
-                    COUNT(*) FILTER (WHERE customer_email IS NOT NULL) as with_email,
-                    COUNT(DISTINCT operator_id) as active_operators
-                FROM conversations 
-                WHERE started_at >= NOW() - INTERVAL '7 days' AND operator_id = $1
-            `;
-            statsParams = [operatorFilter];
-        } else {
-            statsQuery = `
-                SELECT 
-                    COUNT(*) as total_conversations,
-                    COUNT(*) FILTER (WHERE agent_requested = true) as agent_requests,
-                    COUNT(*) FILTER (WHERE customer_email IS NOT NULL) as with_email,
-                    COUNT(DISTINCT operator_id) as active_operators
-                FROM conversations 
-                WHERE started_at >= NOW() - INTERVAL '7 days'
-            `;
-        }
-
-        const stats = await pool.query(statsQuery, statsParams);
-
-        // Recent messages query
-        let recentMessagesQuery;
-        let recentParams = [];
-        
-        if (operatorFilter) {
-            recentMessagesQuery = `
-                SELECT COUNT(*) as total_messages
-                FROM messages m
-                JOIN conversations c ON m.conversation_id = c.conversation_id
-                WHERE m.timestamp >= NOW() - INTERVAL '24 hours' AND c.operator_id = $1
-            `;
-            recentParams = [operatorFilter];
-        } else {
-            recentMessagesQuery = `
-                SELECT COUNT(*) as total_messages
-                FROM messages m
-                JOIN conversations c ON m.conversation_id = c.conversation_id
-                WHERE m.timestamp >= NOW() - INTERVAL '24 hours'
-            `;
-        }
-        
-        const recentMessages = await pool.query(recentMessagesQuery, recentParams);
-
-        res.json({
-            success: true,
-            stats: {
-                ...stats.rows[0],
-                recent_messages: recentMessages.rows[0].total_messages
-            }
-        });
-    } catch (error) {
-        console.error('Error fetching stats:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Failed to fetch stats' 
-        });
-    }
-});
-
-// Endpoint to save operator config (with database)
-app.post('/api/save-config', async (req, res) => {
-    console.log('Received enhanced config save request:', req.body);
-    
-    const config = req.body;
-    
-    // Validate required configuration fields
-    if (!config.businessName) {
-        return res.status(400).json({ 
-            success: false, 
-            error: 'Business name is required.' 
-        });
-    }
-
-    const operatorId = Math.random().toString(36).substring(2, 9); 
-
-    try {
-        const saved = await saveOperatorConfig(operatorId, config);
-        
-        if (!saved) {
-            return res.status(500).json({ 
-                success: false, 
-                error: 'Failed to save configuration to database.' 
-            });
-        }
-
-        console.log(`Enhanced config saved successfully for operator ${operatorId}`);
-
-        const isProduction = process.env.NODE_ENV === 'production';
-        const host = isProduction 
-            ? (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RENDER_EXTERNAL_HOSTNAME || req.get('host'))
-            : `localhost:${process.env.PORT || 3000}`;
-        const protocol = isProduction ? 'https' : 'http';
-        const baseUrl = `${protocol}://${host}`;
-
-        const embedCode = `<script>
-  window.wherewolfChatbot = {
-    operatorId: '${operatorId}',
-    buttonColor: '${config.brandColor || CONFIG.DEFAULT_BRAND_COLOR}'
-  };
-</script>
-<script src="${baseUrl}/widget.js"></script>`;
-
-        res.json({
-            success: true,
-            operatorId,
-            embedCode,
-            baseUrl
-        });
-    } catch (error) {
-        console.error('Error saving enhanced config:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to save configuration.' 
-        });
-    }
-});
-
-// Endpoint to get operator config (from database)
-app.get('/api/config/:operatorId', async (req, res) => {
-    const { operatorId } = req.params;
-    
-    // Validate operatorId format
-    if (!/^[a-zA-Z0-9_-]+$/.test(operatorId)) {
-        return res.status(400).json({ 
-            success: false,
-            error: 'Invalid operator ID format' 
-        });
-    }
-    
-    console.log(`Looking for config in database for operator: ${operatorId}`);
-
-    try {
-        const config = await getOperatorConfig(operatorId);
-        
-        if (config) {
-            res.json(config);
-        } else {
-            console.log(`Config not found for operator: ${operatorId}`);
-            res.status(404).json({ 
-                success: false,
-                error: 'Config not found' 
-            });
-        }
-    } catch (error) {
-        console.error(`Error reading config for ${operatorId}:`, error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Failed to read configuration.' 
-        });
-    }
-});
+// ===========================================
+// SYSTEM PROMPT BUILDER (COMPLETE VERSION)
+// ===========================================
 
 // Enhanced system prompt builder with knowledge boundaries
 function buildEnhancedSystemPrompt(config) {
@@ -1456,209 +808,285 @@ If someone needs complex help or wants to make special requests, suggest they ca
     return SYSTEM_PROMPT;
 }
 
-// Enhanced and more efficient poll-messages endpoint
-app.post('/api/chat/poll-messages', validateRequired(['operatorId']), async (req, res) => {
-    const { operatorId, sessionId = 'default', lastMessageCount = 0 } = req.body;
+// ===========================================
+// ROUTES - STATIC PAGES
+// ===========================================
 
-    const sessionKey = `${operatorId}_${sessionId}`;
+// Root route redirect
+app.get('/', (req, res) => {
+    res.redirect('/setup');
+});
+
+// Serve setup page
+app.get('/setup', (req, res) => {
+    res.sendFile(path.join(__dirname, 'setup.html'));
+});
+
+// Serve chat page
+app.get('/chat.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'chat.html'));
+});
+
+// Serve dashboard page
+app.get('/dashboard', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dashboard.html'));
+});
+
+// ===========================================
+// ROUTES - CONFIG MANAGEMENT
+// ===========================================
+
+// Endpoint to save operator config (with database)
+app.post('/api/save-config', async (req, res) => {
+    console.log('Received enhanced config save request:', req.body);
+    
+    const config = req.body;
+    
+    // Validate required configuration fields
+    if (!config.businessName) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'Business name is required.' 
+        });
+    }
+
+    const operatorId = Math.random().toString(36).substring(2, 9); 
 
     try {
-        // Get conversation from database
-        const convResult = await pool.query(
-            'SELECT conversation_id FROM conversations WHERE session_key = $1',
-            [sessionKey]
-        );
-
-        if (convResult.rows.length === 0) {
-            return res.json({ 
-                success: true,
-                newMessages: [], 
-                totalMessages: 0,
-                hasOperatorMessages: false,
-                lastPolled: new Date().toISOString()
+        const saved = await saveOperatorConfig(operatorId, config);
+        
+        if (!saved) {
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Failed to save configuration to database.' 
             });
         }
 
-        const conversationId = convResult.rows[0].conversation_id;
+        console.log(`Enhanced config saved successfully for operator ${operatorId}`);
 
-        // Optimized: Only get recent messages for better performance
-        const messagesResult = await pool.query(`
-            SELECT role, content, timestamp
-            FROM messages 
-            WHERE conversation_id = $1 
-            AND timestamp > NOW() - INTERVAL $2
-            ORDER BY timestamp ASC
-        `, [conversationId, `${CONFIG.POLL_INTERVAL_HOURS} hours`]);
+        const isProduction = process.env.NODE_ENV === 'production';
+        const host = isProduction 
+            ? (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RENDER_EXTERNAL_HOSTNAME || req.get('host'))
+            : `localhost:${process.env.PORT || 3000}`;
+        const protocol = isProduction ? 'https' : 'http';
+        const baseUrl = `${protocol}://${host}`;
 
-        const allMessages = messagesResult.rows;
-        const newMessages = allMessages.slice(lastMessageCount);
+        const embedCode = `<script>
+  window.wherewolfChatbot = {
+    operatorId: '${operatorId}',
+    buttonColor: '${config.brandColor || CONFIG.DEFAULT_BRAND_COLOR}'
+  };
+</script>
+<script src="${baseUrl}/widget.js"></script>`;
 
-        // Only return operator and system messages, but track all for count
-        const operatorMessages = newMessages.filter(msg => 
-            msg.role === 'operator' || msg.role === 'system'
-        );
-
-        // Add metadata for better client handling
-        const response = {
+        res.json({
             success: true,
-            newMessages: operatorMessages,
-            totalMessages: allMessages.length,
-            hasOperatorMessages: operatorMessages.length > 0,
-            lastPolled: new Date().toISOString()
-        };
-
-        // Set appropriate cache headers
-        res.set({
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
+            operatorId,
+            embedCode,
+            baseUrl
         });
-
-        res.json(response);
-
     } catch (error) {
-        console.error('Error polling messages:', error);
+        console.error('Error saving enhanced config:', error);
         res.status(500).json({ 
-            success: false,
-            error: 'Failed to poll messages',
-            timestamp: new Date().toISOString()
+            success: false, 
+            error: 'Failed to save configuration.' 
         });
     }
 });
 
-// Lightweight heartbeat endpoint for connection testing
-app.head('/api/test', (req, res) => {
-    res.status(200).end();
-});
-
-app.get('/api/test', (req, res) => {
-    res.json({ 
-        success: true, 
-        message: 'Enhanced database server with dashboard is working!',
-        timestamp: new Date().toISOString(),
-        emailConfigured: !!emailTransporter,
-        databaseConfigured: !!process.env.DATABASE_URL,
-        twilioConfigured: !!twilioClient,
-        version: 'Enhanced v3.0 - Fixed and Optimized'
-    });
-});
-
-// Send operator message endpoint with enhanced validation
-// Enhanced operator message sending with immediate feedback
-app.post('/api/dashboard/send-message', validateRequired(['conversationId', 'message']), async (req, res) => {
-    const { conversationId, message, operatorId } = req.body;
-
-    // Validate conversationId is a number
-    if (!/^\d+$/.test(conversationId)) {
+// Endpoint to get operator config (from database)
+app.get('/api/config/:operatorId', async (req, res) => {
+    const { operatorId } = req.params;
+    
+    // Validate operatorId format
+    if (!/^[a-zA-Z0-9_-]+$/.test(operatorId)) {
         return res.status(400).json({ 
             success: false,
-            error: 'Invalid conversation ID format' 
+            error: 'Invalid operator ID format' 
         });
     }
+    
+    console.log(`Looking for config in database for operator: ${operatorId}`);
 
+    try {
+        const config = await getOperatorConfig(operatorId);
+        
+        if (config) {
+            res.json(config);
+        } else {
+            console.log(`Config not found for operator: ${operatorId}`);
+            res.status(404).json({ 
+                success: false,
+                error: 'Config not found' 
+            });
+        }
+    } catch (error) {
+        console.error(`Error reading config for ${operatorId}:`, error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to read configuration.' 
+        });
+    }
+});
+
+// ===========================================
+// ROUTES - SMS FUNCTIONALITY
+// ===========================================
+
+// SMS webhook endpoint - FIXED PHONE NORMALIZATION
+app.post('/api/sms/webhook', async (req, res) => {
+    const { From, To, Body, MessageSid } = req.body;
+    
+    console.log(`📱 Incoming SMS from ${From}: ${Body}`);
+    
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // Check if conversation exists
-        const convCheck = await client.query(
-            'SELECT conversation_id, session_key, status FROM conversations WHERE conversation_id = $1',
-            [conversationId]
-        );
-
-        if (convCheck.rows.length === 0) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({
-                success: false,
-                error: 'Conversation not found'
-            });
-        }
-
-        const conversationData = convCheck.rows[0];
-
-        // Check if this is the first operator message in this conversation
-        const existingOperatorMessages = await client.query(
-            'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
-            [conversationId, 'operator']
-        );
-
-        const isFirstOperatorMessage = parseInt(existingOperatorMessages.rows[0].count) === 0;
-
-        // Add system message if this is the first operator message
-        if (isFirstOperatorMessage) {
-            await client.query(
-                'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
-                [conversationId, 'system', '👨‍💼 A team member has joined the chat to assist you personally!']
-            );
+        // Use your existing normalizePhone function
+        const normalizePhone = (phone) => {
+            if (!phone) return '';
+            let normalized = phone.replace(/\D/g, '');
+            if (normalized.startsWith('1') && normalized.length === 11) {
+                normalized = normalized.substring(1);
+            }
+            return normalized;
+        };
+        
+        const normalizedFrom = normalizePhone(From);
+        console.log(`📱 Normalized phone: ${From} -> ${normalizedFrom}`);
+        
+        // FIXED: Get all conversations with phone numbers and check properly
+        let convResult = await client.query(`
+            SELECT conversation_id, operator_id, session_key, customer_phone, customer_sms_number
+            FROM conversations 
+            WHERE (customer_phone IS NOT NULL AND customer_phone != '') 
+               OR (customer_sms_number IS NOT NULL AND customer_sms_number != '')
+            ORDER BY last_message_at DESC
+        `);
+        
+        let existingConversation = null;
+        
+        // Check each conversation for phone number match using JavaScript
+        for (const conv of convResult.rows) {
+            const normalizedCustomerPhone = normalizePhone(conv.customer_phone);
+            const normalizedCustomerSms = normalizePhone(conv.customer_sms_number);
             
-            await client.query(
-                'UPDATE conversations SET last_message_at = NOW(), message_count = message_count + 1 WHERE conversation_id = $1',
-                [conversationId]
-            );
+            console.log(`🔍 Checking conversation ${conv.conversation_id}:`);
+            console.log(`   Customer phone: ${conv.customer_phone} -> ${normalizedCustomerPhone}`);
+            console.log(`   Customer SMS: ${conv.customer_sms_number} -> ${normalizedCustomerSms}`);
+            console.log(`   Incoming: ${From} -> ${normalizedFrom}`);
+            
+            if (normalizedCustomerPhone === normalizedFrom || normalizedCustomerSms === normalizedFrom) {
+                existingConversation = conv;
+                console.log(`✅ MATCH FOUND! Merging into conversation ${conv.conversation_id}`);
+                break;
+            }
         }
 
-        // Save operator message to database
+        let conversationId;
+        let operatorId;
+
+        if (existingConversation) {
+            // Found existing conversation - MERGE into it!
+            conversationId = existingConversation.conversation_id;
+            operatorId = existingConversation.operator_id;
+            
+            // Enable SMS on this existing conversation
+            await client.query(`
+                UPDATE conversations 
+                SET customer_sms_number = $1, sms_enabled = true, last_message_at = NOW()
+                WHERE conversation_id = $2
+            `, [From, conversationId]);
+            
+            console.log(`📱 SMS merged into existing conversation ${conversationId} for operator ${operatorId}`);
+            
+        } else {
+            // No existing conversation found - create new one
+            operatorId = 'sms_user';
+            const sessionKey = `sms_${normalizedFrom}_${Date.now()}`;
+            const newConv = await client.query(
+                'INSERT INTO conversations (operator_id, session_key, customer_phone, customer_sms_number, sms_enabled, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING conversation_id',
+                [operatorId, sessionKey, From, From, true, 'new']
+            );
+            conversationId = newConv.rows[0].conversation_id;
+            console.log(`📱 Created new SMS conversation ${conversationId}`);
+        }
+        
+        // Rest of your SMS saving code stays the same...
+        await client.query(
+            'INSERT INTO sms_messages (conversation_id, direction, from_number, to_number, message_body, message_sid, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [conversationId, 'inbound', From, To, Body, MessageSid, 'received']
+        );
+        
         await client.query(
             'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
-            [conversationId, 'operator', message]
+            [conversationId, 'user', `📱 SMS from ${From}: ${Body}`]
         );
 
-        // Update conversation with operator message time and status
-        await client.query(`
-            UPDATE conversations 
-            SET last_message_at = NOW(), 
-                last_operator_message_at = NOW(),
-                message_count = message_count + 1,
-                status = CASE 
-                    WHEN status = 'new' THEN 'in_progress' 
-                    ELSE status 
-                END
-            WHERE conversation_id = $1`,
+        await client.query(
+            'UPDATE conversations SET last_message_at = NOW(), message_count = message_count + 1 WHERE conversation_id = $1',
             [conversationId]
         );
 
         await client.query('COMMIT');
-
-        // Update in-memory conversation for immediate polling response
-        const sessionKey = conversationData.session_key;
-        if (conversations[sessionKey]) {
-            if (isFirstOperatorMessage) {
-                conversations[sessionKey].push({
-                    role: 'system',
-                    content: '👨‍💼 A team member has joined the chat to assist you personally!'
-                });
-            }
-            
-            conversations[sessionKey].push({
-                role: 'operator',
-                content: message
-            });
-
-            conversations[sessionKey].lastActivity = Date.now();
-        }
-
-        console.log(`💬 Operator message sent successfully to conversation ${conversationId}`);
-
-        res.json({ 
-            success: true, 
-            message: 'Operator message sent successfully',
-            timestamp: new Date().toISOString(),
-            isFirstMessage: isFirstOperatorMessage,
-            conversationStatus: conversationData.status === 'new' ? 'in_progress' : conversationData.status
-        });
-
+        res.status(200).send('<Response></Response>');
+        
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('❌ Error sending operator message:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to send operator message',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
+        console.error('Error processing incoming SMS:', error);
+        res.status(500).send('Error processing SMS');
     } finally {
         client.release();
     }
 });
+
+// Dashboard endpoint to send SMS
+app.post('/api/dashboard/send-sms', validateRequired(['conversationId', 'message']), async (req, res) => {
+    const { conversationId, message } = req.body;
+    
+    try {
+        const convResult = await pool.query(
+            'SELECT customer_sms_number FROM conversations WHERE conversation_id = $1',
+            [conversationId]
+        );
+        
+        if (convResult.rows.length === 0 || !convResult.rows[0].customer_sms_number) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'Conversation or SMS number not found' 
+            });
+        }
+        
+        const customerSmsNumber = convResult.rows[0].customer_sms_number;
+        const smsResult = await sendSMS(customerSmsNumber, message, conversationId);
+        
+        if (smsResult) {
+            // Save as a regular message for dashboard display
+            await saveMessage(conversationId, 'operator', `📤 SMS to ${customerSmsNumber}: ${message}`);
+            res.json({ 
+                success: true, 
+                messageSid: smsResult.sid 
+            });
+        } else {
+            res.status(500).json({ 
+                success: false,
+                error: 'Failed to send SMS' 
+            });
+        }
+        
+    } catch (error) {
+        console.error('Error in dashboard send SMS endpoint:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Internal server error' 
+        });
+    }
+});
+
+// ===========================================
+// ROUTES - CHAT FUNCTIONALITY
+// ===========================================
 
 // 🔧 FIXED: Enhanced Chat endpoint with corrected flow
 app.post('/api/chat', validateRequired(['message', 'operatorId']), async function(req, res) {
@@ -1697,7 +1125,12 @@ app.post('/api/chat', validateRequired(['message', 'operatorId']), async functio
             });
         }
 
-       // Initialize in-memory conversation for Claude API
+        // Initialize in-memory conversation for Claude API
+        if (!conversations[sessionKey]) {
+            conversations[sessionKey] = [];
+        }
+        conversations[sessionKey].push({ role: 'user', content: message });
+        conversations[sessionKey].lastActivity = Date.now();
 
         const lowerMessage = message.toLowerCase();
         const waiverLink = currentConfig.waiverLink || "No waiver link provided.";
@@ -2004,56 +1437,93 @@ Our team typically responds within ${responseTime}.`;
     }
 });
 
-// Helper function to extract phone from message
-function extractPhoneFromMessage(message) {
-    const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
-    const match = message.match(phoneRegex);
-    return match ? match[0] : null;
-}
+// Enhanced and more efficient poll-messages endpoint with better error handling
+app.post('/api/chat/poll-messages', validateRequired(['operatorId']), async (req, res) => {
+    const { operatorId, sessionId = 'default', lastMessageCount = 0 } = req.body;
 
-// Contact info capture with enhanced validation and database storage
-app.post('/contact-info', validateRequired(['operatorId']), async (req, res) => {
-    const { email, phone, operatorId, sessionId = 'default' } = req.body;
     const sessionKey = `${operatorId}_${sessionId}`;
-    
-    // Validate email format if provided
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        return res.status(400).json({
-            success: false,
-            error: 'Invalid email format'
-        });
-    }
-    
-    // Validate phone format if provided
-    if (phone && !/^[\+]?[\s\-\(\)]*([0-9][\s\-\(\)]*){10,}$/.test(phone)) {
-        return res.status(400).json({
-            success: false,
-            error: 'Invalid phone format'
-        });
-    }
-    
+
     try {
-        // Store in memory for immediate use
-        customerContacts[sessionKey] = { email, phone };
-        
-        // Update database
-        await updateCustomerContact(sessionKey, email, phone);
-        
-        console.log('📬 Received enhanced contact info:', {
-            email: email || 'N/A',
-            phone: phone || 'N/A',
-            session: sessionKey
-        });
-        
-        res.json({ 
+        console.log(`📡 Polling request: ${sessionKey}, lastCount: ${lastMessageCount}`);
+
+        // Get conversation from database
+        const convResult = await pool.query(
+            'SELECT conversation_id, last_message_at, last_operator_message_at FROM conversations WHERE session_key = $1',
+            [sessionKey]
+        );
+
+        if (convResult.rows.length === 0) {
+            return res.json({ 
+                success: true,
+                newMessages: [], 
+                totalMessages: 0,
+                hasOperatorMessages: false,
+                lastPolled: new Date().toISOString()
+            });
+        }
+
+        const conversation = convResult.rows[0];
+        const conversationId = conversation.conversation_id;
+
+        // Get all messages for this conversation
+        const messagesResult = await pool.query(`
+            SELECT 
+                role, 
+                content, 
+                timestamp,
+                message_id
+            FROM messages 
+            WHERE conversation_id = $1 
+            ORDER BY timestamp ASC, message_id ASC
+        `, [conversationId]);
+
+        const allMessages = messagesResult.rows;
+        const totalMessages = allMessages.length;
+
+        // Determine which messages are new
+        const newMessages = allMessages.slice(lastMessageCount);
+
+        // Filter for operator and system messages only for the client
+        const relevantNewMessages = newMessages.filter(msg => 
+            msg.role === 'operator' || msg.role === 'system'
+        );
+
+        // Check if there are any operator messages at all
+        const hasOperatorMessages = allMessages.some(msg => msg.role === 'operator');
+
+        // Enhanced response with more metadata
+        const response = {
             success: true,
-            message: 'Contact information saved successfully'
+            newMessages: relevantNewMessages.map(msg => ({
+                role: msg.role,
+                content: msg.content,
+                timestamp: msg.timestamp
+            })),
+            totalMessages: totalMessages,
+            hasOperatorMessages: hasOperatorMessages,
+            lastPolled: new Date().toISOString(),
+            conversationId: conversationId,
+            lastOperatorMessageAt: conversation.last_operator_message_at
+        };
+
+        // Set appropriate cache headers for real-time polling
+        res.set({
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'X-Accel-Buffering': 'no' // Disable nginx buffering for real-time responses
         });
+
+        console.log(`📨 Poll response: ${relevantNewMessages.length} new messages, ${totalMessages} total`);
+        res.json(response);
+
     } catch (error) {
-        console.error('Error saving contact info:', error);
-        res.status(500).json({
+        console.error('❌ Polling error:', error);
+        res.status(500).json({ 
             success: false,
-            error: 'Failed to save contact information'
+            error: 'Failed to poll messages',
+            timestamp: new Date().toISOString(),
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 });
@@ -2126,53 +1596,205 @@ app.post('/api/chat/history', validateRequired(['operatorId']), async (req, res)
     }
 });
 
-// Dashboard API - Update conversation status with validation
-app.post('/api/dashboard/update-status', validateRequired(['conversationId', 'status']), async (req, res) => {
-    const { conversationId, status } = req.body;
+// Contact info capture with enhanced validation and database storage
+app.post('/contact-info', validateRequired(['operatorId']), async (req, res) => {
+    const { email, phone, operatorId, sessionId = 'default' } = req.body;
+    const sessionKey = `${operatorId}_${sessionId}`;
     
-    const validStatuses = ['new', 'in_progress', 'resolved', 'on_hold'];
-    if (!validStatuses.includes(status)) {
-        return res.status(400).json({ 
+    // Validate email format if provided
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({
             success: false,
-            error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+            error: 'Invalid email format'
         });
     }
     
-    // Validate conversationId is a number
-    if (!/^\d+$/.test(conversationId)) {
-        return res.status(400).json({ 
+    // Validate phone format if provided
+    if (phone && !/^[\+]?[\s\-\(\)]*([0-9][\s\-\(\)]*){10,}$/.test(phone)) {
+        return res.status(400).json({
             success: false,
-            error: 'Invalid conversation ID format' 
+            error: 'Invalid phone format'
         });
     }
     
     try {
-        const result = await pool.query(
-            'UPDATE conversations SET status = $1 WHERE conversation_id = $2',
-            [status, parseInt(conversationId)]
-        );
+        // Store in memory for immediate use
+        customerContacts[sessionKey] = { email, phone };
         
-        if (result.rowCount === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'Conversation not found'
-            });
-        }
+        // Update database
+        await updateCustomerContact(sessionKey, email, phone);
+        
+        console.log('📬 Received enhanced contact info:', {
+            email: email || 'N/A',
+            phone: phone || 'N/A',
+            session: sessionKey
+        });
         
         res.json({ 
-            success: true, 
-            message: 'Status updated successfully' 
+            success: true,
+            message: 'Contact information saved successfully'
         });
     } catch (error) {
-        console.error('Error updating status:', error);
-        res.status(500).json({ 
+        console.error('Error saving contact info:', error);
+        res.status(500).json({
             success: false,
-            error: 'Failed to update status' 
+            error: 'Failed to save contact information'
         });
     }
 });
 
-// MISSING ENDPOINT 1: Get messages for a specific conversation
+// ===========================================
+// ROUTES - DASHBOARD
+// ===========================================
+
+// Dashboard API - Get all conversations (SINGLE VERSION)
+app.get('/api/dashboard/conversations', async (req, res) => {
+    try {
+        const { 
+            operator: operatorFilter,
+            status,
+            hasEmail,
+            hasPhone,
+            agentRequested,
+            dateFrom,
+            dateTo,
+            search
+        } = req.query;
+        
+        let query = `
+            SELECT 
+                c.conversation_id,
+                c.operator_id,
+                c.customer_email,
+                c.customer_phone,
+                c.customer_sms_number,
+                c.sms_enabled,
+                c.started_at,
+                c.last_message_at,
+                c.last_operator_message_at,
+                c.message_count,
+                c.agent_requested,
+                c.status,
+                oc.config->>'businessName' as business_name,
+                (SELECT content FROM messages 
+                 WHERE conversation_id = c.conversation_id 
+                 ORDER BY timestamp DESC LIMIT 1) as last_message,
+                -- Calculate urgency score for better sorting
+                CASE 
+                    WHEN c.status = 'new' AND c.agent_requested THEN 1000
+                    WHEN c.status = 'in_progress' THEN 500
+                    WHEN c.status = 'new' THEN 100
+                    ELSE 0
+                END as urgency_score
+            FROM conversations c
+            LEFT JOIN operator_configs oc ON c.operator_id = oc.operator_id
+            WHERE 1=1
+        `;
+        
+        const params = [];
+        let paramCount = 0;
+        
+        // Add filters with proper parameterization
+        if (operatorFilter) {
+            paramCount++;
+            query += ` AND c.operator_id = $${paramCount}`;
+            params.push(operatorFilter);
+        }
+        
+        if (status && status !== 'all') {
+            paramCount++;
+            query += ` AND c.status = $${paramCount}`;
+            params.push(status);
+        }
+        
+        if (hasEmail === 'true') {
+            query += ` AND c.customer_email IS NOT NULL AND c.customer_email != ''`;
+        } else if (hasEmail === 'false') {
+            query += ` AND (c.customer_email IS NULL OR c.customer_email = '')`;
+        }
+        
+        if (hasPhone === 'true') {
+            query += ` AND c.customer_phone IS NOT NULL AND c.customer_phone != ''`;
+        } else if (hasPhone === 'false') {
+            query += ` AND (c.customer_phone IS NULL OR c.customer_phone = '')`;
+        }
+        
+        if (agentRequested === 'true') {
+            query += ` AND c.agent_requested = true`;
+        } else if (agentRequested === 'false') {
+            query += ` AND c.agent_requested = false`;
+        }
+        
+        if (dateFrom) {
+            paramCount++;
+            query += ` AND c.started_at >= $${paramCount}`;
+            params.push(dateFrom);
+        }
+        
+        if (dateTo) {
+            paramCount++;
+            query += ` AND c.started_at <= $${paramCount}`;
+            params.push(dateTo);
+        }
+        
+        if (search) {
+            paramCount++;
+            query += ` AND (
+                c.customer_email ILIKE $${paramCount} OR 
+                c.customer_phone ILIKE $${paramCount} OR
+                oc.config->>'businessName' ILIKE $${paramCount} OR
+                EXISTS (
+                    SELECT 1 FROM messages m 
+                    WHERE m.conversation_id = c.conversation_id 
+                    AND m.content ILIKE $${paramCount}
+                )
+            )`;
+            params.push(`%${search}%`);
+        }
+        
+        // Enhanced ordering: urgency first, then recency
+        query += ` ORDER BY 
+            urgency_score DESC,
+            c.last_message_at DESC 
+            LIMIT 100`;
+        
+        const result = await pool.query(query, params);
+
+        // Add computed fields for better frontend handling
+        const enhancedConversations = result.rows.map(conv => ({
+            ...conv,
+            is_urgent: conv.urgency_score >= 1000,
+            is_active: conv.status === 'in_progress' || conv.last_operator_message_at,
+            needs_response: conv.status === 'new' || (conv.agent_requested && !conv.last_operator_message_at),
+            has_contact: !!(conv.customer_email || conv.customer_phone)
+        }));
+
+        res.json({
+            success: true,
+            conversations: enhancedConversations,
+            totalCount: enhancedConversations.length,
+            filters: {
+                operator: operatorFilter,
+                status,
+                hasEmail,
+                hasPhone,
+                agentRequested,
+                dateFrom,
+                dateTo,
+                search
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error fetching conversations:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to fetch conversations',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+// Get messages for a specific conversation
 app.get('/api/dashboard/conversations/:id/messages', async (req, res) => {
     try {
         const conversationId = req.params.id;
@@ -2214,7 +1836,7 @@ app.get('/api/dashboard/conversations/:id/messages', async (req, res) => {
     }
 });
 
-// MISSING ENDPOINT 2: Update conversation status
+// Update conversation status
 app.post('/api/dashboard/conversations/:id/status', async (req, res) => {
     try {
         const conversationId = req.params.id;
@@ -2269,6 +1891,240 @@ app.post('/api/dashboard/conversations/:id/status', async (req, res) => {
     }
 });
 
+// Enhanced operator message sending with immediate feedback
+app.post('/api/dashboard/send-message', validateRequired(['conversationId', 'message']), async (req, res) => {
+    const { conversationId, message, operatorId } = req.body;
+
+    // Validate conversationId is a number
+    if (!/^\d+$/.test(conversationId)) {
+        return res.status(400).json({ 
+            success: false,
+            error: 'Invalid conversation ID format' 
+        });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Check if conversation exists
+        const convCheck = await client.query(
+            'SELECT conversation_id, session_key, status FROM conversations WHERE conversation_id = $1',
+            [conversationId]
+        );
+
+        if (convCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({
+                success: false,
+                error: 'Conversation not found'
+            });
+        }
+
+        const conversationData = convCheck.rows[0];
+
+        // Check if this is the first operator message in this conversation
+        const existingOperatorMessages = await client.query(
+            'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
+            [conversationId, 'operator']
+        );
+
+        const isFirstOperatorMessage = parseInt(existingOperatorMessages.rows[0].count) === 0;
+
+        // Add system message if this is the first operator message
+        if (isFirstOperatorMessage) {
+            await client.query(
+                'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+                [conversationId, 'system', '👨‍💼 A team member has joined the chat to assist you personally!']
+            );
+            
+            await client.query(
+                'UPDATE conversations SET last_message_at = NOW(), message_count = message_count + 1 WHERE conversation_id = $1',
+                [conversationId]
+            );
+        }
+
+        // Save operator message to database
+        await client.query(
+            'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+            [conversationId, 'operator', message]
+        );
+
+        // Update conversation with operator message time and status
+        await client.query(`
+            UPDATE conversations 
+            SET last_message_at = NOW(), 
+                last_operator_message_at = NOW(),
+                message_count = message_count + 1,
+                status = CASE 
+                    WHEN status = 'new' THEN 'in_progress' 
+                    ELSE status 
+                END
+            WHERE conversation_id = $1`,
+            [conversationId]
+        );
+
+        await client.query('COMMIT');
+
+        // Update in-memory conversation for immediate polling response
+        const sessionKey = conversationData.session_key;
+        if (conversations[sessionKey]) {
+            if (isFirstOperatorMessage) {
+                conversations[sessionKey].push({
+                    role: 'system',
+                    content: '👨‍💼 A team member has joined the chat to assist you personally!'
+                });
+            }
+            
+            conversations[sessionKey].push({
+                role: 'operator',
+                content: message
+            });
+
+            conversations[sessionKey].lastActivity = Date.now();
+        }
+
+        console.log(`💬 Operator message sent successfully to conversation ${conversationId}`);
+
+        res.json({ 
+            success: true, 
+            message: 'Operator message sent successfully',
+            timestamp: new Date().toISOString(),
+            isFirstMessage: isFirstOperatorMessage,
+            conversationStatus: conversationData.status === 'new' ? 'in_progress' : conversationData.status
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error sending operator message:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to send operator message',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    } finally {
+        client.release();
+    }
+});
+
+// Dashboard API - Update conversation status with validation
+app.post('/api/dashboard/update-status', validateRequired(['conversationId', 'status']), async (req, res) => {
+    const { conversationId, status } = req.body;
+    
+    const validStatuses = ['new', 'in_progress', 'resolved', 'on_hold'];
+    if (!validStatuses.includes(status)) {
+        return res.status(400).json({ 
+            success: false,
+            error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+        });
+    }
+    
+    // Validate conversationId is a number
+    if (!/^\d+$/.test(conversationId)) {
+        return res.status(400).json({ 
+            success: false,
+            error: 'Invalid conversation ID format' 
+        });
+    }
+    
+    try {
+        const result = await pool.query(
+            'UPDATE conversations SET status = $1 WHERE conversation_id = $2',
+            [status, parseInt(conversationId)]
+        );
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Conversation not found'
+            });
+        }
+        
+        res.json({ 
+            success: true, 
+            message: 'Status updated successfully' 
+        });
+    } catch (error) {
+        console.error('Error updating status:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to update status' 
+        });
+    }
+});
+
+// Dashboard API - Get stats
+app.get('/api/dashboard/stats', async (req, res) => {
+    try {
+        const operatorFilter = req.query.operator;
+        
+        let statsQuery;
+        let statsParams = [];
+        
+        if (operatorFilter) {
+            statsQuery = `
+                SELECT 
+                    COUNT(*) as total_conversations,
+                    COUNT(*) FILTER (WHERE agent_requested = true) as agent_requests,
+                    COUNT(*) FILTER (WHERE customer_email IS NOT NULL) as with_email,
+                    COUNT(DISTINCT operator_id) as active_operators
+                FROM conversations 
+                WHERE started_at >= NOW() - INTERVAL '7 days' AND operator_id = $1
+            `;
+            statsParams = [operatorFilter];
+        } else {
+            statsQuery = `
+                SELECT 
+                    COUNT(*) as total_conversations,
+                    COUNT(*) FILTER (WHERE agent_requested = true) as agent_requests,
+                    COUNT(*) FILTER (WHERE customer_email IS NOT NULL) as with_email,
+                    COUNT(DISTINCT operator_id) as active_operators
+                FROM conversations 
+                WHERE started_at >= NOW() - INTERVAL '7 days'
+            `;
+        }
+
+        const stats = await pool.query(statsQuery, statsParams);
+
+        // Recent messages query
+        let recentMessagesQuery;
+        let recentParams = [];
+        
+        if (operatorFilter) {
+            recentMessagesQuery = `
+                SELECT COUNT(*) as total_messages
+                FROM messages m
+                JOIN conversations c ON m.conversation_id = c.conversation_id
+                WHERE m.timestamp >= NOW() - INTERVAL '24 hours' AND c.operator_id = $1
+            `;
+            recentParams = [operatorFilter];
+        } else {
+            recentMessagesQuery = `
+                SELECT COUNT(*) as total_messages
+                FROM messages m
+                JOIN conversations c ON m.conversation_id = c.conversation_id
+                WHERE m.timestamp >= NOW() - INTERVAL '24 hours'
+            `;
+        }
+        
+        const recentMessages = await pool.query(recentMessagesQuery, recentParams);
+
+        res.json({
+            success: true,
+            stats: {
+                ...stats.rows[0],
+                recent_messages: recentMessages.rows[0].total_messages
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching stats:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to fetch stats' 
+        });
+    }
+});
+
 // Dashboard API - Get filter statistics
 app.get('/api/dashboard/filter-stats', async (req, res) => {
     try {
@@ -2307,6 +2163,55 @@ app.get('/api/dashboard/filter-stats', async (req, res) => {
             error: 'Failed to fetch statistics' 
         });
     }
+});
+
+// Get operator list for dashboard filtering
+app.get('/api/dashboard/operators', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                oc.operator_id,
+                oc.config->>'businessName' as business_name,
+                COUNT(c.conversation_id) as conversation_count,
+                MAX(c.last_message_at) as last_activity
+            FROM operator_configs oc
+            LEFT JOIN conversations c ON oc.operator_id = c.operator_id
+            GROUP BY oc.operator_id, oc.config->>'businessName'
+            ORDER BY last_activity DESC NULLS LAST
+        `);
+        
+        res.json({
+            success: true,
+            operators: result.rows
+        });
+    } catch (error) {
+        console.error('Error fetching operators:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch operators'
+        });
+    }
+});
+
+// ===========================================
+// ROUTES - MISC & HEALTH CHECKS
+// ===========================================
+
+// Lightweight heartbeat endpoint for connection testing
+app.head('/api/test', (req, res) => {
+    res.status(200).end();
+});
+
+app.get('/api/test', (req, res) => {
+    res.json({ 
+        success: true, 
+        message: 'Enhanced database server with dashboard is working!',
+        timestamp: new Date().toISOString(),
+        emailConfigured: !!emailTransporter,
+        databaseConfigured: !!process.env.DATABASE_URL,
+        twilioConfigured: !!twilioClient,
+        version: 'Enhanced v4.0 - Complete Rewrite with All Features'
+    });
 });
 
 // Database health check endpoint with detailed information
@@ -2355,33 +2260,9 @@ app.get('/api/db-health', async (req, res) => {
     }
 });
 
-// Get operator list for dashboard filtering
-app.get('/api/dashboard/operators', async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT 
-                oc.operator_id,
-                oc.config->>'businessName' as business_name,
-                COUNT(c.conversation_id) as conversation_count,
-                MAX(c.last_message_at) as last_activity
-            FROM operator_configs oc
-            LEFT JOIN conversations c ON oc.operator_id = c.operator_id
-            GROUP BY oc.operator_id, oc.config->>'businessName'
-            ORDER BY last_activity DESC NULLS LAST
-        `);
-        
-        res.json({
-            success: true,
-            operators: result.rows
-        });
-    } catch (error) {
-        console.error('Error fetching operators:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to fetch operators'
-        });
-    }
-});
+// ===========================================
+// ERROR HANDLING
+// ===========================================
 
 // Global error handler
 app.use((error, req, res, next) => {
@@ -2401,6 +2282,10 @@ app.use((req, res) => {
         message: `Cannot ${req.method} ${req.path}`
     });
 });
+
+// ===========================================
+// GRACEFUL SHUTDOWN
+// ===========================================
 
 // Graceful shutdown handling
 async function gracefulShutdown(signal) {
@@ -2433,6 +2318,10 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
+// ===========================================
+// START SERVER
+// ===========================================
+
 // Start server
 const PORT = process.env.PORT || 3000;
 
@@ -2443,7 +2332,7 @@ async function startServer() {
         
         // Start HTTP server
         const server = app.listen(PORT, () => {
-            console.log(`\n🚀 Enhanced Chatbot Server v3.0 running on port ${PORT}`);
+            console.log(`\n🚀 Enhanced Chatbot Server v4.0 running on port ${PORT}`);
             console.log('📝 Setup page: /setup');
             console.log('💬 Chat interface: /chat.html');
             console.log('📊 Dashboard: /dashboard');
@@ -2454,6 +2343,7 @@ async function startServer() {
             console.log(`🗃️ Database: ${process.env.DATABASE_URL ? 'Connected' : 'Not configured'}`);
             console.log('✨ Features: Enhanced error handling, SMS support, improved performance');
             console.log('🔒 Security: Input validation, SQL injection protection, rate limiting ready');
+            console.log('📊 All original functionality preserved and enhanced');
         });
 
         // Server error handling
