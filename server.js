@@ -2187,7 +2187,59 @@ While you wait, could I get your email or phone number so they can follow up if 
     }
     // ... continue with other existing handoff logic if you have any
 }
+        // ===============================
+        // CONTACT COLLECTION LOGIC  
+        // ===============================
+        // Check if this is the first few messages and no contact collected yet
+        const messageCount = conversations[sessionKey].length;
+        const hasContactInfo = customerContacts[sessionKey] && 
+            (customerContacts[sessionKey].email || customerContacts[sessionKey].phone);
+            
+        // Show contact form on 2nd or 3rd user message if no contact collected
+        if (messageCount >= 3 && messageCount <= 5 && !hasContactInfo && !alreadyHandedOff && !isAgentRequest) {
+            const shouldShowContactForm = !conversations[`contact_shown_${sessionKey}`];
+            
+            if (shouldShowContactForm) {
+                conversations[`contact_shown_${sessionKey}`] = true;
+                
+                const contactFormResponse = `Quick question! Could I get your email so we can send you ${currentConfig.businessType || 'tour'} details and follow up if needed? Phone is optional too.`;
+                
+                conversations[sessionKey].push({ role: 'assistant', content: contactFormResponse });
+                await saveMessage(conversation.conversation_id, 'assistant', contactFormResponse);
+                return res.json({ 
+                    success: true, 
+                    response: contactFormResponse,
+                    showContactForm: true
+                });
+            }
+        }
         
+        // Handle contact info submission
+        const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
+        const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
+        
+        if (emailRegex.test(message) && !hasContactInfo && !alreadyHandedOff) {
+            const email = message.match(emailRegex)[0];
+            customerContacts[sessionKey] = { ...customerContacts[sessionKey], email };
+            await updateCustomerContact(sessionKey, email, null);
+            
+            const thankYouResponse = `Perfect! I've saved your email (${email}). Now, how can I help you today?`;
+            conversations[sessionKey].push({ role: 'assistant', content: thankYouResponse });
+            await saveMessage(conversation.conversation_id, 'assistant', thankYouResponse);
+            return res.json({ success: true, response: thankYouResponse });
+        }
+        
+        if (phoneRegex.test(message) && !hasContactInfo && !alreadyHandedOff && !isAgentRequest) {
+            const phone = message.match(phoneRegex)[0];
+            customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
+            await updateCustomerContact(sessionKey, null, phone);
+            
+            const thankYouResponse = `Perfect! I've saved your phone number (${phone}). Now, how can I help you today?`;
+            conversations[sessionKey].push({ role: 'assistant', content: thankYouResponse });
+            await saveMessage(conversation.conversation_id, 'assistant', thankYouResponse);
+            return res.json({ success: true, response: thankYouResponse });
+        }
+
         // Handle waiver requests
         if (lowerMessage.includes('waiver') || lowerMessage.includes('form') || lowerMessage.includes('sign') || lowerMessage.includes('release')) {
             const botResponse = `Here's your waiver: <a href='${waiverLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR};'>Click here to sign</a>`;
