@@ -1697,74 +1697,7 @@ app.post('/api/chat', validateRequired(['message', 'operatorId']), async functio
             });
         }
 
-        // Initialize in-memory conversation for Claude API
-        if (!conversations[sessionKey]) {
-            conversations[sessionKey] = [];
-            conversations[sessionKey].lastActivity = Date.now();
-        }
-        conversations[sessionKey].push({ role: 'user', content: message });
-        conversations[sessionKey].lastActivity = Date.now();
-
-        // Check if operator has taken over
-        const operatorCheckResult = await pool.query(
-            'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
-            [conversation.conversation_id, 'operator']
-        );
-
-        const hasOperatorMessages = parseInt(operatorCheckResult.rows[0].count) > 0;
-        
-        // Check if we've already sent the operator notification
-        const notificationCheckResult = await pool.query(
-            `SELECT COUNT(*) FROM messages 
-             WHERE conversation_id = $1 
-             AND role = 'assistant' 
-             AND content LIKE '%Our team member will respond shortly%'`,
-            [conversation.conversation_id]
-        );
-        
-        const hasAlreadyNotified = parseInt(notificationCheckResult.rows[0].count) > 0;
-
-        // Only show the notification ONCE when operator first joins
-        if (hasOperatorMessages && !hasAlreadyNotified) {
-            const operatorResponse = "Thanks for your message! Our team member will respond shortly in this chat.";
-            conversations[sessionKey].push({ role: 'assistant', content: operatorResponse });
-            await saveMessage(conversation.conversation_id, 'assistant', operatorResponse);
-            
-            return res.json({ 
-                success: true,
-                response: operatorResponse,
-                operatorJoined: true,
-                twoWayChat: true,
-                startPolling: true
-            });
-        } else if (hasOperatorMessages && hasAlreadyNotified) {
-            // Operator is active but we've already notified - just acknowledge without bot response
-            return res.json({ 
-                success: true,
-                response: null, // No bot response needed
-                skipBotResponse: true, // Tell client to skip showing a bot response
-                operatorActive: true,
-                twoWayChat: true,
-                continuePolling: true
-            });
-        }
-
-        // 🔧 FIXED: Check if this is the first real question (not a greeting)
-        const messageCount = conversations[sessionKey].length;
-        const isFirstRealQuestion = messageCount === 1 && !hasProvidedContact;
-        
-        // If this is the first real question and we don't have contact info, show contact form FIRST
-        if (isFirstRealQuestion && !hasProvidedContact) {
-            console.log('📝 First real question - showing contact form first');
-            pendingMessage = message; // Store the question for later
-            
-            return res.json({
-                success: true,
-                response: null, // No response yet
-                showContactForm: true, // Tell frontend to show contact form
-                pendingMessage: message // Store for after contact collection
-            });
-        }
+       // Initialize in-memory conversation for Claude API
 
         const lowerMessage = message.toLowerCase();
         const waiverLink = currentConfig.waiverLink || "No waiver link provided.";
