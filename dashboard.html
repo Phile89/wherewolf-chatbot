@@ -804,63 +804,12 @@
     </div>
 
     <script>
-        
+
 let conversations = [];
 let selectedConversationId = null;
 let currentFilters = {
     status: 'all'
 };
-
-// Enhanced refresh function with better feedback
-async function loadDashboard() {
-    try {
-        // Show loading state
-        const refreshBtn = document.querySelector('.btn-primary');
-        const originalText = refreshBtn.textContent;
-        refreshBtn.textContent = '🔄 Refreshing...';
-        refreshBtn.disabled = true;
-        
-        // Clear current data
-        selectedConversationId = null;
-        document.getElementById('chatActions').style.display = 'none';
-        document.getElementById('chatInputContainer').classList.remove('active');
-        document.getElementById('chatMessages').innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">💬</div>
-                <p>Select a conversation from the left to view messages</p>
-            </div>
-        `;
-        document.getElementById('chatTitle').textContent = 'Select a conversation';
-        document.getElementById('chatSubtitle').textContent = '';
-        
-        // Apply filters with URL operator if present
-        await applyFilters();
-        
-        // Load unique operators for filter
-        await loadOperators();
-        
-        // Refresh stats
-        await loadFilterStats();
-        
-        // Restore button
-        refreshBtn.textContent = originalText;
-        refreshBtn.disabled = false;
-        
-        console.log('✅ Dashboard refreshed successfully');
-        
-    } catch (error) {
-        console.error('Error loading dashboard:', error);
-        showError('Failed to connect to server');
-        
-        // Restore button on error
-        const refreshBtn = document.querySelector('.btn-primary');
-        refreshBtn.textContent = '❌ Error - Retry';
-        refreshBtn.disabled = false;
-        setTimeout(() => {
-            refreshBtn.textContent = '🔄 Refresh';
-        }, 3000);
-    }
-}
 
 // Enhanced conversation loading with better prioritization
 async function loadConversations(queryString = '') {
@@ -1177,6 +1126,8 @@ function showError(message) {
     `;
 }
 
+
+
 // MISSING FUNCTION 3: loadDashboard
 async function loadDashboard() {
     console.log('📊 Loading dashboard...');
@@ -1274,6 +1225,115 @@ if (!document.getElementById('quick-filter-styles')) {
 // Initialize quick filters after DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(addQuickFilters, 1000);
+});
+
+// MISSING FUNCTIONS - Add these to fix the loading issue
+
+// Toggle filter visibility
+function toggleFilters() {
+    const filterContent = document.getElementById('filterContent');
+    const toggleText = document.getElementById('filterToggleText');
+    
+    if (filterContent.style.display === 'none') {
+        filterContent.style.display = 'block';
+        toggleText.textContent = 'Hide Filters';
+    } else {
+        filterContent.style.display = 'none';
+        toggleText.textContent = 'Show Filters';
+    }
+}
+
+// Load filter statistics
+async function loadFilterStats() {
+    try {
+        console.log('Loading filter stats...');
+        const response = await fetch('/api/dashboard/filter-stats');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Filter stats loaded:', data);
+        
+        if (data.success) {
+            document.getElementById('newCount').textContent = `(${data.stats.new_count || 0})`;
+            document.getElementById('inProgressCount').textContent = `(${data.stats.in_progress_count || 0})`;
+            document.getElementById('resolvedCount').textContent = `(${data.stats.resolved_count || 0})`;
+            document.getElementById('onHoldCount').textContent = `(${data.stats.on_hold_count || 0})`;
+            
+            const totalCount = (data.stats.new_count || 0) + 
+                             (data.stats.in_progress_count || 0) + 
+                             (data.stats.resolved_count || 0) + 
+                             (data.stats.on_hold_count || 0);
+            document.getElementById('allCount').textContent = `(${totalCount})`;
+        }
+    } catch (error) {
+        console.error('Error loading filter stats:', error);
+        document.getElementById('allCount').textContent = '(Error)';
+    }
+}
+
+// Load unique operators
+async function loadOperators() {
+    try {
+        console.log('Loading operators...');
+        const response = await fetch('/api/dashboard/conversations');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Operators response:', data);
+        
+        if (data.success && data.conversations) {
+            const operators = [...new Set(data.conversations.map(c => c.operator_id))];
+            const operatorSelect = document.getElementById('operatorFilter');
+            
+            const currentValue = operatorSelect.value;
+            
+            operatorSelect.innerHTML = '<option value="">All Operators</option>';
+            operators.forEach(op => {
+                const selected = op === currentValue ? 'selected' : '';
+                operatorSelect.innerHTML += `<option value="${op}" ${selected}>${op}</option>`;
+            });
+            
+            operatorSelect.value = currentValue || '';
+        }
+    } catch (error) {
+        console.error('Error loading operators:', error);
+    }
+}
+
+// Debounced search
+let searchTimeout = null;
+function debounceSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        applyFilters();
+    }, 500);
+}
+
+// Clear all filters
+function clearFilters() {
+    document.getElementById('operatorFilter').value = '';
+    document.getElementById('hasEmailFilter').value = '';
+    document.getElementById('hasPhoneFilter').value = '';
+    document.getElementById('agentRequestedFilter').value = '';
+    document.getElementById('dateFromFilter').value = '';
+    document.getElementById('dateToFilter').value = '';
+    document.getElementById('searchInput').value = '';
+    
+    filterByStatus('all');
+}
+
+// Initialize dashboard when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Dashboard loading...');
+    loadDashboard();
+    loadFilterStats();
+    setInterval(loadFilterStats, 30000); // Update every 30 seconds
 });
 
 </script>
