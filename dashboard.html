@@ -811,52 +811,7 @@ let currentFilters = {
     status: 'all'
 };
 
-// Enhanced conversation loading with better prioritization
-async function loadConversations(queryString = '') {
-    const container = document.getElementById('conversationsList');
-    
-    // Show loading state
-    container.innerHTML = `
-        <div class="loading">
-            <div class="loading-spinner"></div>
-            Loading conversations...
-        </div>
-    `;
-    
-    try {
-        const url = queryString ? `/api/dashboard/conversations?${queryString}` : '/api/dashboard/conversations';
-        console.log('🔍 Loading from:', url); // DEBUG
-        
-        const response = await fetch(url);
-        console.log('📡 Response status:', response.status); // DEBUG
-        
-        if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('📊 Data received:', data); // DEBUG
-        
-        if (data.success) {
-            conversations = data.conversations || [];
-            renderConversations(conversations);
-            console.log(`✅ Loaded ${conversations.length} conversations`);
-        } else {
-            throw new Error(data.error || 'Failed to load conversations');
-        }
-    } catch (error) {
-        console.error('❌ Error loading conversations:', error);
-        container.innerHTML = `
-            <div style="padding: 40px 20px; text-align: center; color: #dc2626;">
-                <h3>❌ Loading Error</h3>
-                <p>${error.message}</p>
-                <button onclick="loadDashboard()" style="background: #8B5CF6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 10px;">
-                    🔄 Try Again
-                </button>
-            </div>
-        `;
-    }
-}
+loadConversations
 
 // Enhanced conversation rendering with better visual indicators
 function renderConversations(conversations) {

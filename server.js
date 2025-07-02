@@ -457,7 +457,7 @@ Wherewolf Enhanced Chatbot System
     }
 }
 
-// SMS webhook endpoint - FIXED VERSION
+// SMS webhook endpoint - SIMPLIFIED VERSION
 app.post('/api/sms/webhook', async (req, res) => {
     const { From, To, Body, MessageSid } = req.body;
     
@@ -467,28 +467,48 @@ app.post('/api/sms/webhook', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // FIXED: Normalize phone numbers for comparison
-        const normalizedFrom = From.replace(/\+1/, '').replace(/\D/g, ''); // Remove +1 and all non-digits
+        // SIMPLIFIED: Normalize phone numbers in JavaScript first
+        const normalizePhone = (phone) => {
+            if (!phone) return '';
+            return phone.replace(/\+1/, '').replace(/\D/g, ''); // Remove +1 and all non-digits
+        };
         
-        // SMART MERGING: Check for ANY existing conversation with this phone number (normalized)
+        const normalizedFrom = normalizePhone(From);
+        console.log(`📱 Normalized phone: ${From} -> ${normalizedFrom}`);
+        
+        // SMART MERGING: Check for ANY existing conversation with this phone number
         let convResult = await client.query(`
-            SELECT conversation_id, operator_id, session_key
+            SELECT conversation_id, operator_id, session_key, customer_phone, customer_sms_number
             FROM conversations 
-            WHERE (
-                REGEXP_REPLACE(COALESCE(customer_phone, ''), '\\D', '', 'g') = $1 OR 
-                REGEXP_REPLACE(COALESCE(customer_sms_number, ''), '\\D', '', 'g') = $1
+            WHERE conversation_id IN (
+                SELECT conversation_id FROM conversations 
+                WHERE customer_phone IS NOT NULL 
+                   OR customer_sms_number IS NOT NULL
             )
-            ORDER BY last_message_at DESC 
-            LIMIT 1
-        `, [normalizedFrom]);
+            ORDER BY last_message_at DESC
+        `);
+        
+        let existingConversation = null;
+        
+        // Check each conversation for phone number match
+        for (const conv of convResult.rows) {
+            const normalizedCustomerPhone = normalizePhone(conv.customer_phone);
+            const normalizedCustomerSms = normalizePhone(conv.customer_sms_number);
+            
+            if (normalizedCustomerPhone === normalizedFrom || normalizedCustomerSms === normalizedFrom) {
+                existingConversation = conv;
+                console.log(`📱 Found matching conversation ${conv.conversation_id} for phone ${normalizedFrom}`);
+                break;
+            }
+        }
 
         let conversationId;
         let operatorId;
 
-        if (convResult.rows.length > 0) {
+        if (existingConversation) {
             // Found existing conversation - MERGE into it!
-            conversationId = convResult.rows[0].conversation_id;
-            operatorId = convResult.rows[0].operator_id;
+            conversationId = existingConversation.conversation_id;
+            operatorId = existingConversation.operator_id;
             
             // Enable SMS on this existing conversation
             await client.query(`
