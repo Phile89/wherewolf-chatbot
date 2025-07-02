@@ -811,8 +811,6 @@ let currentFilters = {
     status: 'all'
 };
 
-loadConversations
-
 // COMPLETE DASHBOARD FUNCTIONS - Add these after: let selectedConversationId = null;
 
 // Enhanced conversation loading with better prioritization
@@ -936,6 +934,105 @@ function updateConversationCounter(count) {
     }
 }
 
+// MISSING FUNCTION: renderConversations - Add this to your script
+function renderConversations(conversations) {
+    const container = document.getElementById('conversationsList');
+    
+    if (conversations.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="padding: 40px; text-align: center;">
+                <div class="empty-state-icon">📭</div>
+                <p><strong>No conversations found</strong></p>
+                <p style="font-size: 12px; color: #64748b; margin-top: 8px;">
+                    Try adjusting your filters or wait for new conversations
+                </p>
+                <button class="btn btn-secondary" onclick="clearFilters()" style="margin-top: 12px;">
+                    Clear All Filters
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = conversations.map(conv => {
+        const lastMessageTime = new Date(conv.last_message_at);
+        const isToday = isDateToday(lastMessageTime);
+        const isThisWeek = isDateThisWeek(lastMessageTime);
+        
+        let timeDisplay;
+        if (isToday) {
+            timeDisplay = lastMessageTime.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } else if (isThisWeek) {
+            timeDisplay = lastMessageTime.toLocaleDateString('en-US', {
+                weekday: 'short',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } else {
+            timeDisplay = lastMessageTime.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        const status = conv.status || 'new';
+        const statusClass = status.replace('_', '-');
+        
+        // Determine urgency level
+        const isUrgent = status === 'new' && conv.agent_requested;
+        const isActive = status === 'in_progress';
+        const hasRecentActivity = (Date.now() - lastMessageTime.getTime()) < (2 * 60 * 60 * 1000); // 2 hours
+        
+        let priorityIndicator = '';
+        if (isUrgent) {
+            priorityIndicator = '<div style="position: absolute; top: 8px; left: 8px; width: 8px; height: 8px; background: #ef4444; border-radius: 50%; animation: pulse 2s infinite;"></div>';
+        } else if (isActive && hasRecentActivity) {
+            priorityIndicator = '<div style="position: absolute; top: 8px; left: 8px; width: 8px; height: 8px; background: #10b981; border-radius: 50%;"></div>';
+        }
+
+        const messagePreview = conv.last_message ? 
+            conv.last_message.length > 80 ? 
+                conv.last_message.substring(0, 80) + '...' : 
+                conv.last_message : 
+            'No messages yet';
+
+        return `
+            <div class="conversation-item ${isUrgent ? 'urgent' : ''}" 
+                 onclick="selectConversation(${conv.conversation_id})"
+                 data-conversation-id="${conv.conversation_id}">
+                ${priorityIndicator}
+                <div class="conversation-status ${statusClass}">${status.replace('_', ' ').toUpperCase()}</div>
+                <div class="conversation-header">
+                    <div class="business-name">
+                        ${conv.business_name || 'Unknown Business'}
+                        ${isUrgent ? ' 🚨' : ''}
+                        ${isActive && hasRecentActivity ? ' 🟢' : ''}
+                    </div>
+                    <div class="conversation-time">${timeDisplay}</div>
+                </div>
+                <div class="conversation-details">
+                    <strong>Operator:</strong> ${conv.operator_id} • 
+                    <strong>Messages:</strong> ${conv.message_count || 0}
+                    ${hasRecentActivity ? ' • <span style="color: #10b981;">Active</span>' : ''}
+                </div>
+                <div class="conversation-preview">${messagePreview}</div>
+                <div class="conversation-badges">
+                    ${conv.customer_email ? '<span class="badge badge-email">📧 Email</span>' : ''}
+                    ${conv.customer_phone ? '<span class="badge badge-phone">📞 Phone</span>' : ''}
+                    ${conv.sms_enabled ? '<span class="badge badge-sms">💬 SMS</span>' : ''}
+                    ${conv.agent_requested ? '<span class="badge badge-agent">🚨 Agent</span>' : ''}
+                    ${conv.last_operator_message_at ? '<span class="badge" style="background: #d1fae5; color: #065f46;">👨‍💼 Operator Active</span>' : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 // Enhanced quick filters
 function addQuickFilters() {
     const quickFiltersHtml = `
@@ -1028,46 +1125,6 @@ function filterByStatus(status) {
     // Update the filter and reload conversations
     currentFilters.status = status;
     applyFilters();
-}
-
-// MISSING FUNCTION 1: applyFilters
-async function applyFilters() {
-    console.log('🔧 Applying filters...', currentFilters);
-    
-    const params = new URLSearchParams();
-    
-    // Add status filter
-    if (currentFilters.status && currentFilters.status !== 'all') {
-        params.append('status', currentFilters.status);
-    }
-    
-    // Add other filters if they exist
-    const operatorFilter = document.getElementById('operatorFilter');
-    if (operatorFilter && operatorFilter.value) {
-        params.append('operator', operatorFilter.value);
-    }
-    
-    const hasEmailFilter = document.getElementById('hasEmailFilter');
-    if (hasEmailFilter && hasEmailFilter.value) {
-        params.append('hasEmail', hasEmailFilter.value);
-    }
-    
-    const hasPhoneFilter = document.getElementById('hasPhoneFilter');
-    if (hasPhoneFilter && hasPhoneFilter.value) {
-        params.append('hasPhone', hasPhoneFilter.value);
-    }
-    
-    const agentRequestedFilter = document.getElementById('agentRequestedFilter');
-    if (agentRequestedFilter && agentRequestedFilter.value) {
-        params.append('agentRequested', agentRequestedFilter.value);
-    }
-    
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput && searchInput.value) {
-        params.append('search', searchInput.value);
-    }
-    
-    await loadConversations(params.toString());
 }
 
 // MISSING FUNCTION 2: showError
