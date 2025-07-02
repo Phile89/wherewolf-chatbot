@@ -509,6 +509,7 @@
         let pendingMessage = null;
         let pollingInterval = null;
         let lastMessageCount = 0;
+        
 
         // Get operator ID from URL
         const urlParams = new URLSearchParams(window.location.search);
@@ -740,17 +741,11 @@
             input.focus();
         }
 
-        // 🔧 FIXED: Enhanced contact form with better UX
+        // 🔧 FIXED: Updated showContactForm function
 function showContactForm() {
     const businessName = businessConfig.businessName || 'our business';
     const responseTime = businessConfig.responseTime || '30 minutes';
     const smsEnabled = businessConfig.smsEnabled || 'disabled';
-    
-    // Check if contact form already exists
-    if (document.querySelector('.contact-form')) {
-        console.log('Contact form already shown');
-        return;
-    }
     
     let formContent = '';
     
@@ -806,7 +801,7 @@ function showContactForm() {
     }
     
     const contactFormHtml = `
-        <div class="message bot-message" id="contactFormMessage">
+        <div class="message bot-message">
             <div class="contact-form">
                 ${formContent}
             </div>
@@ -817,36 +812,26 @@ function showContactForm() {
     messagesContainer.insertAdjacentHTML('beforeend', contactFormHtml);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
     
-    // Focus appropriate field after form appears
     setTimeout(() => {
         if (smsEnabled === 'sms-first') {
-            const phoneInput = document.getElementById('contactPhone');
-            if (phoneInput) phoneInput.focus();
+            document.getElementById('contactPhone').focus();
         } else {
-            const emailInput = document.getElementById('contactEmail');
-            if (emailInput) emailInput.focus();
+            document.getElementById('contactEmail').focus();
         }
     }, 100);
 }
 
-        // 🔧 FIXED: Enhanced contact submission with better validation
+
+        // 🔧 FIXED: Updated submitContact function
 async function submitContact() {
-    const emailInput = document.getElementById('contactEmail');
-    const phoneInput = document.getElementById('contactPhone');
-    
-    if (!emailInput || !phoneInput) {
-        console.error('Contact form inputs not found');
-        return;
-    }
-    
-    const email = emailInput.value.trim();
-    const phone = phoneInput.value.trim();
+    const email = document.getElementById('contactEmail').value;
+    const phone = document.getElementById('contactPhone').value;
     const smsEnabled = businessConfig.smsEnabled || 'disabled';
     
-    // Validation based on SMS mode
     if (smsEnabled === 'sms-first') {
         const phoneRegex = /^\+?[\s\-\(\)]*([0-9][\s\-\(\)]*){10,}$/;
         if (!phone || !phoneRegex.test(phone)) {
+            const phoneInput = document.getElementById('contactPhone');
             phoneInput.style.borderColor = '#EF4444';
             phoneInput.placeholder = 'Please enter a valid phone number';
             phoneInput.value = '';
@@ -854,9 +839,9 @@ async function submitContact() {
             return;
         }
     } else {
-        // Email mode - require email
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!email || !emailRegex.test(email)) {
+            const emailInput = document.getElementById('contactEmail');
             emailInput.style.borderColor = '#EF4444';
             emailInput.placeholder = 'Please enter a valid email';
             emailInput.value = '';
@@ -865,59 +850,52 @@ async function submitContact() {
         }
     }
     
-    // Mark as provided to prevent showing again
     hasProvidedContact = true;
     
     try {
-        const response = await fetch(`${serverUrl}/contact-info`, {
+        await fetch(`${serverUrl}/contact-info`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({ 
-                email: email || null, 
-                phone: phone || null, 
+                email, 
+                phone, 
                 operatorId: operatorId,
                 sessionId: 'default'
             })
         });
         
-        if (!response.ok) {
-            throw new Error('Failed to save contact info');
-        }
-        
         console.log('📧 Contact info saved:', { email, phone, operatorId });
         
-        // Replace form with success message
-        const contactFormMessage = document.getElementById('contactFormMessage');
-        if (contactFormMessage) {
-            let successMessage = '';
-            
-            if (smsEnabled === 'sms-first') {
-                successMessage = '✨ Perfect! Now let me help you with your question, and we\'ll send you a text shortly...';
-            } else {
-                successMessage = '✨ Perfect! Now let me help you with your question...';
-            }
-            
-            contactFormMessage.innerHTML = `
-                <div style="
-                    color: #059669; 
-                    font-weight: 600; 
-                    font-size: 14px;
-                    text-align: center;
-                    padding: 16px;
-                    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-                    border-radius: 12px;
-                    border: 1px solid #a7f3d0;
-                ">
-                    ${successMessage}
-                </div>
-            `;
+        const lastMessage = document.querySelector('.message:last-child');
+        let successMessage = '';
+        
+        if (smsEnabled === 'sms-first') {
+            successMessage = '✨ Perfect! Now let me help you with your question, and we\'ll send you a text shortly...';
+        } else {
+            successMessage = '✨ Perfect! Now let me help you with your question...';
         }
         
-        // Process pending message after brief delay
+        lastMessage.innerHTML = `
+            <div style="
+                color: #059669; 
+                font-weight: 600; 
+                font-size: 14px;
+                text-align: center;
+                padding: 16px;
+                background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+                border-radius: 12px;
+                border: 1px solid #a7f3d0;
+            ">
+                ${successMessage}
+            </div>
+        `;
+        
+        // 🔧 FIXED: Now send the pending message to get the actual answer
         setTimeout(async () => {
             if (pendingMessage) {
+                console.log('📤 Now sending pending message:', pendingMessage);
                 await sendMessageToServer(pendingMessage);
                 pendingMessage = null;
             }
@@ -925,28 +903,25 @@ async function submitContact() {
         
     } catch (error) {
         console.error('Error saving contact:', error);
-        // Fall back to skip behavior
         skipContact();
     }
 }
 
-// 🔧 FIXED: Enhanced skip function
+// 🔧 FIXED: Updated skipContact function
 function skipContact() {
     hasProvidedContact = true;
+    const lastMessage = document.querySelector('.message:last-child');
+    lastMessage.remove();
     
-    const contactFormMessage = document.getElementById('contactFormMessage');
-    if (contactFormMessage) {
-        contactFormMessage.remove();
-    }
-    
-    // Process pending message immediately
+    // Send the pending message immediately
     if (pendingMessage) {
+        console.log('📤 Sending pending message after skip:', pendingMessage);
         sendMessageToServer(pendingMessage);
         pendingMessage = null;
     }
 }
 
-        // FIXED: Enhanced sendMessageToServer function with proper contact form handling
+       // 🔧 FIXED: Updated sendMessageToServer function in chat.html
 async function sendMessageToServer(message) {
     showTyping();
     
@@ -970,6 +945,14 @@ async function sendMessageToServer(message) {
         const data = await response.json();
         console.log('📨 Server response:', data);
         hideTyping();
+        
+        // 🔧 FIXED: Handle contact form request BEFORE answering question
+        if (data.showContactForm) {
+            console.log('📝 Server requesting contact form before answering');
+            pendingMessage = data.pendingMessage || message;
+            showContactForm();
+            return; // Don't show any response yet
+        }
         
         if (data.skipBotResponse) {
             console.log('💬 Operator is active - no bot response needed');
@@ -995,21 +978,6 @@ async function sendMessageToServer(message) {
                 });
             }, 100);
         }
-
-        // 🔧 FIXED: Proper contact form handling
-        if (data.showContactForm) {
-            console.log('📋 Showing contact form...');
-            
-            // Store pending message if provided
-            if (data.pendingMessage) {
-                pendingMessage = data.pendingMessage;
-            }
-            
-            // Show contact form after a brief delay
-            setTimeout(() => {
-                showContactForm();
-            }, 500);
-        }
         
         if (data.agentRequested || data.operatorJoined || data.startPolling || data.twoWayChat || data.continuePolling) {
             console.log('🔄 Starting/continuing message polling...');
@@ -1017,11 +985,11 @@ async function sendMessageToServer(message) {
             
             if (data.smsEnabled && data.smsMode === 'hybrid') {
                 setTimeout(() => {
-                    showSMSNotification('💬 Two-way chat active! You can also text us if you prefer mobile messaging.', '#8B5CF6');
+                    showSMSNotification('💬 Choose your preferred way to continue the conversation!', '#8B5CF6');
                 }, 2000);
             } else if (data.smsEnabled && data.smsMode === 'sms-first') {
                 setTimeout(() => {
-                    showSMSNotification('📱 SMS conversation started! Continue on your mobile device.', '#10b981');
+                    showSMSNotification('📱 SMS conversation starting!', '#10b981');
                 }, 2000);
             } else if (data.twoWayChat) {
                 setTimeout(() => {
