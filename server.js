@@ -467,30 +467,43 @@ app.post('/api/sms/webhook', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // Find or create conversation based on phone number
-        let convResult = await client.query(
-            'SELECT conversation_id, operator_id FROM conversations WHERE customer_sms_number = $1 AND sms_enabled = true ORDER BY last_message_at DESC LIMIT 1',
-            [From]
-        );
-        
-        let conversationId;
-        let operatorId;
-        
-        if (convResult.rows.length > 0) {
-            // Existing conversation
-            conversationId = convResult.rows[0].conversation_id;
-            operatorId = convResult.rows[0].operator_id;
-        } else {
-            // Create new conversation
-            operatorId = 'sms_user'; 
-            
-            const sessionKey = `sms_${From}_${Date.now()}`;
-            const newConv = await client.query(
-                'INSERT INTO conversations (operator_id, session_key, customer_phone, customer_sms_number, sms_enabled, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING conversation_id',
-                [operatorId, sessionKey, From, From, true, 'new']
-            );
-            conversationId = newConv.rows[0].conversation_id;
-        }
+        // SMART MERGING: First check for ANY existing conversation with this phone number
+let convResult = await client.query(`
+    SELECT conversation_id, operator_id, session_key
+    FROM conversations 
+    WHERE (customer_phone = $1 OR customer_sms_number = $1)
+    ORDER BY last_message_at DESC 
+    LIMIT 1
+`, [From]);
+
+let conversationId;
+let operatorId;
+
+if (convResult.rows.length > 0) {
+    // Found existing conversation - MERGE into it!
+    conversationId = convResult.rows[0].conversation_id;
+    operatorId = convResult.rows[0].operator_id;
+    
+    // Enable SMS on this existing conversation
+    await client.query(`
+        UPDATE conversations 
+        SET customer_sms_number = $1, sms_enabled = true, last_message_at = NOW()
+        WHERE conversation_id = $2
+    `, [From, conversationId]);
+    
+    console.log(`📱 SMS merged into existing conversation ${conversationId}`);
+    
+} else {
+    // No existing conversation found - create new one
+    operatorId = 'sms_user';
+    const sessionKey = `sms_${From}_${Date.now()}`;
+    const newConv = await client.query(
+        'INSERT INTO conversations (operator_id, session_key, customer_phone, customer_sms_number, sms_enabled, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING conversation_id',
+        [operatorId, sessionKey, From, From, true, 'new']
+    );
+    conversationId = newConv.rows[0].conversation_id;
+    console.log(`📱 Created new SMS conversation ${conversationId}`);
+}
         
         // Save SMS message to the sms_messages table
         await client.query(
@@ -802,463 +815,92 @@ app.get('/api/dashboard/conversations', async (req, res) => {
 // COMPLETE REPLACEMENT for the poll-messages endpoint in server.js
 // Enhanced and more efficient poll-messages endpoint with better error handling
 
-// REPLACE the entire chat logic section with this fixed version:
+app.post('/api/chat/poll-messages', validateRequired(['operatorId']), async (req, res) => {
+    const { operatorId, sessionId = 'default', lastMessageCount = 0 } = req.body;
 
-// Enhanced Chat endpoint with better error handling and operator message detection
-app.post('/api/chat', validateRequired(['message', 'operatorId']), async function(req, res) {
-    const { message, sessionId = 'default', operatorId } = req.body;
     const sessionKey = `${operatorId}_${sessionId}`;
 
     try {
-        // Get or create conversation in database
-        const conversation = await getOrCreateConversation(operatorId, sessionKey);
-        if (!conversation) {
-            return res.status(500).json({ 
-                success: false,
-                error: 'Failed to manage conversation' 
-            });
-        }
+        console.log(`📡 Polling request: ${sessionKey}, lastCount: ${lastMessageCount}`);
 
-        // Save user message to database
-        await saveMessage(conversation.conversation_id, 'user', message);
-
-        // Load operator config
-        let currentConfig;
-        try {
-            currentConfig = await getOperatorConfig(operatorId);
-            if (!currentConfig) {
-                return res.status(404).json({ 
-                    success: false,
-                    error: 'Operator config not found.' 
-                });
-            }
-        } catch (error) {
-            console.error(`Error loading config for operatorId ${operatorId}:`, error);
-            return res.status(500).json({ 
-                success: false,
-                error: 'Failed to load operator configuration.' 
-            });
-        }
-
-        // Initialize in-memory conversation for Claude API
-        if (!conversations[sessionKey]) {
-            conversations[sessionKey] = [];
-            conversations[sessionKey].lastActivity = Date.now();
-        }
-        conversations[sessionKey].push({ role: 'user', content: message });
-        conversations[sessionKey].lastActivity = Date.now();
-
-        // Check if operator has taken over
-        const operatorCheckResult = await pool.query(
-            'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
-            [conversation.conversation_id, 'operator']
+        // Get conversation from database
+        const convResult = await pool.query(
+            'SELECT conversation_id, last_message_at, last_operator_message_at FROM conversations WHERE session_key = $1',
+            [sessionKey]
         );
 
-        const hasOperatorMessages = parseInt(operatorCheckResult.rows[0].count) > 0;
-        
-        // Check if we've already sent the operator notification
-        const notificationCheckResult = await pool.query(
-            `SELECT COUNT(*) FROM messages 
-             WHERE conversation_id = $1 
-             AND role = 'assistant' 
-             AND content LIKE '%Our team member will respond shortly%'`,
-            [conversation.conversation_id]
+        if (convResult.rows.length === 0) {
+            return res.json({ 
+                success: true,
+                newMessages: [], 
+                totalMessages: 0,
+                hasOperatorMessages: false,
+                lastPolled: new Date().toISOString()
+            });
+        }
+
+        const conversation = convResult.rows[0];
+        const conversationId = conversation.conversation_id;
+
+        // Get all messages for this conversation
+        const messagesResult = await pool.query(`
+            SELECT 
+                role, 
+                content, 
+                timestamp,
+                message_id
+            FROM messages 
+            WHERE conversation_id = $1 
+            ORDER BY timestamp ASC, message_id ASC
+        `, [conversationId]);
+
+        const allMessages = messagesResult.rows;
+        const totalMessages = allMessages.length;
+
+        // Determine which messages are new
+        const newMessages = allMessages.slice(lastMessageCount);
+
+        // Filter for operator and system messages only for the client
+        const relevantNewMessages = newMessages.filter(msg => 
+            msg.role === 'operator' || msg.role === 'system'
         );
-        
-        const hasAlreadyNotified = parseInt(notificationCheckResult.rows[0].count) > 0;
 
-        // Only show the notification ONCE when operator first joins
-        if (hasOperatorMessages && !hasAlreadyNotified) {
-            const operatorResponse = "Thanks for your message! Our team member will respond shortly in this chat.";
-            conversations[sessionKey].push({ role: 'assistant', content: operatorResponse });
-            await saveMessage(conversation.conversation_id, 'assistant', operatorResponse);
-            
-            return res.json({ 
-                success: true,
-                response: operatorResponse,
-                operatorJoined: true,
-                twoWayChat: true,
-                startPolling: true
-            });
-        } else if (hasOperatorMessages && hasAlreadyNotified) {
-            // Operator is active but we've already notified - just acknowledge without bot response
-            return res.json({ 
-                success: true,
-                response: null, // No bot response needed
-                skipBotResponse: true, // Tell client to skip showing a bot response
-                operatorActive: true,
-                twoWayChat: true,
-                continuePolling: true
-            });
-        }
+        // Check if there are any operator messages at all
+        const hasOperatorMessages = allMessages.some(msg => msg.role === 'operator');
 
-        const lowerMessage = message.toLowerCase();
-        const waiverLink = currentConfig.waiverLink || "No waiver link provided.";
-        const smsEnabled = currentConfig.smsEnabled || 'disabled';
+        // Enhanced response with more metadata
+        const response = {
+            success: true,
+            newMessages: relevantNewMessages.map(msg => ({
+                role: msg.role,
+                content: msg.content,
+                timestamp: msg.timestamp
+            })),
+            totalMessages: totalMessages,
+            hasOperatorMessages: hasOperatorMessages,
+            lastPolled: new Date().toISOString(),
+            conversationId: conversationId,
+            lastOperatorMessageAt: conversation.last_operator_message_at
+        };
 
-        const defaultAgentKeywords = [
-            'agent', 'human', 'speak to someone', 'talk to someone', 
-            'representative', 'person', 'staff', 'manager', 'urgent',
-            'speak with human', 'speak with an agent', 'speak human',
-            'talk to human', 'talk with human', 'real person',
-            'customer service', 'help me', 'support'
-        ];
-        
-        let customTriggers = [];
-        if (currentConfig.handoffTriggers) {
-            customTriggers = currentConfig.handoffTriggers.split(',').map(t => t.trim().toLowerCase());
-        }
-        
-        const allAgentKeywords = [...defaultAgentKeywords, ...customTriggers];
-        const isAgentRequest = allAgentKeywords.some(keyword => lowerMessage.includes(keyword)) ||
-            lowerMessage.includes('call me') ||
-            (lowerMessage.includes('speak') && lowerMessage.includes('human')) ||
-            (lowerMessage.includes('talk') && lowerMessage.includes('human')) ||
-            (lowerMessage.includes('connect') && lowerMessage.includes('agent'));
+        // Set appropriate cache headers for real-time polling
+        res.set({
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'X-Accel-Buffering': 'no' // Disable nginx buffering for real-time responses
+        });
 
-        const handoffKey = `handoff_${sessionKey}`;
-        const alreadyHandedOff = conversations[handoffKey] || false;
-
-        // ===============================
-        // CONTACT COLLECTION LOGIC FIRST
-        // ===============================
-        
-        // Check if this is the first few messages and no contact collected yet
-        const messageCount = conversations[sessionKey].length;
-        const hasContactInfo = customerContacts[sessionKey] && 
-            (customerContacts[sessionKey].email || customerContacts[sessionKey].phone);
-        
-        // Show contact form on 2nd or 3rd user message if no contact collected
-        if (messageCount >= 3 && messageCount <= 5 && !hasContactInfo && !alreadyHandedOff && !isAgentRequest) {
-            const shouldShowContactForm = !conversations[`contact_shown_${sessionKey}`];
-            
-            if (shouldShowContactForm) {
-                conversations[`contact_shown_${sessionKey}`] = true;
-                
-                let contactFormResponse;
-                if (smsEnabled === 'sms-first') {
-                    contactFormResponse = `Quick question! What's your mobile number so we can text you ${currentConfig.businessType || 'tour'} updates and follow up if needed? (Email is optional too!)
-                    
-**Phone:** _Required for SMS updates_
-**Email:** _Optional backup_`;
-                } else {
-                    contactFormResponse = `Quick question! Could I get your email so we can send you ${currentConfig.businessType || 'tour'} details and follow up if needed? Phone is optional too.
-                    
-**Email:** _For tour details & follow-up_
-**Phone:** _Optional_`;
-                }
-                
-                conversations[sessionKey].push({ role: 'assistant', content: contactFormResponse });
-                await saveMessage(conversation.conversation_id, 'assistant', contactFormResponse);
-                return res.json({ 
-                    success: true, 
-                    response: contactFormResponse,
-                    showContactForm: true,
-                    smsMode: smsEnabled
-                });
-            }
-        }
-
-        // Handle contact info submission
-        const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
-        const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
-        
-        if (emailRegex.test(message) && !hasContactInfo) {
-            const email = message.match(emailRegex)[0];
-            customerContacts[sessionKey] = { ...customerContacts[sessionKey], email };
-            await updateCustomerContact(sessionKey, email, null);
-            
-            const thankYouResponse = `Perfect! I've saved your email (${email}). Now, how can I help you today?`;
-            conversations[sessionKey].push({ role: 'assistant', content: thankYouResponse });
-            await saveMessage(conversation.conversation_id, 'assistant', thankYouResponse);
-            return res.json({ success: true, response: thankYouResponse });
-        }
-        
-        if (phoneRegex.test(message) && !hasContactInfo && !isAgentRequest) {
-            const phone = message.match(phoneRegex)[0];
-            customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
-            await updateCustomerContact(sessionKey, null, phone);
-            
-            const thankYouResponse = `Perfect! I've saved your phone number (${phone}). Now, how can I help you today?`;
-            conversations[sessionKey].push({ role: 'assistant', content: thankYouResponse });
-            await saveMessage(conversation.conversation_id, 'assistant', thankYouResponse);
-            return res.json({ success: true, response: thankYouResponse });
-        }
-
-        // ===============================
-        // AGENT REQUEST LOGIC
-        // ===============================
-        
-        if (isAgentRequest && !alreadyHandedOff) {
-            await markAgentRequested(sessionKey);
-            conversations[handoffKey] = true;
-            
-            const customerContact = customerContacts[sessionKey];
-            const responseTime = currentConfig.responseTime || '30 minutes';
-            
-            let botResponse;
-            
-            if (smsEnabled === 'hybrid') {
-                // Hybrid mode - give choice
-                botResponse = `I'd be happy to connect you with our team! How would you prefer to continue the conversation?
-                
-<div style="margin: 15px 0;">
-    <button class="choice-btn" onclick="selectChatChoice('sms')" style="
-        display: block; width: 100%; margin: 8px 0; padding: 12px;
-        background: #8B5CF6; color: white; border: none; border-radius: 8px;
-        cursor: pointer; font-weight: 600;">📱 Text me so I can reply on the go</button>
-    
-    <button class="choice-btn" onclick="selectChatChoice('chat')" style="
-        display: block; width: 100%; margin: 8px 0; padding: 12px;
-        background: #10b981; color: white; border: none; border-radius: 8px;
-        cursor: pointer; font-weight: 600;">💬 Continue chatting here</button>
-</div>
-
-<p style="font-size: 12px; color: #6b7280; margin-top: 10px;">Our team typically responds within ${responseTime}</p>`;
-                
-            } else if (smsEnabled === 'sms-first') {
-                // SMS-first mode - check if we have phone already
-                if (customerContact && customerContact.phone) {
-                    // We have phone, send SMS immediately
-                    const businessName = currentConfig.businessName || 'Our Business';
-                    const smsFirstMessage = currentConfig.smsFirstMessage || '';
-                    const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
-                                      `Hi! This is ${businessName}. Thanks for reaching out! How can we help you today?`;
-                    
-                    const smsResult = await sendSMS(customerContact.phone, welcomeSMS, conversation.conversation_id);
-                    
-                    if (smsResult && smsResult.success) {
-                        botResponse = `Perfect! 📱 I've sent you a text at ${customerContact.phone}. Continue our conversation there, and our team will join you shortly!`;
-                    } else {
-                        botResponse = `I have your number (${customerContact.phone}). Our team will text you shortly!`;
-                    }
-                    
-                    // Send handoff email
-                    if (emailTransporter) {
-                        await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-                    }
-                } else {
-                    // No phone yet, ask for it
-                    botResponse = `I'd be happy to connect you with our team! What's your mobile number so we can start a text conversation?`;
-                }
-                
-            } else {
-                // Regular mode - no SMS
-                botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime}. Could I get your contact information?`;
-            }
-            
-            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-            
-            // Send handoff email for non-hybrid modes
-            if (smsEnabled !== 'hybrid' && emailTransporter) {
-                await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-            }
-            
-            return res.json({ 
-                success: true, 
-                response: botResponse,
-                agentRequested: true,
-                smsMode: smsEnabled
-            });
-        }
-
-        // ===============================
-        // HANDOFF FOLLOW-UP LOGIC
-        // ===============================
-        
-        if (alreadyHandedOff) {
-            const customerContact = customerContacts[sessionKey];
-            const responseTime = currentConfig.responseTime || '30 minutes';
-            
-            console.log('🔍 Handoff follow-up debug:', {
-                message: message,
-                phoneRegexMatch: phoneRegex.test(message),
-                smsEnabled: smsEnabled,
-                isHybrid: smsEnabled === 'hybrid',
-                isSmsFirst: smsEnabled === 'sms-first'
-            });
-            
-            // Handle phone number submission for SMS modes
-            if (phoneRegex.test(message) && (smsEnabled === 'hybrid' || smsEnabled === 'sms-first')) {
-                const phone = message.match(phoneRegex)[0];
-                customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
-                await updateCustomerContact(sessionKey, null, phone);
-                
-                // Send SMS using SMS logic
-                const businessName = currentConfig.businessName || 'Our Business';
-                const smsFirstMessage = currentConfig.smsFirstMessage || '';
-                const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
-                                  `Hi! This is ${businessName}. Thanks for reaching out! How can we help you today?`;
-                
-                const smsResult = await sendSMS(phone, welcomeSMS, conversation.conversation_id);
-                
-                let botResponse;
-                if (smsResult && smsResult.success) {
-                    botResponse = `Perfect! 📱 I've sent you a text at ${phone}. Continue our conversation there for mobile chat, and our team will join you shortly!`;
-                } else {
-                    botResponse = `I have your number (${phone}). Our team will text you shortly! You can also continue chatting here if you prefer.`;
-                }
-                
-                // Send handoff email with phone number
-                if (emailTransporter) {
-                    await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
-                }
-                
-                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                return res.json({ 
-                    success: true, 
-                    response: botResponse, 
-                    smsEnabled: true, 
-                    smsMode: smsEnabled,
-                    phoneCollected: true
-                });
-            }
-            
-            // Handle "continue chatting here" choice
-            if (lowerMessage.includes('continue chatting') || lowerMessage.includes('chat here') || 
-                lowerMessage.includes('prefer') && lowerMessage.includes('here')) {
-                
-                // Start regular chat handoff
-                if (emailTransporter) {
-                    await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-                }
-                
-                const botResponse = `Perfect! Our team will join this chat to assist you personally. They typically respond within ${responseTime}. 
-                
-While you wait, could I get your email or phone number so they can follow up if needed?`;
-                
-                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                return res.json({ 
-                    success: true, 
-                    response: botResponse,
-                    startPolling: true,
-                    twoWayChat: true
-                });
-            }
-            
-            // Handle email collection
-            if (emailRegex.test(message)) {
-                const email = message.match(emailRegex)[0];
-                customerContacts[sessionKey] = { ...customerContacts[sessionKey], email };
-                await updateCustomerContact(sessionKey, email, null);
-                
-                if (emailTransporter) {
-                    await sendHandoffEmail(currentConfig, conversations[sessionKey], { email }, operatorId);
-                }
-                
-                const botResponse = `Perfect! I've saved your email (${email}) and our team has been notified. They'll reach out within ${responseTime}. Is there anything else I can help you with while you wait?`;
-                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                return res.json({ success: true, response: botResponse });
-            }
-            
-            // Handle general phone/call requests (non-SMS modes only)
-            if ((lowerMessage.includes('phone') || lowerMessage.includes('call')) && smsEnabled === 'disabled') {
-                if (customerContact && customerContact.phone) {
-                    const botResponse = `Perfect! Our team will call you at ${customerContact.phone} within ${responseTime}. Is there anything else I can help you with while you wait?`;
-                    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                    return res.json({ success: true, response: botResponse });
-                } else {
-                    const botResponse = `Perfect! What's your phone number so our team can call you within ${responseTime}?`;
-                    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                    return res.json({ success: true, response: botResponse });
-                }
-            }
-        }
-        
-        // ===============================
-        // NORMAL CHAT RESPONSES
-        // ===============================
-        
-        // Handle waiver requests
-        if (lowerMessage.includes('waiver') || lowerMessage.includes('form') || lowerMessage.includes('sign') || lowerMessage.includes('release')) {
-            const botResponse = `Here's your waiver: <a href='${waiverLink}' target='_blank' style='color: ${currentConfig.brandColor || '#8B5CF6'};'>Click here to sign</a>`;
-            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-            return res.json({ success: true, response: botResponse });
-        }
-
-        // Handle pricing questions
-        if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('pricing')) {
-            if (currentConfig.bookingLink) {
-                const botResponse = `For current pricing and availability, please check our booking system: <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || '#8B5CF6'};'>View prices and book here</a>. Our team can also help with pricing questions if you need assistance!`;
-                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                return res.json({ success: true, response: botResponse });
-            }
-        }
-
-        // Handle booking requests
-        if (currentConfig.bookingLink && (lowerMessage.includes('book') || lowerMessage.includes('reserve') || lowerMessage.includes('schedule'))) {
-            const botResponse = `Ready to book? <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || '#8B5CF6'};'>Click here to book online</a> or speak to someone from our team for assistance!`;
-            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-            return res.json({ success: true, response: botResponse });
-        }
-
-        // Normal conversation with Claude API
-        const SYSTEM_PROMPT = buildEnhancedSystemPrompt(currentConfig);
-
-        try {
-            let maxTokens = 100;
-            switch (currentConfig.responseLength) {
-                case "Detailed (3-4 sentences)":
-                    maxTokens = 150;
-                    break;
-                case "Moderate (2-3 sentences)":
-                    maxTokens = 120;
-                    break;
-                default:
-                    maxTokens = 100;
-            }
-
-            const response = await axios.post('https://api.anthropic.com/v1/messages', {
-                model: 'claude-3-haiku-20240307',
-                max_tokens: maxTokens,
-                temperature: currentConfig.chatbotTone === 'Enthusiastic' ? 0.7 : 0.5,
-                system: SYSTEM_PROMPT,
-                messages: conversations[sessionKey]
-            }, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': process.env.CLAUDE_API_KEY,
-                    'anthropic-version': '2023-06-01'
-                },
-                timeout: 30000 // 30 second timeout
-            });
-
-            const botResponse = response.data.content[0].text;
-            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-
-            // Trim conversation history to prevent memory bloat
-            if (conversations[sessionKey].length > 20) {
-                conversations[sessionKey] = conversations[sessionKey].slice(-20);
-            }
-
-            res.json({ success: true, response: botResponse });
-
-        } catch (claudeError) {
-            console.error('Error with Claude API:', claudeError.response?.data || claudeError.message);
-
-            let fallbackResponse = `Sorry, I'm having connection issues. For immediate help, please speak to someone from our team!`;
-            
-            conversations[sessionKey].push({ role: 'assistant', content: fallbackResponse });
-            await saveMessage(conversation.conversation_id, 'assistant', fallbackResponse);
-            res.json({ success: true, response: fallbackResponse });
-        }
+        console.log(`📨 Poll response: ${relevantNewMessages.length} new messages, ${totalMessages} total`);
+        res.json(response);
 
     } catch (error) {
-        console.error('Error in chat endpoint:', error);
+        console.error('❌ Polling error:', error);
         res.status(500).json({ 
             success: false,
-            error: 'Internal server error',
-            message: 'Please try again or contact support if the issue persists.'
+            error: 'Failed to poll messages',
+            timestamp: new Date().toISOString(),
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 });
@@ -2145,70 +1787,173 @@ async function sendSMS(toNumber, message, conversationId) {
 }
 
         // Handle agent handoff follow-ups
-        if (alreadyHandedOff) {
-            const customerContact = customerContacts[sessionKey];
-            const responseTime = currentConfig.responseTime || CONFIG.DEFAULT_RESPONSE_TIME;
-            
-            const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
-            const phoneRegex = /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b|\b\(\d{3}\)\s?\d{3}[-.]?\d{4}\b/;
-            
-            if (emailRegex.test(message)) {
-                const email = message.match(emailRegex)[0];
-                customerContacts[sessionKey] = { ...customerContacts[sessionKey], email };
-                await updateCustomerContact(sessionKey, email, null);
-                
-                if (emailTransporter) {
-                    await sendHandoffEmail(currentConfig, conversations[sessionKey], { email }, operatorId);
-                }
-                
-                const botResponse = `Perfect! I've saved your email (${email}) and our team has been notified. They'll reach out within ${responseTime}. Is there anything else I can help you with while you wait?`;
-                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                return res.json({ success: true, response: botResponse });
-            } else if (phoneRegex.test(message) && smsEnabled !== 'hybrid') {
-                const phone = message.match(phoneRegex)[0];
-                customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
-                await updateCustomerContact(sessionKey, null, phone);
-                
-                if (emailTransporter) {
-                    await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
-                }
-                
-                const botResponse = `Perfect! I've saved your phone number (${phone}) and our team has been notified. They'll call you within ${responseTime}. Is there anything else I can help you with while you wait?`;
-                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                return res.json({ success: true, response: botResponse });
-            } else if ((lowerMessage.includes('phone') || lowerMessage.includes('call')) && smsEnabled !== 'hybrid') {
-                if (customerContact && customerContact.phone) {
-                    const botResponse = `Perfect! Our team will call you at ${customerContact.phone} within ${responseTime}. Is there anything else I can help you with while you wait?`;
-                    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                    return res.json({ success: true, response: botResponse });
-                } else {
-                    const botResponse = `Perfect! What's your phone number so our team can call you within ${responseTime}?`;
-                    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                    return res.json({ success: true, response: botResponse });
-                }
-            } else if (lowerMessage.includes('email')) {
-                if (customerContact && customerContact.email) {
-                    const botResponse = `Perfect! Our team will email you at ${customerContact.email} within ${responseTime}. Is there anything else I can help you with while you wait?`;
-                    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                    return res.json({ success: true, response: botResponse });
-                } else {
-                    const botResponse = `Perfect! What's your email address so our team can reach out within ${responseTime}?`;
-                    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                    return res.json({ success: true, response: botResponse });
-                }
-            } else if (isAgentRequest) {
-                const botResponse = `Our team has already been notified and will reach out within ${responseTime}! Is there anything else I can help you with while you wait, or would you like me to provide our direct contact information?`;
-                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                return res.json({ success: true, response: botResponse });
-            }
+        // Handle agent handoff follow-ups
+if (alreadyHandedOff) {
+    const customerContact = customerContacts[sessionKey];
+    const responseTime = currentConfig.responseTime || CONFIG.DEFAULT_RESPONSE_TIME;
+    const smsEnabled = currentConfig.smsEnabled || 'disabled';
+    
+    const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
+    const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
+    
+    // Handle phone number submission for hybrid mode
+    if (phoneRegex.test(message) && smsEnabled === 'hybrid') {
+        const phone = message.match(phoneRegex)[0];
+        customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
+        await updateCustomerContact(sessionKey, null, phone);
+        
+        // Send SMS using SMS-first logic
+        const businessName = currentConfig.businessName || 'Our Business';
+        const smsFirstMessage = currentConfig.smsFirstMessage || '';
+        const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
+                          `Hi! This is ${businessName}. Thanks for reaching out! How can we help you today?`;
+        
+        const smsResult = await sendSMS(phone, welcomeSMS, conversation.conversation_id);
+        
+        let botResponse;
+        if (smsResult && smsResult.success) {
+            botResponse = `Perfect! 📱 I've sent you a text at ${phone}. Continue our conversation there for mobile chat, and our team will join you shortly!`;
+        } else {
+            botResponse = `I have your number (${phone}). Our team will text you shortly! You can also continue chatting here if you prefer.`;
         }
+        
+        if (emailTransporter) {
+            await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
+        }
+        
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ 
+            success: true, 
+            response: botResponse, 
+            smsEnabled: true, 
+            smsMode: 'hybrid',
+            phoneCollected: true
+        });
+    }
+    
+    // Handle phone number submission for SMS-first mode
+    else if (phoneRegex.test(message) && smsEnabled === 'sms-first') {
+        const phone = message.match(phoneRegex)[0];
+        customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
+        await updateCustomerContact(sessionKey, null, phone);
+        
+        // Send SMS for sms-first mode
+        const businessName = currentConfig.businessName || 'Our Business';
+        const smsFirstMessage = currentConfig.smsFirstMessage || '';
+        const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
+                          `Hi! This is ${businessName}. Thanks for reaching out! How can we help you today?`;
+        
+        const smsResult = await sendSMS(phone, welcomeSMS, conversation.conversation_id);
+        
+        let botResponse;
+        if (smsResult && smsResult.success) {
+            botResponse = `Perfect! 📱 I've sent you a text at ${phone}. Continue our conversation there, and our team will join you shortly!`;
+        } else {
+            botResponse = `I have your number (${phone}). Our team will text you shortly!`;
+        }
+        
+        if (emailTransporter) {
+            await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
+        }
+        
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ success: true, response: botResponse });
+    }
+    
+    // Handle "continue chatting here" choice
+    else if (lowerMessage.includes('continue chatting') || lowerMessage.includes('chat here') || 
+        lowerMessage.includes('prefer') && lowerMessage.includes('here')) {
+        
+        if (emailTransporter) {
+            await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+        }
+        
+        const botResponse = `Perfect! Our team will join this chat to assist you personally. They typically respond within ${responseTime}. 
+        
+While you wait, could I get your email or phone number so they can follow up if needed?`;
+        
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ 
+            success: true, 
+            response: botResponse,
+            startPolling: true,
+            twoWayChat: true
+        });
+    }
+    
+    // Handle email collection
+    else if (emailRegex.test(message)) {
+        const email = message.match(emailRegex)[0];
+        customerContacts[sessionKey] = { ...customerContacts[sessionKey], email };
+        await updateCustomerContact(sessionKey, email, null);
+        
+        if (emailTransporter) {
+            await sendHandoffEmail(currentConfig, conversations[sessionKey], { email }, operatorId);
+        }
+        
+        const botResponse = `Perfect! I've saved your email (${email}) and our team has been notified. They'll reach out within ${responseTime}. Is there anything else I can help you with while you wait?`;
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ success: true, response: botResponse });
+    } 
+    
+    // Handle phone collection for disabled SMS mode (regular calling)
+    else if (phoneRegex.test(message) && smsEnabled === 'disabled') {
+        const phone = message.match(phoneRegex)[0];
+        customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
+        await updateCustomerContact(sessionKey, null, phone);
+        
+        if (emailTransporter) {
+            await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
+        }
+        
+        const botResponse = `Perfect! I've saved your phone number (${phone}) and our team has been notified. They'll call you within ${responseTime}. Is there anything else I can help you with while you wait?`;
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ success: true, response: botResponse });
+    } 
+    
+    // Handle general phone/call requests
+    else if ((lowerMessage.includes('phone') || lowerMessage.includes('call')) && smsEnabled === 'disabled') {
+        if (customerContact && customerContact.phone) {
+            const botResponse = `Perfect! Our team will call you at ${customerContact.phone} within ${responseTime}. Is there anything else I can help you with while you wait?`;
+            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+            return res.json({ success: true, response: botResponse });
+        } else {
+            const botResponse = `Perfect! What's your phone number so our team can call you within ${responseTime}?`;
+            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+            return res.json({ success: true, response: botResponse });
+        }
+    } 
+    
+    // Handle email requests
+    else if (lowerMessage.includes('email')) {
+        if (customerContact && customerContact.email) {
+            const botResponse = `Perfect! Our team will email you at ${customerContact.email} within ${responseTime}. Is there anything else I can help you with while you wait?`;
+            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+            return res.json({ success: true, response: botResponse });
+        } else {
+            const botResponse = `Perfect! What's your email address so our team can reach out within ${responseTime}?`;
+            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+            return res.json({ success: true, response: botResponse });
+        }
+    } 
+    
+    // Handle repeat agent requests
+    else if (isAgentRequest) {
+        const botResponse = `Our team has already been notified and will reach out within ${responseTime}! Is there anything else I can help you with while you wait, or would you like me to provide our direct contact information?`;
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ success: true, response: botResponse });
+    }
+}
 // 🆕 ENHANCED: Handle SMS-first phone number collection
 // 🆕 ENHANCED: Initial agent request handling with hybrid SMS support
 if (isAgentRequest && !alreadyHandedOff) {
