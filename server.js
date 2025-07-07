@@ -355,6 +355,8 @@ async function saveMessage(conversationId, role, content) {
 async function updateCustomerContact(sessionKey, email = null, phone = null, smsNumber = null) {
     const client = await pool.connect();
     try {
+        console.log('📝 Updating customer contact:', { sessionKey, email, phone, smsNumber });
+        
         const updateFields = [];
         const values = [];
         let valueIndex = 1;
@@ -379,14 +381,18 @@ async function updateCustomerContact(sessionKey, email = null, phone = null, sms
 
         if (updateFields.length > 0) {
             values.push(sessionKey);
-            await client.query(
-                `UPDATE conversations SET ${updateFields.join(', ')} WHERE session_key = $${valueIndex}`,
-                values
-            );
-            console.log(`📧 Customer contact updated for ${sessionKey}`);
+            const query = `UPDATE conversations SET ${updateFields.join(', ')} WHERE session_key = $${valueIndex}`;
+            
+            console.log('📝 Executing query:', query, 'with values:', values);
+            
+            const result = await client.query(query, values);
+            
+            console.log(`📧 Customer contact updated for ${sessionKey}, rows affected: ${result.rowCount}`);
+        } else {
+            console.log('⚠️ No contact info to update');
         }
     } catch (error) {
-        console.error('Error updating customer contact:', error);
+        console.error('❌ Error updating customer contact:', error);
         throw error;
     } finally {
         client.release();
@@ -1685,12 +1691,15 @@ app.post('/contact-info', validateRequired(['operatorId']), async (req, res) => 
     
     try {
         // Store in memory for immediate use
-        customerContacts[sessionKey] = { email, phone };
+        customerContacts[sessionKey] = { 
+            email: email || null, 
+            phone: phone || null 
+        };
         
-        // Update database
+        // Update database - FIXED VERSION
         await updateCustomerContact(sessionKey, email, phone);
         
-        console.log('📬 Received enhanced contact info:', {
+        console.log('📬 Enhanced contact info saved:', {
             email: email || 'N/A',
             phone: phone || 'N/A',
             session: sessionKey
@@ -1698,10 +1707,14 @@ app.post('/contact-info', validateRequired(['operatorId']), async (req, res) => 
         
         res.json({ 
             success: true,
-            message: 'Contact information saved successfully'
+            message: 'Contact information saved successfully',
+            stored: {
+                email: !!email,
+                phone: !!phone
+            }
         });
     } catch (error) {
-        console.error('Error saving contact info:', error);
+        console.error('❌ Error saving contact info:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to save contact information'
