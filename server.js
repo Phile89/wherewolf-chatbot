@@ -1112,7 +1112,32 @@ app.post('/api/chat', validateRequired(['message', 'operatorId']), async functio
 
         // Save user message to database
         await saveMessage(conversation.conversation_id, 'user', message);
-
+try {
+    // Get total user message count from database 
+    const messageCountResult = await pool.query(
+        'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
+        [conversation.conversation_id, 'user']
+    );
+    
+    const userMessageCount = parseInt(messageCountResult.rows[0].count);
+    const hasContactInfo = conversation.customer_email || conversation.customer_phone;
+    
+    console.log(`📊 Contact form check: userMessageCount=${userMessageCount}, hasContactInfo=${hasContactInfo}`);
+    
+    // Show contact form on FIRST user message if no contact info
+    if (userMessageCount === 1 && !hasContactInfo) {
+        console.log('📝 First message detected - showing contact form');
+        
+        return res.json({
+            success: true,
+            showContactForm: true,
+            pendingMessage: message
+        });
+    }
+} catch (contactCheckError) {
+    console.error('❌ Error checking contact form logic:', contactCheckError);
+    // Continue with normal flow if contact check fails
+}
         // Load operator config
         let currentConfig;
         try {
@@ -1509,33 +1534,7 @@ if (lowerMessage.includes('time') || lowerMessage.includes('schedule') || lowerM
     }
 });
 
-// 🔧 CONTACT FORM LOGIC - Add this after operator checks
-        try {
-            // Get total user message count from database 
-            const messageCountResult = await pool.query(
-                'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
-                [conversation.conversation_id, 'user']
-            );
-            
-            const userMessageCount = parseInt(messageCountResult.rows[0].count);
-            const hasContactInfo = conversation.customer_email || conversation.customer_phone;
-            
-            console.log(`📊 Contact form check: userMessageCount=${userMessageCount}, hasContactInfo=${hasContactInfo}`);
-            
-            // Show contact form on FIRST user message if no contact info
-            if (userMessageCount === 1 && !hasContactInfo) {
-                console.log('📝 First message detected - showing contact form');
-                
-                return res.json({
-                    success: true,
-                    showContactForm: true,
-                    pendingMessage: message
-                });
-            }
-        } catch (contactCheckError) {
-            console.error('❌ Error checking contact form logic:', contactCheckError);
-            // Continue with normal flow if contact check fails
-        }
+
 
 // Enhanced and more efficient poll-messages endpoint with better error handling
 app.post('/api/chat/poll-messages', validateRequired(['operatorId']), async (req, res) => {
