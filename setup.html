@@ -1461,18 +1461,31 @@
 
         // Update alert preference selection
         function updateAlertOption(label) {
-            // Remove selected class from all options
-            document.querySelectorAll('.alert-option').forEach(option => {
-                option.classList.remove('selected');
-            });
-            
-            // Add selected class to clicked option
-            label.classList.add('selected');
-            
-            // Check the radio button
-            const radio = label.querySelector('input[type="radio"]');
-            radio.checked = true;
-        }
+    // Remove selected class from all options
+    document.querySelectorAll('.alert-option').forEach(option => {
+        option.classList.remove('selected');
+    });
+    
+    // Add selected class to clicked option
+    label.classList.add('selected');
+    
+    // Check the radio button
+    const radio = label.querySelector('input[type="radio"]');
+    radio.checked = true;
+    
+    // 🆕 Show/hide email field based on selection
+    const emailField = document.getElementById('operatorEmailField');
+    const emailInput = document.getElementById('operatorEmail');
+    
+    if (radio.value === 'email') {
+        emailField.style.display = 'block';
+        emailInput.setAttribute('required', 'required');
+    } else {
+        emailField.style.display = 'none';
+        emailInput.removeAttribute('required');
+        emailInput.value = '';
+    }
+}
 
         // Toggle SMS fields
         function toggleSMSFields() {
