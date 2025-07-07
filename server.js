@@ -1337,48 +1337,61 @@ While you wait, could I get your email or phone number so they can follow up if 
         }
 
         // 🔧 FIXED: Initial agent request handling with better hybrid SMS messaging
-        if (isAgentRequest && !alreadyHandedOff) {
-            await markAgentRequested(sessionKey);
-            conversations[handoffKey] = true;
-            
-            const customerContact = customerContacts[sessionKey];
-            const responseTime = currentConfig.responseTime || CONFIG.DEFAULT_RESPONSE_TIME;
-            const smsEnabled = currentConfig.smsEnabled || 'disabled';
-            
-            let botResponse;
-            
-            if (smsEnabled === 'hybrid') {
-                // 🔧 FIXED: More direct hybrid mode messaging
-                botResponse = `Perfect! I'll connect you with our team. Would you prefer to continue chatting here, or we can text you so you can reply on the go?
-
-Just type "text" for mobile messaging or "chat" to continue here.
-
-Our team typically responds within ${responseTime}.`;
-                
-            } else if (smsEnabled === 'sms-first') {
-                // SMS-first mode remains the same
-                botResponse = `I'd be happy to connect you with our team! What's your mobile number so we can start a text conversation?`;
-                
-            } else {
-                // Regular mode - no SMS
-                botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime}. Could I get your contact information?`;
-            }
-            
-            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-            
-            // Send handoff email if not hybrid mode
-            if (smsEnabled !== 'hybrid' && emailTransporter) {
-                await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-            }
-            
-            return res.json({ 
-                success: true, 
-                response: botResponse,
-                agentRequested: true,
-                smsMode: smsEnabled
-            });
-        }
+        // 🆕 ENHANCED: Initial agent request handling with alertPreference check
+if (isAgentRequest && !alreadyHandedOff) {
+    
+    // 🔧 CHECK ALERT PREFERENCE FIRST
+    const alertPreference = currentConfig.alertPreference || 'email'; // default to email if not set
+    
+    if (alertPreference === 'none') {
+        // AI-ONLY MODE: Redirect back to automated help
+        const aiOnlyResponse = `I'm here to help you with any questions about our ${currentConfig.businessType || 'tours'}! I can provide information about pricing, schedules, locations, and policies. What specific information can I help you find?`;
+        
+        conversations[sessionKey].push({ role: 'assistant', content: aiOnlyResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', aiOnlyResponse);
+        
+        return res.json({ 
+            success: true, 
+            response: aiOnlyResponse,
+            aiOnlyMode: true 
+        });
+    }
+    
+    // CONTINUE WITH HUMAN HANDOFF for 'email' and 'dashboard' modes
+    await markAgentRequested(sessionKey);
+    conversations[handoffKey] = true;
+    
+    const customerContact = customerContacts[sessionKey];
+    const responseTime = currentConfig.responseTime || CONFIG.DEFAULT_RESPONSE_TIME;
+    const contactMethods = currentConfig.contactMethods || CONFIG.DEFAULT_CONTACT_METHODS;
+    const smsEnabled = currentConfig.smsEnabled || 'disabled';
+    
+    let botResponse;
+    
+    if (smsEnabled === 'hybrid') {
+        // ... keep your existing hybrid mode code here
+    } else if (smsEnabled === 'sms-first') {
+        // ... keep your existing sms-first mode code here  
+    } else {
+        // Regular mode - no SMS
+        botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime} via ${contactMethods}. Could I get your contact information?`;
+    }
+    
+    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+    
+    // Send handoff email if not hybrid mode or if customer chooses chat
+    if (smsEnabled !== 'hybrid' && emailTransporter) {
+        await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+    }
+    
+    return res.json({ 
+        success: true, 
+        response: botResponse,
+        agentRequested: true,
+        smsMode: smsEnabled
+    });
+}
         
         // Handle waiver requests
         if (lowerMessage.includes('waiver') || lowerMessage.includes('form') || lowerMessage.includes('sign') || lowerMessage.includes('release')) {
