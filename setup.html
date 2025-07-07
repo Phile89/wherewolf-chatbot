@@ -1189,14 +1189,16 @@
                                 </div>
                             </label>
                             
-                            <label class="alert-option" onclick="updateAlertOption(this)">
-                                <input type="radio" name="alertPreference" value="dashboard">
-                                <div>
-                                    <strong>💬 Two-way chat dashboard</strong>
-                                    <p style="margin: 5px 0 0 0; font-size: 14px; color: #6b7280;">Respond directly in the chat through a dashboard. Customers get real-time responses.</p>
-                                    <p style="margin: 5px 0 0 0; font-size: 12px; color: #8B5CF6; font-weight: 600;">📊 Dashboard link will be provided after setup!</p>
-                                </div>
-                            </label>
+                            <div class="form-group" id="operatorEmailField" style="display: none;">
+    <label for="operatorEmail">
+        📧 Your Alert Email Address *
+        <span class="info-icon">i
+            <div class="tooltip">Email address where you want to receive customer alerts and handoff notifications</div>
+        </span>
+    </label>
+    <input type="email" id="operatorEmail" placeholder="alerts@yourbusiness.com">
+    <p class="help-text">You'll receive notifications when customers request human support</p>
+</div>
                         </div>
                     </div>
                     
