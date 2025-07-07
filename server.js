@@ -1351,30 +1351,96 @@ Our team typically responds within ${responseTime}.`;
         
         // Handle waiver requests
         if (lowerMessage.includes('waiver') || lowerMessage.includes('form') || lowerMessage.includes('sign') || lowerMessage.includes('release')) {
-            const botResponse = `Here's your waiver: <a href='${waiverLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR};'>Click here to sign</a>`;
-            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-            return res.json({ success: true, response: botResponse });
-        }
+    let botResponse;
+    if (currentConfig.waiverLink && currentConfig.waiverLink.trim() && currentConfig.waiverLink !== "No waiver link provided.") {
+        botResponse = `Here's your waiver: <a href='${currentConfig.waiverLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR};'>Click here to sign</a>`;
+    } else {
+        botResponse = `I'm not sure about waiver requirements. Please speak to someone from our team who can provide you with the most current waiver information.`;
+    }
+    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+    return res.json({ success: true, response: botResponse });
+}
 
         // Handle pricing questions
         if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('pricing')) {
-            if (currentConfig.bookingLink) {
-                const botResponse = `For current pricing and availability, please check our booking system: <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR};'>View prices and book here</a>. Our team can also help with pricing questions if you need assistance!`;
-                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-                await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-                return res.json({ success: true, response: botResponse });
-            }
-        }
+    if (currentConfig.bookingLink && currentConfig.bookingLink.trim()) {
+        const botResponse = `For current pricing and availability, please check our booking system: <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR}; text-decoration: underline;'>View prices and book here</a>`;
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ success: true, response: botResponse });
+    }
+}
 
         // Handle booking requests
         if (currentConfig.bookingLink && (lowerMessage.includes('book') || lowerMessage.includes('reserve') || lowerMessage.includes('schedule'))) {
-            const botResponse = `Ready to book? <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR};'>Click here to book online</a> or speak to someone from our team for assistance!`;
+    const botResponse = `Ready to book? <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR}; text-decoration: underline;'>Click here to book online</a>`;
+    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+    return res.json({ success: true, response: botResponse });
+}
+// Look for phone number patterns in SMS-first mode
+const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
+if (phoneRegex.test(message) && currentConfig.smsEnabled === 'sms-first') {
+    const phone = message.match(phoneRegex)[0];
+    
+    // Store the phone number
+    customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
+    await updateCustomerContact(sessionKey, null, phone);
+    
+    // Send SMS immediately
+    const businessName = currentConfig.businessName || 'Our Business';
+    const smsFirstMessage = currentConfig.smsFirstMessage || '';
+    const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
+                      `Hi! This is ${businessName}. Thanks for reaching out! How can we help you today?`;
+    
+    const smsResult = await sendSMS(phone, welcomeSMS, conversation.conversation_id);
+    
+    let botResponse;
+    if (smsResult && smsResult.success) {
+        botResponse = `Perfect! 📱 I've sent you a text at ${phone}. Continue our conversation there!`;
+    } else {
+        botResponse = `I have your number (${phone}). Our team will text you shortly!`;
+    }
+    
+    // Send handoff email
+    if (emailTransporter) {
+        await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
+    }
+    
+    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+    return res.json({ 
+        success: true, 
+        response: botResponse,
+        smsEnabled: true
+    });
+}
+if (lowerMessage.includes('meet') || lowerMessage.includes('location') || lowerMessage.includes('where')) {
+    if (currentConfig.location && currentConfig.location.trim()) {
+        const botResponse = `We meet at ${currentConfig.location}. If you need more specific directions or landmarks, please speak to someone from our team!`;
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ success: true, response: botResponse });
+    }
+}
+if (lowerMessage.includes('time') || lowerMessage.includes('schedule') || lowerMessage.includes('when')) {
+    if (currentConfig.bookingLink && currentConfig.bookingLink.trim()) {
+        const botResponse = `For current tour times and availability, please check our booking system: <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR}; text-decoration: underline;'>View schedule and book here</a>`;
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ success: true, response: botResponse });
+    } else if (currentConfig.times && currentConfig.times.length > 0) {
+        const validTimes = currentConfig.times.filter(time => time && time.trim() !== '');
+        if (validTimes.length > 0) {
+            const timesStr = validTimes.join(', ');
+            const botResponse = `Our tours typically run at: ${timesStr}. For current availability and to book, please speak to someone from our team!`;
             conversations[sessionKey].push({ role: 'assistant', content: botResponse });
             await saveMessage(conversation.conversation_id, 'assistant', botResponse);
             return res.json({ success: true, response: botResponse });
         }
-
+    }
+}
         // Normal conversation with Claude API
         const SYSTEM_PROMPT = buildEnhancedSystemPrompt(currentConfig);
 
