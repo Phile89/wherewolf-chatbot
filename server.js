@@ -2089,14 +2089,128 @@ if (isAgentRequest && !alreadyHandedOff) {
     
     let botResponse;
     
+    // 🔧 FIXED: Complete agent handoff logic for server.js
+// Replace the incomplete section around line 1150-1200 in your server.js
+
+// 🆕 ENHANCED: Initial agent request handling with alertPreference check
+if (isAgentRequest && !alreadyHandedOff) {
+    
+    // 🔧 CHECK ALERT PREFERENCE FIRST
+    const alertPreference = currentConfig.alertPreference || 'email'; // default to email if not set
+    
+    if (alertPreference === 'none') {
+        // AI-ONLY MODE: Redirect back to automated help
+        const aiOnlyResponse = `I'm here to help you with any questions about our ${currentConfig.businessType || 'tours'}! I can provide information about pricing, schedules, locations, and policies. What specific information can I help you find?`;
+        
+        conversations[sessionKey].push({ role: 'assistant', content: aiOnlyResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', aiOnlyResponse);
+        
+        return res.json({ 
+            success: true, 
+            response: aiOnlyResponse,
+            aiOnlyMode: true 
+        });
+    }
+    
+    // CONTINUE WITH HUMAN HANDOFF for 'email' and 'dashboard' modes
+    await markAgentRequested(sessionKey);
+    conversations[handoffKey] = true;
+    
+    const customerContact = customerContacts[sessionKey];
+    const responseTime = currentConfig.responseTime || CONFIG.DEFAULT_RESPONSE_TIME;
+    const contactMethods = currentConfig.contactMethods || CONFIG.DEFAULT_CONTACT_METHODS;
+    const smsEnabled = currentConfig.smsEnabled || 'disabled';
+    
+    let botResponse = ''; // 🔧 FIXED: Initialize botResponse
+    
     if (smsEnabled === 'hybrid') {
-        // ... keep your existing hybrid mode code here
+        // 🔧 FIXED: Complete hybrid mode implementation
+        const businessSmsNumber = currentConfig.businessSmsNumber || process.env.TWILIO_PHONE_NUMBER;
+        const smsHandoffMessage = currentConfig.smsHandoffMessage || 
+            '💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!';
+        
+        if (businessSmsNumber) {
+            const formattedSmsMessage = smsHandoffMessage.replace('{PHONE_NUMBER}', businessSmsNumber);
+            
+            botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime}. 
+
+Choose how you'd like to continue:
+
+<div style="margin: 15px 0; text-align: center;">
+    <button onclick="selectChatChoice('chat')" style="
+        display: block;
+        width: 100%;
+        margin: 8px 0;
+        padding: 12px;
+        background: #8B5CF6;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 14px;
+    " class="choice-btn">Continue chatting here 💬</button>
+    
+    <button onclick="selectChatChoice('sms')" style="
+        display: block;
+        width: 100%;
+        margin: 8px 0;
+        padding: 12px;
+        background: #10b981;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 14px;
+    " class="choice-btn">Switch to text messaging 📱</button>
+</div>
+
+${formattedSmsMessage}`;
+        } else {
+            // Fallback if no SMS number configured
+            botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime} via ${contactMethods}. Could I get your contact information?`;
+        }
     } else if (smsEnabled === 'sms-first') {
-        // ... keep your existing sms-first mode code here  
+        // 🔧 FIXED: SMS-first mode implementation
+        botResponse = `Great! I'd love to connect you with our team via text message for faster assistance.
+
+Could you please provide your mobile number? We'll send you a quick text to get you connected with one of our team members who can help personally.
+
+Once I have your number, our team will typically respond within ${responseTime}.`;
     } else {
         // Regular mode - no SMS
         botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime} via ${contactMethods}. Could I get your contact information?`;
     }
+    
+    // 🔧 FIXED: Ensure botResponse is always set before using it
+    if (!botResponse) {
+        botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime}. Please provide your contact information so they can assist you.`;
+    }
+    
+    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+    
+    // Send handoff email if email mode or if customer chooses chat in hybrid mode
+    if (alertPreference === 'email' && emailTransporter) {
+        try {
+            await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+            console.log('✅ Handoff email sent successfully');
+        } catch (emailError) {
+            console.error('❌ Failed to send handoff email:', emailError);
+            // Don't fail the whole request if email fails
+        }
+    }
+    f
+    return res.json({ 
+        success: true, 
+        response: botResponse,
+        agentRequested: true,
+        smsMode: smsEnabled,
+        startPolling: alertPreference === 'dashboard', // Start polling for dashboard mode
+        twoWayChat: alertPreference === 'dashboard'     // Enable two-way chat for dashboard mode
+    });
+}
     
     conversations[sessionKey].push({ role: 'assistant', content: botResponse });
     await saveMessage(conversation.conversation_id, 'assistant', botResponse);
