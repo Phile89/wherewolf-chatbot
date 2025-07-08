@@ -619,7 +619,8 @@ async function sendSMS(toNumber, message, conversationId) {
         client.release();
     }
 }
-// Add weather function near the top of server.js (after other helper functions)
+// Replace your existing getCurrentWeather function with this fixed version
+
 async function getCurrentWeather(location) {
     if (!process.env.OPENWEATHER_API_KEY) {
         console.log('⚠️ OpenWeather API key not configured');
@@ -628,31 +629,149 @@ async function getCurrentWeather(location) {
     
     try {
         console.log(`🌤️ Fetching weather for: ${location}`);
+        
         const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather`, {
             params: {
                 q: location,
                 appid: process.env.OPENWEATHER_API_KEY,
                 units: 'imperial' // Use 'metric' for Celsius
             },
-            timeout: 5000 // 5 second timeout
+            timeout: 10000, // 10 second timeout (increased from 5)
+            validateStatus: function (status) {
+                // Don't throw errors for 4xx responses - let us handle them
+                return status < 500;
+            }
         });
         
-        const weather = response.data;
-        return {
-            temp: Math.round(weather.main.temp),
-            feelsLike: Math.round(weather.main.feels_like),
-            description: weather.weather[0].description,
-            humidity: weather.main.humidity,
-            windSpeed: Math.round(weather.wind?.speed || 0),
-            cloudiness: weather.clouds?.all || 0,
-            city: weather.name,
-            country: weather.sys.country
-        };
+        console.log(`📡 Weather API status: ${response.status} for ${location}`);
+        
+        // Handle different response statuses
+        if (response.status === 200) {
+            const weather = response.data;
+            console.log(`✅ Weather success: ${weather.name}, ${weather.sys.country} - ${weather.main.temp}°F`);
+            
+            return {
+                temp: Math.round(weather.main.temp),
+                feelsLike: Math.round(weather.main.feels_like),
+                description: weather.weather[0].description,
+                humidity: weather.main.humidity,
+                windSpeed: Math.round(weather.wind?.speed || 0),
+                cloudiness: weather.clouds?.all || 0,
+                city: weather.name,
+                country: weather.sys.country
+            };
+        } else if (response.status === 404) {
+            console.error(`❌ Location not found: ${location}`);
+            console.error('💡 Try format like: "Miami, FL" or "Key West, Florida"');
+            return null;
+        } else if (response.status === 401) {
+            console.error(`❌ Invalid API key for location: ${location}`);
+            return null;
+        } else {
+            console.error(`❌ Weather API error ${response.status} for ${location}:`, response.data);
+            return null;
+        }
+        
     } catch (error) {
-        console.error('❌ Weather API error:', error.message);
+        // Handle network/timeout errors
+        if (error.code === 'ECONNABORTED') {
+            console.error(`❌ Weather API timeout for ${location} (>10 seconds)`);
+        } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            console.error(`❌ Network error fetching weather for ${location}:`, error.code);
+        } else {
+            console.error(`❌ Unexpected weather API error for ${location}:`, error.message);
+            if (error.response) {
+                console.error(`   Status: ${error.response.status}`);
+                console.error(`   Data:`, error.response.data);
+            }
+        }
         return null;
     }
 }
+
+// Test different location formats for Key West
+app.get('/api/debug/location-formats', async (req, res) => {
+    const testLocations = [
+        'Key West, FL',
+        'Key West, Florida',
+        'Key West, US',
+        'Key West',
+        'Key West, Florida, US',
+        'Miami, FL', // Known working location
+    ];
+    
+    const results = [];
+    
+    for (const location of testLocations) {
+        console.log(`🧪 Testing location format: ${location}`);
+        
+        try {
+            const weather = await getCurrentWeather(location);
+            results.push({
+                location: location,
+                success: !!weather,
+                data: weather
+            });
+        } catch (error) {
+            results.push({
+                location: location,
+                success: false,
+                error: error.message
+            });
+        }
+        
+        // Small delay between requests
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    res.json({
+        success: true,
+        message: 'Location format test results',
+        results: results,
+        recommendation: results.find(r => r.success)?.location || 'Try "Miami, FL" as fallback'
+    });
+});
+
+// Quick fix test endpoint
+app.get('/api/test-weather-fixed/:location', async (req, res) => {
+    const { location } = req.params;
+    
+    try {
+        console.log(`🔧 Testing fixed weather function for: ${location}`);
+        
+        const weatherData = await getCurrentWeather(location);
+        
+        if (weatherData) {
+            const testConfig = {
+                businessType: 'boat tours',
+                weatherStyle: 'tour-focused'
+            };
+            
+            const response = generateWeatherResponse(weatherData, testConfig);
+            
+            res.json({
+                success: true,
+                location: location,
+                weatherData: weatherData,
+                botResponse: response,
+                fixed: true
+            });
+        } else {
+            res.json({
+                success: false,
+                error: 'Weather data not available - check server logs for details',
+                location: location,
+                suggestion: 'Try /api/debug/location-formats to test different formats'
+            });
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            location: location
+        });
+    }
+});
 
 // Add weather response generation function
 function generateWeatherResponse(weatherData, config) {
