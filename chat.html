@@ -629,7 +629,28 @@ function enableChatInput() {
 }
 
         // 2. REPLACE the loadConversationHistory function with this improved version:
-async function loadConversationHistory() {
+        // 🧪 DEBUG: Add this function to test what's happening
+function debugSessionState() {
+    console.log('🧪 === SESSION DEBUG ===');
+    console.log('Current sessionId:', sessionId);
+    console.log('SessionStorage sessionId:', sessionStorage.getItem('wherewolf_session_id'));
+    console.log('SessionStorage age:', sessionStorage.getItem('wherewolf_session_age'));
+    console.log('hasProvidedContact:', hasProvidedContact);
+    console.log('isFirstMessage:', isFirstMessage);
+    console.log('operatorId:', operatorId);
+    
+    // Test if session age is too old
+    const sessionAge = sessionStorage.getItem('wherewolf_session_age');
+    const FOUR_HOURS = 4 * 60 * 60 * 1000;
+    const now = Date.now();
+    const ageInMinutes = sessionAge ? Math.round((now - parseInt(sessionAge)) / 60000) : 'N/A';
+    console.log('Session age (minutes):', ageInMinutes);
+    console.log('Session expired?', sessionAge ? (now - parseInt(sessionAge)) >= FOUR_HOURS : 'N/A');
+    
+    console.log('🧪 === END SESSION DEBUG ===');
+}
+
+        async function loadConversationHistory() {
     try {
         console.log('📜 Loading conversation history for session:', sessionId);
         
@@ -959,7 +980,32 @@ async function submitContact() {
             return;
         }
     }
+    // 🧪 DEBUG: Add this function to test what's happening
+function debugSessionState() {
+    console.log('🧪 === SESSION DEBUG ===');
+    console.log('Current sessionId:', sessionId);
+    console.log('SessionStorage sessionId:', sessionStorage.getItem('wherewolf_session_id'));
+    console.log('SessionStorage age:', sessionStorage.getItem('wherewolf_session_age'));
+    console.log('hasProvidedContact:', hasProvidedContact);
+    console.log('isFirstMessage:', isFirstMessage);
+    console.log('operatorId:', operatorId);
     
+    // Test if session age is too old
+    const sessionAge = sessionStorage.getItem('wherewolf_session_age');
+    const FOUR_HOURS = 4 * 60 * 60 * 1000;
+    const now = Date.now();
+    const ageInMinutes = sessionAge ? Math.round((now - parseInt(sessionAge)) / 60000) : 'N/A';
+    console.log('Session age (minutes):', ageInMinutes);
+    console.log('Session expired?', sessionAge ? (now - parseInt(sessionAge)) >= FOUR_HOURS : 'N/A');
+    
+    console.log('🧪 === END SESSION DEBUG ===');
+}
+
+// Call this on page load
+window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(debugSessionState, 1000);
+});
+
     // 🔧 FIXED: Mark contact as provided BEFORE making the API call
     hasProvidedContact = true;
     isFirstMessage = false;

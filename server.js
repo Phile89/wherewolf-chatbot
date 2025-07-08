@@ -1908,69 +1908,59 @@ While you wait, could I get your email or phone number so they can follow up if 
             }
         }
 
-        // Initial agent request handling with alertPreference check
-        if (isAgentRequest && !alreadyHandedOff) {
-            
-            // CHECK ALERT PREFERENCE FIRST
-            const alertPreference = currentConfig.alertPreference || 'email'; // default to email if not set
-            
-            if (alertPreference === 'none') {
-                // AI-ONLY MODE: Redirect back to automated help
-                const aiOnlyResponse = `I'm here to help you with any questions about our ${currentConfig.businessType || 'tours'}! I can provide information about pricing, schedules, locations, and policies. What specific information can I help you find?`;
-                
-                conversations[sessionKey].push({ role: 'assistant', content: aiOnlyResponse });
-                await saveMessage(conversation.conversation_id, 'assistant', aiOnlyResponse);
-                
-                return res.json({ 
-                    success: true, 
-                    response: aiOnlyResponse,
-                    aiOnlyMode: true 
-                });
-            }
-            
-            // CONTINUE WITH HUMAN HANDOFF for 'email' and 'dashboard' modes
-            await markAgentRequested(sessionKey);
-            conversations[handoffKey] = true;
-            
-            const customerContact = customerContacts[sessionKey];
-            const responseTime = currentConfig.responseTime || CONFIG.DEFAULT_RESPONSE_TIME;
-            const contactMethods = currentConfig.contactMethods || CONFIG.DEFAULT_CONTACT_METHODS;
-            const smsEnabled = currentConfig.smsEnabled || 'disabled';
-            
-            let botResponse;
-            
-            if (smsEnabled === 'hybrid') {
-                botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime}. 
-
-💬 Would you prefer to:
-<div style="margin: 15px 0; display: flex; gap: 10px; flex-wrap: wrap;">
-    <button onclick="selectChatChoice('sms')" class="choice-btn" style="background: #3b82f6; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">📱 Continue via SMS</button>
-    <button onclick="selectChatChoice('chat')" class="choice-btn" style="background: #8B5CF6; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">💬 Continue chatting here</button>
-</div>
-
-Could I also get your contact information?`;
-            } else if (smsEnabled === 'sms-first') {
-                botResponse = `I'd be happy to connect you with our team! What's your mobile number? We'll send you a text so you can chat with us on the go.`;
-            } else {
-                // Regular mode - no SMS
-                botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime} via ${contactMethods}. Could I get your contact information?`;
-            }
-            
-            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-            
-            // Send handoff email if not hybrid mode or if customer chooses chat
-            if (smsEnabled !== 'hybrid' && emailTransporter) {
-                await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-            }
-            
-            return res.json({ 
-                success: true, 
-                response: botResponse,
-                agentRequested: true,
-                smsMode: smsEnabled
-            });
-        }
+        // 🆕 ENHANCED: Initial agent request handling with alertPreference check
+if (isAgentRequest && !alreadyHandedOff) {
+    
+    // 🔧 CHECK ALERT PREFERENCE FIRST
+    const alertPreference = currentConfig.alertPreference || 'email';
+    
+    if (alertPreference === 'none') {
+        // AI-ONLY MODE: Redirect back to automated help
+        const aiOnlyResponse = `I'm here to help you with any questions about our ${currentConfig.businessType || 'tours'}! I can provide information about pricing, schedules, locations, and policies. What specific information can I help you find?`;
+        
+        conversations[sessionKey].push({ role: 'assistant', content: aiOnlyResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', aiOnlyResponse);
+        
+        return res.json({ 
+            success: true, 
+            response: aiOnlyResponse,
+            aiOnlyMode: true 
+        });
+    }
+    
+    // CONTINUE WITH HUMAN HANDOFF for 'email' and 'dashboard' modes
+    await markAgentRequested(sessionKey);
+    conversations[handoffKey] = true;
+    
+    const customerContact = customerContacts[sessionKey];
+    const responseTime = currentConfig.responseTime || CONFIG.DEFAULT_RESPONSE_TIME;
+    const contactMethods = currentConfig.contactMethods || CONFIG.DEFAULT_CONTACT_METHODS;
+    const smsEnabled = currentConfig.smsEnabled || 'disabled';
+    
+    let botResponse;
+    
+    if (smsEnabled === 'hybrid') {
+        // ... keep your existing hybrid mode code here
+    } else if (smsEnabled === 'sms-first') {
+        // ... keep your existing sms-first mode code here  
+    } else {
+        // Regular mode - no SMS
+        botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime} via ${contactMethods}. Could I get your contact information?`;
+    }
+    
+    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+    
+    // 🔧 FIXED: Don't send email immediately - wait for contact info!
+    // Email will be sent when customer provides contact information
+    
+    return res.json({ 
+        success: true, 
+        response: botResponse,
+        agentRequested: true,
+        smsMode: smsEnabled
+    });
+}
         
         // Handle waiver requests
         if (lowerMessage.includes('waiver') || lowerMessage.includes('form') || lowerMessage.includes('sign') || lowerMessage.includes('release')) {
