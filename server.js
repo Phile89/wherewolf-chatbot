@@ -1264,6 +1264,48 @@ if (currentConfig.weatherEnabled) {
         }
     }
 }
+// 7. ADD TEST ENDPOINT to server.js (for testing weather integration)
+
+// Add this endpoint to test weather functionality
+app.get('/api/test-weather/:location', async (req, res) => {
+    const { location } = req.params;
+    
+    try {
+        console.log(`🧪 Testing weather for: ${location}`);
+        const weatherData = await getCurrentWeather(location);
+        
+        if (weatherData) {
+            const testConfig = {
+                businessType: 'boat tours',
+                weatherStyle: 'tour-focused'
+            };
+            
+            const response = generateWeatherResponse(weatherData, testConfig);
+            
+            res.json({
+                success: true,
+                location: location,
+                weatherData: weatherData,
+                botResponse: response,
+                apiConfigured: !!process.env.OPENWEATHER_API_KEY
+            });
+        } else {
+            res.json({
+                success: false,
+                error: 'Could not fetch weather data',
+                apiConfigured: !!process.env.OPENWEATHER_API_KEY
+            });
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            apiConfigured: !!process.env.OPENWEATHER_API_KEY
+        });
+    }
+});
+
+// Test by visiting: https://your-app.com/api/test-weather/Key%20West,%20FL
 
         // Load operator config
         let currentConfig;
