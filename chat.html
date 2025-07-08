@@ -501,41 +501,31 @@
         console.log('URL:', window.location.href);
         console.log('URL params:', window.location.search);
 
-        let operatorId = null;
-        let businessConfig = null;
-        let serverUrl = 'https://wherewolf-chatbot.onrender.com';
-        let isFirstMessage = true;
-        let hasProvidedContact = false;
-        let pendingMessage = null;
-        let pollingInterval = null;
-        let lastMessageCount = 0;
+        // REPLACE with this improved version:
 
-       
-// 🔧 FIX: Fresh chat per browser session (Option B)
-let sessionId = sessionStorage.getItem('wherewolf_session_id');
-if (!sessionId) {
-    sessionId = 'chat_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
-    sessionStorage.setItem('wherewolf_session_id', sessionId);
-    console.log('🆕 Created new session ID:', sessionId);
+let operatorId = null;
+let businessConfig = null;
+let serverUrl = 'https://wherewolf-chatbot.onrender.com';
+let isFirstMessage = true;
+let hasProvidedContact = false;
+let pendingMessage = null;
+let pollingInterval = null;
+let lastMessageCount = 0;
+
+// Get operator ID from URL
+const urlParams = new URLSearchParams(window.location.search);
+operatorId = urlParams.get('operator');
+
+console.log('Operator ID from URL:', operatorId);
+console.log('Server URL:', serverUrl);
+
+if (!operatorId) {
+    console.error('❌ No operator ID provided in URL');
+    showError('Error: No operator ID provided');
 } else {
-    console.log('🔄 Using existing session ID:', sessionId);
-} 
-
-        // Get operator ID from URL
-        const urlParams = new URLSearchParams(window.location.search);
-        operatorId = urlParams.get('operator');
-
-        console.log('Operator ID from URL:', operatorId);
-        console.log('Server URL:', serverUrl);
-
-        if (!operatorId) {
-            console.error('❌ No operator ID provided in URL');
-            showError('Error: No operator ID provided');
-        } else {
-            console.log('✅ Starting chat initialization...');
-            loadOperatorConfig();
-        }
-
+    console.log('✅ Starting chat initialization...');
+    loadOperatorConfig();
+}
         // 🆕 FIXED: Add missing handleKeyPress function
         function handleKeyPress(event) {
             if (event.key === 'Enter') {
@@ -588,42 +578,93 @@ if (!sessionId) {
 
         // Load conversation history when chat loads
         async function loadConversationHistory() {
-            try {
-                const response = await fetch(`${serverUrl}/api/chat/history`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        operatorId: operatorId,
-                        sessionId: 'default'
-                    })
+    try {
+        console.log('📚 Checking for conversation history...');
+        
+        const response = await fetch(`${serverUrl}/api/chat/history`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                operatorId: operatorId,
+                sessionId: sessionId  // Use our managed sessionId
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            
+            console.log('📊 History response:', {
+                messageCount: data.messages?.length || 0,
+                hasOperator: data.hasOperator,
+                agentRequested: data.agentRequested
+            });
+            
+            if (data.messages && data.messages.length > 0) {
+                console.log('📜 Loading existing conversation history...');
+                
+                const messagesContainer = document.getElementById('chatMessages');
+                messagesContainer.innerHTML = '';
+                
+                data.messages.forEach(msg => {
+                    displayMessage(msg.content, msg.role);
                 });
                 
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    if (data.messages && data.messages.length > 0) {
-                        const messagesContainer = document.getElementById('chatMessages');
-                        messagesContainer.innerHTML = '';
-                        
-                        data.messages.forEach(msg => {
-                            displayMessage(msg.content, msg.role);
-                        });
-                        
-                        if (data.hasOperator || data.agentRequested) {
-                            console.log('🔄 Previous operator involvement detected, starting polling...');
-                            startOperatorMessagePolling();
-                            isFirstMessage = false;
-                        }
-                        
-                        lastMessageCount = data.messages.length;
-                    }
+                if (data.hasOperator || data.agentRequested) {
+                    console.log('🔄 Previous operator involvement detected, starting polling...');
+                    startOperatorMessagePolling();
+                    isFirstMessage = false;
                 }
-            } catch (error) {
-                console.error('Error loading conversation history:', error);
+                
+                lastMessageCount = data.messages.length;
+                
+                // Mark that we loaded history (not a fresh start)
+                isFirstMessage = false;
+                console.log('✅ Conversation history loaded successfully');
+            } else {
+                console.log('🆕 No previous conversation - starting fresh');
+                // Keep isFirstMessage = true for fresh conversations
             }
+        } else {
+            console.log('❌ History not available, starting fresh');
         }
+    } catch (error) {
+        console.error('❌ Error loading conversation history:', error);
+        console.log('🆕 Starting fresh conversation due to error');
+    }
+}
+function forceNewSession() {
+    console.log('🔄 Forcing completely new session...');
+    
+    // Clear any existing session data
+    sessionStorage.removeItem('wherewolf_session_id');
+    sessionStorage.removeItem('wherewolf_session_age');
+    
+    // Generate new session
+    sessionId = 'chat_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+    sessionStorage.setItem('wherewolf_session_id', sessionId);
+    sessionStorage.setItem('wherewolf_session_age', Date.now().toString());
+    
+    // Reset chat state
+    isFirstMessage = true;
+    hasProvidedContact = false;
+    pendingMessage = null;
+    lastMessageCount = 0;
+    
+    // Clear chat UI
+    const messagesContainer = document.getElementById('chatMessages');
+    if (messagesContainer) {
+        messagesContainer.innerHTML = '<div class="loading-message"><div class="loading-spinner"></div>Loading chat...</div>';
+    }
+    
+    // Restart initialization
+    if (operatorId && businessConfig) {
+        initializeEnhancedChat();
+    }
+    
+    console.log('✅ New session created:', sessionId);
+}
 
         // Apply branding from config
         function applyBranding(config) {
