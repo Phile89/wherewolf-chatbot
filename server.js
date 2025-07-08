@@ -570,6 +570,8 @@ const mailOptions = {
     }
 }
 
+
+
 // 🆕 IMPROVED: Enhanced sendSMS function with better error handling
 async function sendSMS(toNumber, message, conversationId) {
     if (!twilioClient) {
@@ -617,6 +619,76 @@ async function sendSMS(toNumber, message, conversationId) {
         client.release();
     }
 }
+// Add weather function near the top of server.js (after other helper functions)
+async function getCurrentWeather(location) {
+    if (!process.env.OPENWEATHER_API_KEY) {
+        console.log('⚠️ OpenWeather API key not configured');
+        return null;
+    }
+    
+    try {
+        console.log(`🌤️ Fetching weather for: ${location}`);
+        const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather`, {
+            params: {
+                q: location,
+                appid: process.env.OPENWEATHER_API_KEY,
+                units: 'imperial' // Use 'metric' for Celsius
+            },
+            timeout: 5000 // 5 second timeout
+        });
+        
+        const weather = response.data;
+        return {
+            temp: Math.round(weather.main.temp),
+            feelsLike: Math.round(weather.main.feels_like),
+            description: weather.weather[0].description,
+            humidity: weather.main.humidity,
+            windSpeed: Math.round(weather.wind?.speed || 0),
+            cloudiness: weather.clouds?.all || 0,
+            city: weather.name,
+            country: weather.sys.country
+        };
+    } catch (error) {
+        console.error('❌ Weather API error:', error.message);
+        return null;
+    }
+}
+
+// Add weather response generation function
+function generateWeatherResponse(weatherData, config) {
+    if (!weatherData) return null;
+    
+    const businessType = config.businessType || 'tours';
+    const weatherStyle = config.weatherStyle || 'simple';
+    const temp = weatherData.temp;
+    const description = weatherData.description;
+    
+    switch (weatherStyle) {
+        case 'simple':
+            return `🌤️ Current weather: ${temp}°F and ${description}!`;
+            
+        case 'detailed':
+            return `🌤️ Current conditions in ${weatherData.city}: ${temp}°F (feels like ${weatherData.feelsLike}°F), ${description}. Humidity: ${weatherData.humidity}%, Wind: ${weatherData.windSpeed} mph.`;
+            
+        case 'tour-focused':
+            let tourComment = '';
+            if (temp >= 75 && !description.includes('rain')) {
+                tourComment = ` Perfect weather for our ${businessType}!`;
+            } else if (temp >= 60 && temp < 75) {
+                tourComment = ` Great conditions for ${businessType} - bring a light jacket!`;
+            } else if (description.includes('rain')) {
+                tourComment = ` Check our weather policy for ${businessType} during rain.`;
+            } else {
+                tourComment = ` Current conditions for ${businessType}.`;
+            }
+            
+            return `🌤️ Weather in ${weatherData.city}: ${temp}°F and ${description}.${tourComment}`;
+            
+        default:
+            return `🌤️ Current weather: ${temp}°F and ${description}!`;
+    }
+}
+
 
 // ===========================================
 // SYSTEM PROMPT BUILDER (COMPLETE VERSION)
@@ -1147,6 +1219,52 @@ try {
     console.error('❌ Error checking contact form logic:', contactCheckError);
     // Continue with normal flow if contact check fails
 }
+// Add weather detection and response (insert in /api/chat endpoint)
+if (currentConfig.weatherEnabled) {
+    const weatherKeywords = [
+        'weather', 'temperature', 'temp', 'hot', 'cold', 'warm', 'cool',
+        'rain', 'rainy', 'raining', 'sunny', 'cloudy', 'overcast',
+        'forecast', 'conditions', 'climate', 'degrees', 'humid',
+        'windy', 'wind', 'storm', 'clear', 'nice day', 'beautiful day'
+    ];
+    
+    const hasWeatherQuestion = weatherKeywords.some(keyword => 
+        lowerMessage.includes(keyword)
+    );
+    
+    if (hasWeatherQuestion) {
+        console.log('🌤️ Weather question detected, fetching data...');
+        
+        const weatherData = await getCurrentWeather(currentConfig.weatherLocation);
+        
+        if (weatherData) {
+            const weatherResponse = generateWeatherResponse(weatherData, currentConfig);
+            
+            if (weatherResponse) {
+                conversations[sessionKey].push({ role: 'assistant', content: weatherResponse });
+                await saveMessage(conversation.conversation_id, 'assistant', weatherResponse);
+                
+                return res.json({ 
+                    success: true, 
+                    response: weatherResponse,
+                    weatherData: true 
+                });
+            }
+        } else {
+            // Fallback if weather API fails
+            const fallbackResponse = `For current weather conditions in ${currentConfig.weatherLocation}, please speak to someone from our team who can provide real-time updates!`;
+            
+            conversations[sessionKey].push({ role: 'assistant', content: fallbackResponse });
+            await saveMessage(conversation.conversation_id, 'assistant', fallbackResponse);
+            
+            return res.json({ 
+                success: true, 
+                response: fallbackResponse 
+            });
+        }
+    }
+}
+
         // Load operator config
         let currentConfig;
         try {
