@@ -1527,11 +1527,12 @@ app.post('/api/save-config', async (req, res) => {
 <script src="${baseUrl}/widget.js"></script>`;
 
         res.json({
-            success: true,
-            operatorId,
-            embedCode,
-            baseUrl
-        });
+    success: true,
+    operatorId,
+    embedCode,
+    baseUrl,
+    dashboardUrl: `${baseUrl}/dashboard?operator=${operatorId}` // 🆕 ADD operator-specific dashboard URL
+});
     } catch (error) {
         console.error('Error saving enhanced config:', error);
         res.status(500).json({ 

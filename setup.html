@@ -243,28 +243,32 @@
         }
 
         .tooltip {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%) scale(0.9);
-            background: #1f2937;
-            color: white;
-            padding: 12px 16px;
-            border-radius: 10px;
-            font-size: 13px;
-            white-space: normal;
-            opacity: 0;
-            pointer-events: none;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 1000;
-            max-width: 320px;
-            width: max-content;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            font-weight: 400;
-            letter-spacing: 0;
-            line-height: 1.5;
-        }
-
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) scale(0.9);
+    background: #1f2937;
+    color: white;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    white-space: normal;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1000;
+    max-width: 320px;
+    width: max-content;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    font-weight: 400;
+    letter-spacing: 0;
+    line-height: 1.5;
+    
+    /* 🔧 FIX: Prevent cutoffs */
+    min-width: 250px;
+    word-wrap: break-word;
+    hyphens: auto;
+}
         .tooltip::after {
             content: '';
             position: absolute;
@@ -276,9 +280,9 @@
         }
 
         .info-icon:hover .tooltip {
-            opacity: 1;
-            transform: translateX(-50%) scale(1) translateY(-6px);
-        }
+     opacity: 1;
+     transform: translateX(-50%) scale(1) translateY(-6px);
+}
 
         .tooltip strong {
             color: #8B5CF6;
@@ -1301,48 +1305,71 @@
            
             <!-- SMS Integration -->
             <div class="form-section">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h3>📱 SMS Integration</h3>
-                    <span class="section-toggle">▼</span>
-                </div>
-                <div class="section-content">
-                    <div class="section-description">Enable two-way SMS conversations with customers</div>
-                    
-                    <div class="form-group">
-                        <label for="smsEnabled">
-                            📱 SMS Mode
-                            <span class="info-icon">i
-                                <div class="tooltip"><strong>Disabled:</strong> No SMS functionality<br><strong>Hybrid:</strong> Customers can choose between web chat and SMS<br><strong>SMS Primary:</strong> Collect phone numbers first for mobile-first experience</div>
-                            </span>
-                        </label>
-                        <select id="smsEnabled" onchange="toggleSMSFields()">
-                            <option value="disabled">Disabled - No SMS</option>
-                            <option value="hybrid">Hybrid - Web Chat + SMS Option</option>
-                            <option value="sms-first">SMS Primary - Collect phone numbers first</option>
-                        </select>
+    <div class="section-header" onclick="toggleSection(this)">
+        <h3>📱 SMS Integration</h3>
+        <span class="section-toggle">▼</span>
+    </div>
+    <div class="section-content">
+        <div class="section-description">Enable two-way SMS conversations with customers</div>
+        
+        <div class="form-group">
+            <label for="smsEnabled">
+                📱 SMS Mode
+                <span class="info-icon">i
+                    <div class="tooltip">
+                        <strong>⚠️ Important:</strong> Enabling SMS will override your Email Alert settings!<br><br>
+                        <strong>Disabled:</strong> No SMS functionality - uses Email Alerts<br>
+                        <strong>Hybrid:</strong> Customers choose between web chat and SMS - may reduce email alerts<br>
+                        <strong>SMS Primary:</strong> Collect phone numbers first, enable two-way SMS - replaces email alerts
                     </div>
+                </span>
+            </label>
+            <select id="smsEnabled" onchange="toggleSMSFields()">
+                <option value="disabled">Disabled - Use Email Alerts Only</option>
+                <option value="hybrid">Hybrid - Web Chat + SMS Option</option>
+                <option value="sms-first">SMS Primary - Two-Way SMS (Overrides Email Alerts)</option>
+            </select>
+            <p class="help-text" id="smsHelpText">When SMS is enabled, customers will communicate via text message instead of triggering email alerts</p>
+        </div>
 
-                    <div id="smsFields" style="display: none;">
-                        <div class="form-group">
-                            <label for="businessSmsNumber">📞 Your Business SMS Number</label>
-                            <input type="tel" id="businessSmsNumber" placeholder="+1 (555) 123-4567">
-                            <p class="help-text">Your Twilio phone number that customers will text</p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="smsHandoffMessage">💬 SMS Invitation Message (Hybrid Mode)</label>
-                            <textarea id="smsHandoffMessage" rows="2" placeholder="💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!"></textarea>
-                            <p class="help-text">Message shown during agent handoff. Use {PHONE_NUMBER} as placeholder.</p>
-                        </div>
-                        
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label for="smsFirstMessage">📱 Welcome SMS (SMS-First Mode)</label>
-                            <textarea id="smsFirstMessage" rows="2" placeholder="Hi! This is {BUSINESS_NAME}. Thanks for reaching out! How can we help you today?"></textarea>
-                            <p class="help-text">First message sent via SMS when customer provides phone number. Use {BUSINESS_NAME} as placeholder.</p>
-                        </div>
-                    </div>
+        <div id="smsFields" style="display: none;">
+            <!-- 🔧 ADD warning box -->
+            <div style="
+                background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+                border: 2px solid #f59e0b;
+                border-radius: 12px;
+                padding: 16px;
+                margin-bottom: 20px;
+                color: #92400e;
+            ">
+                <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 8px;">
+                    ⚠️ SMS Mode Active
                 </div>
+                <p style="margin: 0; font-size: 14px; line-height: 1.4;">
+                    <strong>Note:</strong> SMS mode will reduce or replace email alerts. Customers will primarily communicate via text message, and you'll respond through the dashboard or SMS.
+                </p>
             </div>
+            
+            <div class="form-group">
+                <label for="businessSmsNumber">📞 Your Business SMS Number</label>
+                <input type="tel" id="businessSmsNumber" placeholder="+1 (555) 123-4567">
+                <p class="help-text">Your Twilio phone number that customers will text</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="smsHandoffMessage">💬 SMS Invitation Message (Hybrid Mode)</label>
+                <textarea id="smsHandoffMessage" rows="2" placeholder="💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!"></textarea>
+                <p class="help-text">Message shown during agent handoff. Use {PHONE_NUMBER} as placeholder.</p>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="smsFirstMessage">📱 Welcome SMS (SMS-First Mode)</label>
+                <textarea id="smsFirstMessage" rows="2" placeholder="Hi! This is {BUSINESS_NAME}. Thanks for reaching out! How can we help you today?"></textarea>
+                <p class="help-text">First message sent via SMS when customer provides phone number. Use {BUSINESS_NAME} as placeholder.</p>
+            </div>
+        </div>
+    </div>
+</div>
             
             <!-- Branding -->
             <div class="form-section">
@@ -1528,23 +1555,39 @@ function updateAlertOption(label) {
 }
 
         // Toggle SMS fields
-        function toggleSMSFields() {
-            const smsEnabled = document.getElementById('smsEnabled').value;
-            const smsFields = document.getElementById('smsFields');
-            
-            if (smsEnabled !== 'disabled') {
-                smsFields.style.display = 'block';
-                if (smsEnabled === 'hybrid' && !document.getElementById('smsHandoffMessage').value) {
-                    document.getElementById('smsHandoffMessage').value = 
-                        "💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!";
-                } else if (smsEnabled === 'sms-first' && !document.getElementById('smsFirstMessage').value) {
-                    document.getElementById('smsFirstMessage').value = 
-                        "Hi! This is {BUSINESS_NAME}. Thanks for reaching out! How can we help you today?";
-                }
-            } else {
-                smsFields.style.display = 'none';
-            }
+// ADD this enhanced function to replace the existing toggleSMSFields:
+function toggleSMSFields() {
+    const smsEnabled = document.getElementById('smsEnabled').value;
+    const smsFields = document.getElementById('smsFields');
+    const helpText = document.getElementById('smsHelpText');
+    
+    if (smsEnabled !== 'disabled') {
+        smsFields.style.display = 'block';
+        
+        // Update help text based on mode
+        if (smsEnabled === 'hybrid') {
+            helpText.textContent = 'Hybrid mode: Customers can choose between web chat and SMS. Some may prefer SMS over email alerts.';
+            helpText.style.color = '#f59e0b';
+        } else if (smsEnabled === 'sms-first') {
+            helpText.textContent = 'SMS-first mode: Primary communication via text message. This will largely replace email alerts.';
+            helpText.style.color = '#dc2626';
         }
+        
+        // Set default messages if empty
+        if (smsEnabled === 'hybrid' && !document.getElementById('smsHandoffMessage').value) {
+            document.getElementById('smsHandoffMessage').value = 
+                "💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!";
+        } else if (smsEnabled === 'sms-first' && !document.getElementById('smsFirstMessage').value) {
+            document.getElementById('smsFirstMessage').value = 
+                "Hi! This is {BUSINESS_NAME}. Thanks for reaching out! How can we help you today?";
+        }
+    } else {
+        smsFields.style.display = 'none';
+        helpText.textContent = 'When SMS is enabled, customers will communicate via text message instead of triggering email alerts';
+        helpText.style.color = '#6b7280';
+    }
+}
+
 
         // Toggle conditional sections based on booking link
         function toggleConditionalSections() {
@@ -1822,14 +1865,15 @@ document.getElementById('chatbotForm').addEventListener('submit', async function
             `;
             
             if (selectedAlertPreference === 'dashboard') {
-                successHTML += `
-                    <div style="background: #8B5CF6; color: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                        <h4 style="margin: 0 0 10px 0;">📊 Your Dashboard Link:</h4>
-                        <a href="${result.baseUrl}/dashboard" target="_blank" style="color: white; font-weight: bold; text-decoration: underline; font-size: 16px;">${result.baseUrl}/dashboard</a>
-                        <p style="margin: 10px 0 0 0; font-size: 14px; opacity: 0.9;">💡 Bookmark this link! Use it to respond to customers in real-time.</p>
-                    </div>
-                `;
-            } else if (selectedAlertPreference === 'email') {
+    const dashboardUrl = result.dashboardUrl || `${result.baseUrl}/dashboard?operator=${result.operatorId}`;
+    successHTML += `
+        <div style="background: #8B5CF6; color: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+            <h4 style="margin: 0 0 10px 0;">📊 Your Personal Dashboard Link:</h4>
+            <a href="${dashboardUrl}" target="_blank" style="color: white; font-weight: bold; text-decoration: underline; font-size: 16px;">${dashboardUrl}</a>
+            <p style="margin: 10px 0 0 0; font-size: 14px; opacity: 0.9;">💡 Bookmark this link! This dashboard is filtered to show only YOUR conversations.</p>
+        </div>
+    `;
+} else if (selectedAlertPreference === 'email') {
                 successHTML += `
                     <div style="background: #f59e0b; color: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
                         <h4 style="margin: 0 0 10px 0;">📧 Email Alerts Enabled</h4>
