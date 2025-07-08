@@ -1896,7 +1896,40 @@ app.post('/api/chat', validateRequired(['message', 'operatorId']), async functio
                 if (phone) {
                     customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
                     await updateCustomerContact(sessionKey, null, phone);
-                    
+                    // Handle "use existing phone" choice
+if (lowerMessage.includes('use my existing phone') || lowerMessage.includes('existing phone')) {
+    const existingPhone = customerContact?.phone || conversation.customer_phone;
+    
+    if (existingPhone) {
+        // Send SMS to existing phone number immediately
+        const businessName = currentConfig.businessName || 'Our Business';
+        const smsFirstMessage = currentConfig.smsFirstMessage || '';
+        const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
+                          `Hi! This is ${businessName}. Thanks for reaching out! How can we help you today?`;
+        
+        const smsResult = await sendSMS(existingPhone, welcomeSMS, conversation.conversation_id);
+        
+        let botResponse;
+        if (smsResult && smsResult.success) {
+            botResponse = `Perfect! 📱 I've sent you a text at ${existingPhone}. Continue our conversation there - our team will join you shortly!`;
+        } else {
+            botResponse = `I have your number (${existingPhone}). Our team will text you shortly!`;
+        }
+        
+        if (emailTransporter) {
+            await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone: existingPhone }, operatorId);
+        }
+        
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ 
+            success: true, 
+            response: botResponse, 
+            smsEnabled: true,
+            phoneCollected: true
+        });
+    }
+}
                     // Send SMS immediately
                     const businessName = currentConfig.businessName || 'Our Business';
                     const smsFirstMessage = currentConfig.smsFirstMessage || '';
@@ -2089,15 +2122,60 @@ if (isAgentRequest && !alreadyHandedOff) {
     
     let botResponse = ''; // 🔧 FIXED: Initialize botResponse
     
-    if (smsEnabled === 'hybrid') {
-        // 🔧 FIXED: Complete hybrid mode implementation
-        const businessSmsNumber = currentConfig.businessSmsNumber || process.env.TWILIO_PHONE_NUMBER;
-        const smsHandoffMessage = currentConfig.smsHandoffMessage || 
-            '💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!';
+    // 🔧 FIXED: Replace your hybrid mode section with this
+if (smsEnabled === 'hybrid') {
+    // 🔧 FIXED: Check if customer already provided phone number
+    const existingPhone = customerContact?.phone || conversation.customer_phone;
+    const existingEmail = customerContact?.email || conversation.customer_email;
+    
+    const businessSmsNumber = currentConfig.businessSmsNumber || process.env.TWILIO_PHONE_NUMBER;
+    const smsHandoffMessage = currentConfig.smsHandoffMessage || 
+        '💬 Prefer to text? You can also reach us at {PHONE_NUMBER} for mobile chat!';
+    
+    if (businessSmsNumber) {
+        const formattedSmsMessage = smsHandoffMessage.replace('{PHONE_NUMBER}', businessSmsNumber);
         
-        if (businessSmsNumber) {
-            const formattedSmsMessage = smsHandoffMessage.replace('{PHONE_NUMBER}', businessSmsNumber);
-            
+        if (existingPhone) {
+            // 🎯 CUSTOMER ALREADY PROVIDED PHONE - offer to use it
+            botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime}. 
+
+I have your contact info: ${existingEmail ? `📧 ${existingEmail}` : ''} ${existingPhone ? `📱 ${existingPhone}` : ''}
+
+Choose how you'd like to continue:
+
+<div style="margin: 15px 0; text-align: center;">
+    <button onclick="selectChatChoice('chat')" style="
+        display: block;
+        width: 100%;
+        margin: 8px 0;
+        padding: 12px;
+        background: #8B5CF6;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 14px;
+    " class="choice-btn">Continue chatting here 💬</button>
+    
+    <button onclick="sendMessageToServer('${existingPhone}')" style="
+        display: block;
+        width: 100%;
+        margin: 8px 0;
+        padding: 12px;
+        background: #10b981;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 14px;
+    " class="choice-btn">Text me at ${existingPhone} 📱</button>
+</div>
+
+${formattedSmsMessage}`;
+        } else {
+            // 🔍 NO PHONE NUMBER YET - ask for it
             botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime}. 
 
 Choose how you'd like to continue:
@@ -2133,11 +2211,12 @@ Choose how you'd like to continue:
 </div>
 
 ${formattedSmsMessage}`;
-        } else {
-            // Fallback if no SMS number configured
-            botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime} via ${contactMethods}. Could I get your contact information?`;
         }
-    } else if (smsEnabled === 'sms-first') {
+    } else {
+        // Fallback if no SMS number configured
+        botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime} via ${contactMethods}. Could I get your contact information?`;
+    }
+} else if (smsEnabled === 'sms-first') {
         // 🔧 FIXED: SMS-first mode implementation
         botResponse = `Great! I'd love to connect you with our team via text message for faster assistance.
 

@@ -951,14 +951,20 @@ function showContactForm() {
 }
 
 
-        // 🔧 FIXED: Updated submitContact function
+        // Enhanced submitContact function with detailed error logging
 async function submitContact() {
     const email = document.getElementById('contactEmail').value;
     const phone = document.getElementById('contactPhone').value;
     const smsEnabled = businessConfig.smsEnabled || 'disabled';
     
-    console.log('📝 Submitting contact info:', { email, phone, smsEnabled });
+    console.log('🔍 CONTACT FORM DEBUG:');
+    console.log('  - Email:', email);
+    console.log('  - Phone:', phone);
+    console.log('  - SMS Mode:', smsEnabled);
+    console.log('  - Operator ID:', operatorId);
+    console.log('  - Server URL:', serverUrl);
     
+    // Enhanced validation with specific error messages
     if (smsEnabled === 'sms-first') {
         const phoneRegex = /^\+?[\s\-\(\)]*([0-9][\s\-\(\)]*){10,}$/;
         if (!phone || !phoneRegex.test(phone)) {
@@ -967,6 +973,7 @@ async function submitContact() {
             phoneInput.placeholder = 'Please enter a valid phone number';
             phoneInput.value = '';
             phoneInput.focus();
+            console.error('❌ Phone validation failed:', phone);
             return;
         }
     } else {
@@ -977,59 +984,50 @@ async function submitContact() {
             emailInput.placeholder = 'Please enter a valid email';
             emailInput.value = '';
             emailInput.focus();
+            console.error('❌ Email validation failed:', email);
             return;
         }
     }
-    // 🧪 DEBUG: Add this function to test what's happening
-function debugSessionState() {
-    console.log('🧪 === SESSION DEBUG ===');
-    console.log('Current sessionId:', sessionId);
-    console.log('SessionStorage sessionId:', sessionStorage.getItem('wherewolf_session_id'));
-    console.log('SessionStorage age:', sessionStorage.getItem('wherewolf_session_age'));
-    console.log('hasProvidedContact:', hasProvidedContact);
-    console.log('isFirstMessage:', isFirstMessage);
-    console.log('operatorId:', operatorId);
     
-    // Test if session age is too old
-    const sessionAge = sessionStorage.getItem('wherewolf_session_age');
-    const FOUR_HOURS = 4 * 60 * 60 * 1000;
-    const now = Date.now();
-    const ageInMinutes = sessionAge ? Math.round((now - parseInt(sessionAge)) / 60000) : 'N/A';
-    console.log('Session age (minutes):', ageInMinutes);
-    console.log('Session expired?', sessionAge ? (now - parseInt(sessionAge)) >= FOUR_HOURS : 'N/A');
-    
-    console.log('🧪 === END SESSION DEBUG ===');
-}
-
-// Call this on page load
-window.addEventListener('DOMContentLoaded', () => {
-    setTimeout(debugSessionState, 1000);
-});
-
-    // 🔧 FIXED: Mark contact as provided BEFORE making the API call
     hasProvidedContact = true;
-    isFirstMessage = false;
     
     try {
+        console.log('📤 Sending contact info to server...');
+        
+        const requestBody = { 
+            email, 
+            phone, 
+            operatorId: operatorId,
+            sessionId: 'default'
+        };
+        
+        console.log('📋 Request body:', requestBody);
+        
         const response = await fetch(`${serverUrl}/contact-info`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ 
-                email, 
-                phone, 
-                operatorId: operatorId,
-                sessionId: sessionId
-            })
+            body: JSON.stringify(requestBody)
         });
         
+        console.log('📡 Response status:', response.status);
+        console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+        
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            const errorText = await response.text();
+            console.error('❌ Server error response:', errorText);
+            throw new Error(`Server error ${response.status}: ${errorText}`);
         }
         
-        const result = await response.json();
-        console.log('📧 Contact info saved successfully:', result);
+        const responseData = await response.json();
+        console.log('✅ Server response:', responseData);
+        
+        if (!responseData.success) {
+            throw new Error(responseData.error || 'Server returned success: false');
+        }
+        
+        console.log('📧 Contact info saved successfully!');
         
         const lastMessage = document.querySelector('.message:last-child');
         let successMessage = '';
@@ -1055,7 +1053,7 @@ window.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         
-        // Send the pending message
+        // Send the pending message after a delay
         setTimeout(async () => {
             if (pendingMessage) {
                 console.log('📤 Now sending pending message:', pendingMessage);
@@ -1065,11 +1063,39 @@ window.addEventListener('DOMContentLoaded', () => {
         }, 1500);
         
     } catch (error) {
-        console.error('❌ Error saving contact:', error);
-        // Reset state on error
-        hasProvidedContact = false;
-        isFirstMessage = true;
-        alert('Failed to save contact information. Please try again.');
+        console.error('💥 CONTACT SAVE ERROR:', error);
+        console.error('  - Error message:', error.message);
+        console.error('  - Error stack:', error.stack);
+        
+        // Show user-friendly error message
+        const lastMessage = document.querySelector('.message:last-child');
+        if (lastMessage) {
+            lastMessage.innerHTML = `
+                <div style="
+                    color: #dc2626; 
+                    font-weight: 600; 
+                    font-size: 14px;
+                    text-align: center;
+                    padding: 16px;
+                    background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%);
+                    border-radius: 12px;
+                    border: 1px solid #f87171;
+                ">
+                    ❌ Failed to save contact info. Error: ${error.message}
+                    <br><br>
+                    <button onclick="skipContact()" style="
+                        background: #8B5CF6; 
+                        color: white; 
+                        border: none; 
+                        padding: 8px 16px; 
+                        border-radius: 6px; 
+                        cursor: pointer;
+                    ">Continue anyway</button>
+                </div>
+            `;
+        }
+        
+        // Don't call skipContact() automatically - let user decide
     }
 }
 
@@ -1415,6 +1441,9 @@ window.selectChatChoice = function(choice) {
     if (choice === 'sms') {
         // Show phone number collection
         showPhoneCollection();
+    } else if (choice === 'use-existing-phone') {
+        // Use existing phone number for SMS
+        sendMessageToServer('Please use my existing phone number for SMS');
     } else {
         // Continue with regular chat handoff
         sendMessageToServer('I prefer to continue chatting here');
