@@ -773,6 +773,329 @@ app.get('/api/test-weather-fixed/:location', async (req, res) => {
     }
 });
 
+// Add these comprehensive debug endpoints to your server.js
+
+// Test the exact same call your server makes
+app.get('/api/debug/server-test/:location', async (req, res) => {
+    const { location } = req.params;
+    
+    try {
+        console.log(`🔍 Testing server weather call for: ${location}`);
+        
+        const apiKey = process.env.OPENWEATHER_API_KEY;
+        console.log(`🔑 API Key length: ${apiKey?.length || 0}`);
+        console.log(`🔑 API Key prefix: ${apiKey?.substring(0, 8) || 'NONE'}...`);
+        
+        // Make the exact same call as getCurrentWeather
+        const response = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
+            params: {
+                q: location,
+                appid: apiKey,
+                units: 'imperial'
+            },
+            timeout: 10000,
+            validateStatus: function (status) {
+                return status < 500;
+            }
+        });
+        
+        console.log(`📡 Response status: ${response.status}`);
+        console.log(`📊 Response headers:`, response.headers);
+        
+        if (response.status === 200) {
+            const weather = response.data;
+            return res.json({
+                success: true,
+                status: response.status,
+                location: location,
+                found: {
+                    city: weather.name,
+                    country: weather.sys.country,
+                    temp: weather.main.temp,
+                    description: weather.weather[0].description
+                },
+                rawData: weather
+            });
+        } else {
+            return res.json({
+                success: false,
+                status: response.status,
+                location: location,
+                error: response.data,
+                troubleshooting: {
+                    401: 'Invalid API key or not activated',
+                    404: 'Location not found - try different format',
+                    429: 'Rate limit exceeded',
+                    503: 'Service temporarily unavailable'
+                }[response.status] || 'Unknown error'
+            });
+        }
+        
+    } catch (error) {
+        console.error('❌ Server test error:', error.message);
+        
+        return res.json({
+            success: false,
+            error: 'Request failed',
+            details: {
+                message: error.message,
+                code: error.code,
+                status: error.response?.status,
+                responseData: error.response?.data
+            }
+        });
+    }
+});
+
+// Test multiple US cities to see which work
+app.get('/api/debug/us-cities-test', async (req, res) => {
+    const testCities = [
+        'Denver, CO',
+        'Miami, FL', 
+        'Key West, FL',
+        'New York, NY',
+        'Los Angeles, CA',
+        'Chicago, IL',
+        'Denver, Colorado',
+        'Miami, Florida',
+        'Key West, Florida'
+    ];
+    
+    const results = [];
+    
+    for (const city of testCities) {
+        try {
+            console.log(`🧪 Testing: ${city}`);
+            
+            const response = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
+                params: {
+                    q: city,
+                    appid: process.env.OPENWEATHER_API_KEY,
+                    units: 'imperial'
+                },
+                timeout: 5000,
+                validateStatus: status => status < 500
+            });
+            
+            if (response.status === 200) {
+                results.push({
+                    input: city,
+                    status: 'SUCCESS',
+                    found: `${response.data.name}, ${response.data.sys.country}`,
+                    temp: `${response.data.main.temp}°F`
+                });
+            } else {
+                results.push({
+                    input: city,
+                    status: 'FAILED',
+                    error: response.status,
+                    message: response.data?.message || 'Unknown error'
+                });
+            }
+            
+        } catch (error) {
+            results.push({
+                input: city,
+                status: 'ERROR',
+                error: error.response?.status || error.code,
+                message: error.message
+            });
+        }
+        
+        // Small delay between requests
+        await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
+    const successful = results.filter(r => r.status === 'SUCCESS');
+    const failed = results.filter(r => r.status !== 'SUCCESS');
+    
+    res.json({
+        success: true,
+        summary: {
+            total: results.length,
+            successful: successful.length,
+            failed: failed.length
+        },
+        working: successful,
+        notWorking: failed,
+        recommendation: successful.length > 0 ? 
+            `Use format like: "${successful[0].input}"` : 
+            'No US cities working - check API key'
+    });
+});
+
+// Compare your API key behavior vs a test call
+app.get('/api/debug/api-key-compare', async (req, res) => {
+    const apiKey = process.env.OPENWEATHER_API_KEY;
+    
+    if (!apiKey) {
+        return res.json({
+            success: false,
+            error: 'No API key configured'
+        });
+    }
+    
+    const testLocation = 'Denver, CO';
+    
+    try {
+        // Test 1: Your current setup
+        console.log('🧪 Test 1: Current setup');
+        const test1 = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
+            params: {
+                q: testLocation,
+                appid: apiKey,
+                units: 'imperial'
+            },
+            timeout: 10000,
+            validateStatus: status => status < 500
+        });
+        
+        // Test 2: Minimal setup (like London test that worked)
+        console.log('🧪 Test 2: Minimal like London');
+        const test2 = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
+            params: {
+                q: 'London,UK',
+                appid: apiKey,
+                units: 'metric'
+            },
+            timeout: 10000,
+            validateStatus: status => status < 500
+        });
+        
+        res.json({
+            success: true,
+            apiKeyInfo: {
+                length: apiKey.length,
+                prefix: apiKey.substring(0, 8) + '...',
+                isValid: apiKey.length === 32 && /^[a-f0-9]+$/i.test(apiKey)
+            },
+            test1_Denver: {
+                status: test1.status,
+                success: test1.status === 200,
+                error: test1.status !== 200 ? test1.data : null,
+                city: test1.status === 200 ? test1.data.name : null
+            },
+            test2_London: {
+                status: test2.status,
+                success: test2.status === 200,
+                error: test2.status !== 200 ? test2.data : null,
+                city: test2.status === 200 ? test2.data.name : null
+            },
+            diagnosis: 
+                test1.status === 200 && test2.status === 200 ? 'API key works perfectly' :
+                test1.status !== 200 && test2.status === 200 ? 'Location format issue with US cities' :
+                test1.status === 200 && test2.status !== 200 ? 'Unexpected - Denver works but London fails' :
+                'API key has issues'
+        });
+        
+    } catch (error) {
+        res.json({
+            success: false,
+            error: error.message,
+            apiKeyInfo: {
+                configured: !!apiKey,
+                length: apiKey?.length || 0,
+                prefix: apiKey?.substring(0, 8) + '...' || 'N/A'
+            }
+        });
+    }
+});
+
+// Fix for your operator weather config
+app.get('/api/debug/operator-weather-fix/:operatorId', async (req, res) => {
+    const { operatorId } = req.params;
+    
+    try {
+        // Get the operator config
+        const config = await getOperatorConfig(operatorId);
+        
+        if (!config) {
+            return res.status(404).json({
+                success: false,
+                error: 'Operator not found'
+            });
+        }
+        
+        const weatherLocation = config.weatherLocation;
+        
+        if (!weatherLocation) {
+            return res.json({
+                success: false,
+                error: 'No weather location configured for this operator',
+                config: {
+                    businessName: config.businessName,
+                    weatherEnabled: config.weatherEnabled,
+                    weatherLocation: config.weatherLocation
+                }
+            });
+        }
+        
+        // Test the configured location
+        console.log(`🌤️ Testing weather for operator ${operatorId}: ${weatherLocation}`);
+        
+        const weatherData = await getCurrentWeather(weatherLocation);
+        
+        if (weatherData) {
+            const botResponse = generateWeatherResponse(weatherData, config);
+            
+            return res.json({
+                success: true,
+                operatorId: operatorId,
+                businessName: config.businessName,
+                weatherLocation: weatherLocation,
+                weatherData: weatherData,
+                botResponse: botResponse,
+                status: 'Weather working for this operator'
+            });
+        } else {
+            // Try alternative formats
+            const alternatives = [
+                weatherLocation.replace(', ', ','),
+                weatherLocation.replace(',', ', '),
+                weatherLocation.split(',')[0].trim(), // Just city name
+                weatherLocation.replace(/\b(FL|CA|NY|TX)\b/, match => ({
+                    'FL': 'Florida',
+                    'CA': 'California', 
+                    'NY': 'New York',
+                    'TX': 'Texas'
+                }[match] || match))
+            ].filter((v, i, a) => a.indexOf(v) === i); // Remove duplicates
+            
+            const alternativeResults = [];
+            
+            for (const alt of alternatives) {
+                const altWeather = await getCurrentWeather(alt);
+                alternativeResults.push({
+                    format: alt,
+                    works: !!altWeather,
+                    data: altWeather
+                });
+                
+                if (altWeather) break; // Stop at first working format
+            }
+            
+            const workingAlternative = alternativeResults.find(r => r.works);
+            
+            return res.json({
+                success: false,
+                operatorId: operatorId,
+                originalLocation: weatherLocation,
+                issue: 'Original location format not working',
+                alternatives: alternativeResults,
+                recommendation: workingAlternative ? 
+                    `Update weatherLocation to: "${workingAlternative.format}"` :
+                    'Try a different city or check location spelling'
+            });
+        }
+        
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // Add weather response generation function
 function generateWeatherResponse(weatherData, config) {
     if (!weatherData) return null;
