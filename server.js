@@ -2666,6 +2666,10 @@ app.post('/contact-info', validateRequired(['operatorId']), async (req, res) => 
         await pool.query('SELECT NOW()');
         console.log('✅ Database connection OK');
         
+        // 🔧 SIMPLE FIX: Create conversation if it doesn't exist
+        await getOrCreateConversation(operatorId, sessionKey);
+        console.log('✅ Conversation created/found');
+        
         // Update database
         console.log('💾 Updating database...');
         await updateCustomerContact(sessionKey, email, phone);
