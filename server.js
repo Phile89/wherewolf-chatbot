@@ -1944,11 +1944,7 @@ if (lowerMessage.includes('use my existing phone') || lowerMessage.includes('exi
                     } else {
                         botResponse = `I have your number (${phone}). Our team will text you shortly!`;
                     }
-                    
-                    if (emailTransporter) {
-                        await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
-                    }
-                    
+
                     conversations[sessionKey].push({ role: 'assistant', content: botResponse });
                     await saveMessage(conversation.conversation_id, 'assistant', botResponse);
                     return res.json({ 
@@ -2012,11 +2008,7 @@ if (phoneRegex.test(message) && smsEnabled === 'hybrid') {
                 } else {
                     botResponse = `I have your number (${phone}). Our team will text you shortly!`;
                 }
-                
-                if (emailTransporter) {
-                    await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
-                }
-                
+
                 conversations[sessionKey].push({ role: 'assistant', content: botResponse });
                 await saveMessage(conversation.conversation_id, 'assistant', botResponse);
                 return res.json({ 
@@ -2071,11 +2063,7 @@ While you wait, could I get your email or phone number so they can follow up if 
                 const phone = message.match(phoneRegex)[0];
                 customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
                 await updateCustomerContact(sessionKey, null, phone);
-                
-                if (emailTransporter) {
-                    await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
-                }
-                
+        
                 const botResponse = `Perfect! I've saved your phone number (${phone}) and our team has been notified. They'll call you within ${responseTime}. Is there anything else I can help you with while you wait?`;
                 conversations[sessionKey].push({ role: 'assistant', content: botResponse });
                 await saveMessage(conversation.conversation_id, 'assistant', botResponse);
@@ -2235,17 +2223,7 @@ Once I have your number, our team will typically respond within ${responseTime}.
     
     conversations[sessionKey].push({ role: 'assistant', content: botResponse });
     await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-    
-    // Send handoff email if email mode
-    if (alertPreference === 'email' && emailTransporter) {
-        try {
-            await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-            console.log('✅ Handoff email sent successfully');
-        } catch (emailError) {
-            console.error('❌ Failed to send handoff email:', emailError);
-        }
-    }
-    
+
     return res.json({ 
         success: true, 
         response: botResponse,
@@ -2310,12 +2288,7 @@ Once I have your number, our team will typically respond within ${responseTime}.
             } else {
                 botResponse = `I have your number (${phone}). Our team will text you shortly!`;
             }
-            
-            // Send handoff email
-            if (emailTransporter) {
-                await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
-            }
-            
+
             conversations[sessionKey].push({ role: 'assistant', content: botResponse });
             await saveMessage(conversation.conversation_id, 'assistant', botResponse);
             return res.json({ 
