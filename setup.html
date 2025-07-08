@@ -1585,6 +1585,19 @@ function updateAlertOption(label) {
 // 🔧 FIXED: Enhanced form submission with proper email field validation
 document.getElementById('chatbotForm').addEventListener('submit', async function(e) {
     e.preventDefault();
+    // 🔧 FIX: Remove 'required' from all hidden fields before validation
+const hiddenRequiredFields = document.querySelectorAll('input[required], select[required], textarea[required]');
+hiddenRequiredFields.forEach(field => {
+    const fieldContainer = field.closest('.form-group, .form-section, div');
+    if (fieldContainer && (
+        fieldContainer.style.display === 'none' || 
+        fieldContainer.offsetParent === null ||
+        field.offsetParent === null
+    )) {
+        console.log('🔧 Removing required from hidden field:', field.id);
+        field.removeAttribute('required');
+    }
+});
 
     try {
         // 🆕 FIXED: Check alert preference and email validation FIRST
