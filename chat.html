@@ -576,35 +576,57 @@ if (!operatorId) {
 
         // Enhanced config loading with debugging
         async function loadOperatorConfig() {
-            try {
-                console.log('🔍 Loading config for operator:', operatorId);
-                
-                const configUrl = `${serverUrl}/api/config/${operatorId}`;
-                console.log('📡 Fetching from:', configUrl);
-                
-                const response = await fetch(configUrl);
-                console.log('📨 Response status:', response.status);
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('❌ Config fetch failed:', errorText);
-                    throw new Error(`Config not found (${response.status}): ${errorText}`);
-                }
-                
-                businessConfig = await response.json();
-                console.log('✅ Config loaded successfully:', businessConfig);
-                
-                applyBranding(businessConfig);
-                initializeEnhancedChat();
-                loadConversationHistory();
-                
-                console.log('🎉 Chat initialization complete!');
-                
-            } catch (error) {
-                console.error('💥 Config loading error:', error);
-                showError(`Error loading chat: ${error.message}. Please check the operator ID and try again.`);
-            }
+    try {
+        console.log('🔍 Loading config for operator:', operatorId);
+        
+        const configUrl = `${serverUrl}/api/config/${operatorId}`;
+        console.log('📡 Fetching from:', configUrl);
+        
+        const response = await fetch(configUrl);
+        console.log('📨 Response status:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Config fetch failed:', errorText);
+            throw new Error(`Config not found (${response.status}): ${errorText}`);
         }
+        
+        businessConfig = await response.json();
+        console.log('✅ Config loaded successfully:', businessConfig);
+        
+        applyBranding(businessConfig);
+        
+        // 🔧 FIXED: Load history FIRST, then decide what to show
+        const hasHistory = await loadConversationHistory();
+        
+        if (!hasHistory) {
+            // Only show welcome for NEW conversations
+            console.log('💬 New conversation - showing welcome');
+            initializeEnhancedChat();
+        } else {
+            // Just enable the input for existing conversations
+            console.log('🔄 Existing conversation - enabling input only');
+            enableChatInput();
+        }
+        
+        console.log('🎉 Chat initialization complete!');
+        
+    } catch (error) {
+        console.error('💥 Config loading error:', error);
+        showError(`Error loading chat: ${error.message}. Please check the operator ID and try again.`);
+    }
+}
+// Enable chat input without showing welcome message
+function enableChatInput() {
+    const chatInput = document.getElementById('chatInput');
+    const sendButton = document.getElementById('sendButton');
+    chatInput.disabled = false;
+    sendButton.disabled = false;
+    chatInput.placeholder = "Type your question...";
+    chatInput.focus();
+    
+    console.log('💬 Chat input enabled for existing conversation');
+}
 
         // 2. REPLACE the loadConversationHistory function with this improved version:
 async function loadConversationHistory() {
@@ -632,12 +654,10 @@ async function loadConversationHistory() {
                 const messagesContainer = document.getElementById('chatMessages');
                 messagesContainer.innerHTML = '';
                 
-                // 🔧 FIXED: Properly restore conversation state
                 data.messages.forEach((msg, index) => {
                     displayMessage(msg.content, msg.role);
                 });
                 
-                // 🔧 FIXED: Check if we have any user messages (meaning contact was provided)
                 const userMessages = data.messages.filter(msg => msg.role === 'user');
                 if (userMessages.length > 0) {
                     hasProvidedContact = true;
@@ -651,25 +671,24 @@ async function loadConversationHistory() {
                 }
                 
                 lastMessageCount = data.messages.length;
-                return true; // Signal that history was loaded
+                return true; // ✅ History found
             } else {
                 console.log('📭 No previous messages found - this is a fresh conversation');
-                // 🔧 FIXED: Ensure fresh conversation state
                 hasProvidedContact = false;
                 isFirstMessage = true;
-                return false;
+                return false; // ✅ No history
             }
         } else {
             console.log('⚠️ Could not load history - treating as new conversation');
             hasProvidedContact = false;
             isFirstMessage = true;
-            return false;
+            return false; // ✅ No history
         }
     } catch (error) {
         console.error('❌ Error loading conversation history:', error);
         hasProvidedContact = false;
         isFirstMessage = true;
-        return false;
+        return false; // ✅ No history
     }
 }
 function forceNewSession() {
