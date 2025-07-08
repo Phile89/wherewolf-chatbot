@@ -509,7 +509,17 @@
         let pendingMessage = null;
         let pollingInterval = null;
         let lastMessageCount = 0;
-        
+
+       
+// 🔧 FIX: Fresh chat per browser session (Option B)
+let sessionId = sessionStorage.getItem('wherewolf_session_id');
+if (!sessionId) {
+    sessionId = 'chat_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+    sessionStorage.setItem('wherewolf_session_id', sessionId);
+    console.log('🆕 Created new session ID:', sessionId);
+} else {
+    console.log('🔄 Using existing session ID:', sessionId);
+} 
 
         // Get operator ID from URL
         const urlParams = new URLSearchParams(window.location.search);
@@ -744,7 +754,6 @@
         // 🔧 FIXED: Updated showContactForm function
 function showContactForm() {
     const businessName = businessConfig.businessName || 'our business';
-    const responseTime = businessConfig.responseTime || '30 minutes';
     const smsEnabled = businessConfig.smsEnabled || 'disabled';
     
     let formContent = '';
@@ -775,9 +784,10 @@ function showContactForm() {
             <p class="help-text">We'll send you a text message to start the conversation on your mobile device</p>
         `;
     } else {
+        // 🔧 FIXED: Removed response time text
         formContent = `
             <h4>👋 Quick question first!</h4>
-            <p>Could we get your email so we can send you ${businessConfig.businessType || 'tour'} info and follow up if needed? We typically respond within ${responseTime}.</p>
+            <p>Could we get your email so we can send you ${businessConfig.businessType || 'tour'} info and follow up if needed?</p>
             <div class="form-row">
                 <input 
                     type="email" 
