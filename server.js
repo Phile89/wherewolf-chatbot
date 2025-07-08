@@ -513,13 +513,22 @@ Please contact this customer within ${responseTime} using their preferred method
 Best regards,
 Wherewolf Enhanced Chatbot System
         `;
+        const alertEmail = config.operatorEmail;
 
-        const mailOptions = {
-            from: process.env.GMAIL_USER,
-            to: process.env.OPERATOR_EMAIL || process.env.GMAIL_USER,
-            subject: `🚨 URGENT Agent Request: ${businessName} - ${customerEmail}`,
-            text: emailContent,
-            html: `
+if (!alertEmail) {
+    console.error('❌ No email configured for operator:', operatorId);
+    console.log('💡 Make sure operator filled out email field in setup form');
+    return false;
+}
+
+console.log(`📧 Sending alert to operator email: ${alertEmail}`);
+
+const mailOptions = {
+    from: process.env.GMAIL_USER,
+    to: alertEmail, // 🆕 Use email from setup form!
+    subject: `🚨 URGENT Agent Request: ${businessName} - ${customerEmail}`,
+    text: emailContent,
+    html:  `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <div style="background: ${config.brandColor || CONFIG.DEFAULT_BRAND_COLOR}; color: white; padding: 20px; text-align: center;">
                         <h2>🚨 Urgent Agent Request</h2>
