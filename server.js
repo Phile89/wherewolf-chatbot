@@ -1770,43 +1770,11 @@ app.post('/api/chat', validateRequired(['message', 'operatorId']), async functio
             
             const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
             const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
-            // 🔧 FIXED: If we have phone and SMS is enabled, use it immediately
-if (hasExistingPhone && smsEnabled === 'hybrid') {
-    const phone = hasExistingPhone;
-    
-    // Send SMS immediately using existing phone
-    const businessName = currentConfig.businessName || 'Our Business';
-    const smsFirstMessage = currentConfig.smsFirstMessage || '';
-    const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
-                      `Hi! This is ${businessName}. Thanks for reaching out! How can we help you today?`;
-    
-    const smsResult = await sendSMS(phone, welcomeSMS, conversation.conversation_id);
-    
-    let botResponse;
-    if (smsResult && smsResult.success) {
-        botResponse = `Perfect! 📱 I've sent you a text at ${phone}. Continue our conversation there - our team will join you shortly!`;
-    } else {
-        botResponse = `I have your number (${phone}). Our team will text you shortly!`;
-    }
-    
-    if (emailTransporter) {
-        await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone, email: hasExistingEmail }, operatorId);
-    }
-    
-    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-    return res.json({ 
-        success: true, 
-        response: botResponse, 
-        smsEnabled: true,
-        phoneCollected: true
-    });
-}
-
+            
             // Handle "text" or "SMS" choice more clearly
             if ((lowerMessage.includes('text') || lowerMessage.includes('sms')) && smsEnabled === 'hybrid') {
                 // They chose SMS - send immediately
-                const phone = customerContact?.phone || extractPhoneFromMessage(message);
+                const phone = customerContact?.phone || conversation.customer_phone || extractPhoneFromMessage(message);
                 if (phone) {
                     customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
                     await updateCustomerContact(sessionKey, null, phone);
@@ -1841,9 +1809,41 @@ if (hasExistingPhone && smsEnabled === 'hybrid') {
                 }
             }
             
-            // Handle phone number submission for hybrid mode
-            if (phoneRegex.test(message) && smsEnabled === 'hybrid') {
-                const phone = message.match(phoneRegex)[0];
+            // Handle phone number submission for hybrid mode  
+if (phoneRegex.test(message) && smsEnabled === 'hybrid') {
+    const phone = message.match(phoneRegex)[0];
+    
+    // 🔧 FIXED: If we already have this phone number, use it immediately
+    const existingPhone = customerContact?.phone || conversation.customer_phone;
+    if (existingPhone && existingPhone.replace(/\D/g, '') === phone.replace(/\D/g, '')) {
+        // Use existing phone number logic
+        const businessName = currentConfig.businessName || 'Our Business';
+        const smsFirstMessage = currentConfig.smsFirstMessage || '';
+        const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
+                          `Hi! This is ${businessName}. Thanks for reaching out! How can we help you today?`;
+        
+        const smsResult = await sendSMS(existingPhone, welcomeSMS, conversation.conversation_id);
+        
+        let botResponse;
+        if (smsResult && smsResult.success) {
+            botResponse = `Perfect! 📱 I've sent you a text at ${existingPhone}. Continue our conversation there - our team will join you shortly!`;
+        } else {
+            botResponse = `I have your number (${existingPhone}). Our team will text you shortly!`;
+        }
+        
+        if (emailTransporter) {
+            await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone: existingPhone }, operatorId);
+        }
+        
+        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+        return res.json({ 
+            success: true, 
+            response: botResponse, 
+            smsEnabled: true,
+            phoneCollected: true
+        });
+    }
                 customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
                 await updateCustomerContact(sessionKey, null, phone);
                 
