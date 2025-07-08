@@ -1182,132 +1182,7 @@ app.post('/api/chat', validateRequired(['message', 'operatorId']), async functio
     const sessionKey = `${operatorId}_${sessionId}`;
 
     try {
-        // Get or create conversation in database
-        const conversation = await getOrCreateConversation(operatorId, sessionKey);
-        if (!conversation) {
-            return res.status(500).json({ 
-                success: false,
-                error: 'Failed to manage conversation' 
-            });
-        }
-
-        // Save user message to database
-        await saveMessage(conversation.conversation_id, 'user', message);
-try {
-    // Get total user message count from database 
-    const messageCountResult = await pool.query(
-        'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
-        [conversation.conversation_id, 'user']
-    );
-    
-    const userMessageCount = parseInt(messageCountResult.rows[0].count);
-    const hasContactInfo = conversation.customer_email || conversation.customer_phone;
-    
-    console.log(`📊 Contact form check: userMessageCount=${userMessageCount}, hasContactInfo=${hasContactInfo}`);
-    
-    // Show contact form on FIRST user message if no contact info
-    if (userMessageCount === 1 && !hasContactInfo) {
-        console.log('📝 First message detected - showing contact form');
-        
-        return res.json({
-            success: true,
-            showContactForm: true,
-            pendingMessage: message
-        });
-    }
-} catch (contactCheckError) {
-    console.error('❌ Error checking contact form logic:', contactCheckError);
-    // Continue with normal flow if contact check fails
-}
-// Add weather detection and response (insert in /api/chat endpoint)
-if (currentConfig.weatherEnabled) {
-    const weatherKeywords = [
-        'weather', 'temperature', 'temp', 'hot', 'cold', 'warm', 'cool',
-        'rain', 'rainy', 'raining', 'sunny', 'cloudy', 'overcast',
-        'forecast', 'conditions', 'climate', 'degrees', 'humid',
-        'windy', 'wind', 'storm', 'clear', 'nice day', 'beautiful day'
-    ];
-    
-    const hasWeatherQuestion = weatherKeywords.some(keyword => 
-        lowerMessage.includes(keyword)
-    );
-    
-    if (hasWeatherQuestion) {
-        console.log('🌤️ Weather question detected, fetching data...');
-        
-        const weatherData = await getCurrentWeather(currentConfig.weatherLocation);
-        
-        if (weatherData) {
-            const weatherResponse = generateWeatherResponse(weatherData, currentConfig);
-            
-            if (weatherResponse) {
-                conversations[sessionKey].push({ role: 'assistant', content: weatherResponse });
-                await saveMessage(conversation.conversation_id, 'assistant', weatherResponse);
-                
-                return res.json({ 
-                    success: true, 
-                    response: weatherResponse,
-                    weatherData: true 
-                });
-            }
-        } else {
-            // Fallback if weather API fails
-            const fallbackResponse = `For current weather conditions in ${currentConfig.weatherLocation}, please speak to someone from our team who can provide real-time updates!`;
-            
-            conversations[sessionKey].push({ role: 'assistant', content: fallbackResponse });
-            await saveMessage(conversation.conversation_id, 'assistant', fallbackResponse);
-            
-            return res.json({ 
-                success: true, 
-                response: fallbackResponse 
-            });
-        }
-    }
-}
-// 7. ADD TEST ENDPOINT to server.js (for testing weather integration)
-
-// Add this endpoint to test weather functionality
-app.get('/api/test-weather/:location', async (req, res) => {
-    const { location } = req.params;
-    
-    try {
-        console.log(`🧪 Testing weather for: ${location}`);
-        const weatherData = await getCurrentWeather(location);
-        
-        if (weatherData) {
-            const testConfig = {
-                businessType: 'boat tours',
-                weatherStyle: 'tour-focused'
-            };
-            
-            const response = generateWeatherResponse(weatherData, testConfig);
-            
-            res.json({
-                success: true,
-                location: location,
-                weatherData: weatherData,
-                botResponse: response,
-                apiConfigured: !!process.env.OPENWEATHER_API_KEY
-            });
-        } else {
-            res.json({
-                success: false,
-                error: 'Could not fetch weather data',
-                apiConfigured: !!process.env.OPENWEATHER_API_KEY
-            });
-        }
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message,
-            apiConfigured: !!process.env.OPENWEATHER_API_KEY
-        });
-    }
-});
-
-// Test by visiting: https://your-app.com/api/test-weather/Key%20West,%20FL
-
-        // Load operator config
+        // Load operator config FIRST before using it
         let currentConfig;
         try {
             currentConfig = await getOperatorConfig(operatorId);
@@ -1325,6 +1200,46 @@ app.get('/api/test-weather/:location', async (req, res) => {
             });
         }
 
+        // Get or create conversation in database
+        const conversation = await getOrCreateConversation(operatorId, sessionKey);
+        if (!conversation) {
+            return res.status(500).json({ 
+                success: false,
+                error: 'Failed to manage conversation' 
+            });
+        }
+
+        // Save user message to database
+        await saveMessage(conversation.conversation_id, 'user', message);
+
+        // Check for contact form requirement
+        try {
+            // Get total user message count from database 
+            const messageCountResult = await pool.query(
+                'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
+                [conversation.conversation_id, 'user']
+            );
+            
+            const userMessageCount = parseInt(messageCountResult.rows[0].count);
+            const hasContactInfo = conversation.customer_email || conversation.customer_phone;
+            
+            console.log(`📊 Contact form check: userMessageCount=${userMessageCount}, hasContactInfo=${hasContactInfo}`);
+            
+            // Show contact form on FIRST user message if no contact info
+            if (userMessageCount === 1 && !hasContactInfo) {
+                console.log('📝 First message detected - showing contact form');
+                
+                return res.json({
+                    success: true,
+                    showContactForm: true,
+                    pendingMessage: message
+                });
+            }
+        } catch (contactCheckError) {
+            console.error('❌ Error checking contact form logic:', contactCheckError);
+            // Continue with normal flow if contact check fails
+        }
+
         // Initialize in-memory conversation for Claude API
         if (!conversations[sessionKey]) {
             conversations[sessionKey] = [];
@@ -1334,6 +1249,52 @@ app.get('/api/test-weather/:location', async (req, res) => {
 
         const lowerMessage = message.toLowerCase();
         const waiverLink = currentConfig.waiverLink || "No waiver link provided.";
+
+        // Weather detection and response (NOW currentConfig is available)
+        if (currentConfig.weatherEnabled) {
+            const weatherKeywords = [
+                'weather', 'temperature', 'temp', 'hot', 'cold', 'warm', 'cool',
+                'rain', 'rainy', 'raining', 'sunny', 'cloudy', 'overcast',
+                'forecast', 'conditions', 'climate', 'degrees', 'humid',
+                'windy', 'wind', 'storm', 'clear', 'nice day', 'beautiful day'
+            ];
+            
+            const hasWeatherQuestion = weatherKeywords.some(keyword => 
+                lowerMessage.includes(keyword)
+            );
+            
+            if (hasWeatherQuestion) {
+                console.log('🌤️ Weather question detected, fetching data...');
+                
+                const weatherData = await getCurrentWeather(currentConfig.weatherLocation);
+                
+                if (weatherData) {
+                    const weatherResponse = generateWeatherResponse(weatherData, currentConfig);
+                    
+                    if (weatherResponse) {
+                        conversations[sessionKey].push({ role: 'assistant', content: weatherResponse });
+                        await saveMessage(conversation.conversation_id, 'assistant', weatherResponse);
+                        
+                        return res.json({ 
+                            success: true, 
+                            response: weatherResponse,
+                            weatherData: true 
+                        });
+                    }
+                } else {
+                    // Fallback if weather API fails
+                    const fallbackResponse = `For current weather conditions in ${currentConfig.weatherLocation}, please speak to someone from our team who can provide real-time updates!`;
+                    
+                    conversations[sessionKey].push({ role: 'assistant', content: fallbackResponse });
+                    await saveMessage(conversation.conversation_id, 'assistant', fallbackResponse);
+                    
+                    return res.json({ 
+                        success: true, 
+                        response: fallbackResponse 
+                    });
+                }
+            }
+        }
 
         const defaultAgentKeywords = [
             'agent', 'human', 'speak to someone', 'talk to someone', 
@@ -1368,7 +1329,7 @@ app.get('/api/test-weather/:location', async (req, res) => {
             const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
             const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
             
-            // 🔧 FIXED: Handle "text" or "SMS" choice more clearly
+            // Handle "text" or "SMS" choice more clearly
             if ((lowerMessage.includes('text') || lowerMessage.includes('sms')) && smsEnabled === 'hybrid') {
                 // They chose SMS - send immediately
                 const phone = customerContact?.phone || extractPhoneFromMessage(message);
@@ -1376,7 +1337,7 @@ app.get('/api/test-weather/:location', async (req, res) => {
                     customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
                     await updateCustomerContact(sessionKey, null, phone);
                     
-                    // 🔧 FIXED: Send SMS immediately
+                    // Send SMS immediately
                     const businessName = currentConfig.businessName || 'Our Business';
                     const smsFirstMessage = currentConfig.smsFirstMessage || '';
                     const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
@@ -1505,155 +1466,168 @@ While you wait, could I get your email or phone number so they can follow up if 
             }
         }
 
-        // 🔧 FIXED: Initial agent request handling with better hybrid SMS messaging
-        // 🆕 ENHANCED: Initial agent request handling with alertPreference check
-if (isAgentRequest && !alreadyHandedOff) {
-    
-    // 🔧 CHECK ALERT PREFERENCE FIRST
-    const alertPreference = currentConfig.alertPreference || 'email'; // default to email if not set
-    
-    if (alertPreference === 'none') {
-        // AI-ONLY MODE: Redirect back to automated help
-        const aiOnlyResponse = `I'm here to help you with any questions about our ${currentConfig.businessType || 'tours'}! I can provide information about pricing, schedules, locations, and policies. What specific information can I help you find?`;
-        
-        conversations[sessionKey].push({ role: 'assistant', content: aiOnlyResponse });
-        await saveMessage(conversation.conversation_id, 'assistant', aiOnlyResponse);
-        
-        return res.json({ 
-            success: true, 
-            response: aiOnlyResponse,
-            aiOnlyMode: true 
-        });
-    }
-    
-    // CONTINUE WITH HUMAN HANDOFF for 'email' and 'dashboard' modes
-    await markAgentRequested(sessionKey);
-    conversations[handoffKey] = true;
-    
-    const customerContact = customerContacts[sessionKey];
-    const responseTime = currentConfig.responseTime || CONFIG.DEFAULT_RESPONSE_TIME;
-    const contactMethods = currentConfig.contactMethods || CONFIG.DEFAULT_CONTACT_METHODS;
-    const smsEnabled = currentConfig.smsEnabled || 'disabled';
-    
-    let botResponse;
-    
-    if (smsEnabled === 'hybrid') {
-        // ... keep your existing hybrid mode code here
-    } else if (smsEnabled === 'sms-first') {
-        // ... keep your existing sms-first mode code here  
-    } else {
-        // Regular mode - no SMS
-        botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime} via ${contactMethods}. Could I get your contact information?`;
-    }
-    
-    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-    
-    // Send handoff email if not hybrid mode or if customer chooses chat
-    if (smsEnabled !== 'hybrid' && emailTransporter) {
-        await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
-    }
-    
-    return res.json({ 
-        success: true, 
-        response: botResponse,
-        agentRequested: true,
-        smsMode: smsEnabled
-    });
-}
+        // Initial agent request handling with alertPreference check
+        if (isAgentRequest && !alreadyHandedOff) {
+            
+            // CHECK ALERT PREFERENCE FIRST
+            const alertPreference = currentConfig.alertPreference || 'email'; // default to email if not set
+            
+            if (alertPreference === 'none') {
+                // AI-ONLY MODE: Redirect back to automated help
+                const aiOnlyResponse = `I'm here to help you with any questions about our ${currentConfig.businessType || 'tours'}! I can provide information about pricing, schedules, locations, and policies. What specific information can I help you find?`;
+                
+                conversations[sessionKey].push({ role: 'assistant', content: aiOnlyResponse });
+                await saveMessage(conversation.conversation_id, 'assistant', aiOnlyResponse);
+                
+                return res.json({ 
+                    success: true, 
+                    response: aiOnlyResponse,
+                    aiOnlyMode: true 
+                });
+            }
+            
+            // CONTINUE WITH HUMAN HANDOFF for 'email' and 'dashboard' modes
+            await markAgentRequested(sessionKey);
+            conversations[handoffKey] = true;
+            
+            const customerContact = customerContacts[sessionKey];
+            const responseTime = currentConfig.responseTime || CONFIG.DEFAULT_RESPONSE_TIME;
+            const contactMethods = currentConfig.contactMethods || CONFIG.DEFAULT_CONTACT_METHODS;
+            const smsEnabled = currentConfig.smsEnabled || 'disabled';
+            
+            let botResponse;
+            
+            if (smsEnabled === 'hybrid') {
+                botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime}. 
+
+💬 Would you prefer to:
+<div style="margin: 15px 0; display: flex; gap: 10px; flex-wrap: wrap;">
+    <button onclick="selectChatChoice('sms')" class="choice-btn" style="background: #3b82f6; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">📱 Continue via SMS</button>
+    <button onclick="selectChatChoice('chat')" class="choice-btn" style="background: #8B5CF6; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">💬 Continue chatting here</button>
+</div>
+
+Could I also get your contact information?`;
+            } else if (smsEnabled === 'sms-first') {
+                botResponse = `I'd be happy to connect you with our team! What's your mobile number? We'll send you a text so you can chat with us on the go.`;
+            } else {
+                // Regular mode - no SMS
+                botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime} via ${contactMethods}. Could I get your contact information?`;
+            }
+            
+            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+            
+            // Send handoff email if not hybrid mode or if customer chooses chat
+            if (smsEnabled !== 'hybrid' && emailTransporter) {
+                await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
+            }
+            
+            return res.json({ 
+                success: true, 
+                response: botResponse,
+                agentRequested: true,
+                smsMode: smsEnabled
+            });
+        }
         
         // Handle waiver requests
         if (lowerMessage.includes('waiver') || lowerMessage.includes('form') || lowerMessage.includes('sign') || lowerMessage.includes('release')) {
-    let botResponse;
-    if (currentConfig.waiverLink && currentConfig.waiverLink.trim() && currentConfig.waiverLink !== "No waiver link provided.") {
-        botResponse = `Here's your waiver: <a href='${currentConfig.waiverLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR};'>Click here to sign</a>`;
-    } else {
-        botResponse = `I'm not sure about waiver requirements. Please speak to someone from our team who can provide you with the most current waiver information.`;
-    }
-    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-    return res.json({ success: true, response: botResponse });
-}
-
-        // Handle pricing questions
-        if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('pricing')) {
-    if (currentConfig.bookingLink && currentConfig.bookingLink.trim()) {
-        const botResponse = `For current pricing and availability, please check our booking system: <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR}; text-decoration: underline;'>View prices and book here</a>`;
-        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-        return res.json({ success: true, response: botResponse });
-    }
-}
-
-        // Handle booking requests
-        if (currentConfig.bookingLink && (lowerMessage.includes('book') || lowerMessage.includes('reserve') || lowerMessage.includes('schedule'))) {
-    const botResponse = `Ready to book? <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR}; text-decoration: underline;'>Click here to book online</a>`;
-    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-    return res.json({ success: true, response: botResponse });
-}
-// Look for phone number patterns in SMS-first mode
-const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
-if (phoneRegex.test(message) && currentConfig.smsEnabled === 'sms-first') {
-    const phone = message.match(phoneRegex)[0];
-    
-    // Store the phone number
-    customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
-    await updateCustomerContact(sessionKey, null, phone);
-    
-    // Send SMS immediately
-    const businessName = currentConfig.businessName || 'Our Business';
-    const smsFirstMessage = currentConfig.smsFirstMessage || '';
-    const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
-                      `Hi! This is ${businessName}. Thanks for reaching out! How can we help you today?`;
-    
-    const smsResult = await sendSMS(phone, welcomeSMS, conversation.conversation_id);
-    
-    let botResponse;
-    if (smsResult && smsResult.success) {
-        botResponse = `Perfect! 📱 I've sent you a text at ${phone}. Continue our conversation there!`;
-    } else {
-        botResponse = `I have your number (${phone}). Our team will text you shortly!`;
-    }
-    
-    // Send handoff email
-    if (emailTransporter) {
-        await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
-    }
-    
-    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-    return res.json({ 
-        success: true, 
-        response: botResponse,
-        smsEnabled: true
-    });
-}
-if (lowerMessage.includes('meet') || lowerMessage.includes('location') || lowerMessage.includes('where')) {
-    if (currentConfig.location && currentConfig.location.trim()) {
-        const botResponse = `We meet at ${currentConfig.location}. If you need more specific directions or landmarks, please speak to someone from our team!`;
-        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-        return res.json({ success: true, response: botResponse });
-    }
-}
-if (lowerMessage.includes('time') || lowerMessage.includes('schedule') || lowerMessage.includes('when')) {
-    if (currentConfig.bookingLink && currentConfig.bookingLink.trim()) {
-        const botResponse = `For current tour times and availability, please check our booking system: <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR}; text-decoration: underline;'>View schedule and book here</a>`;
-        conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-        await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-        return res.json({ success: true, response: botResponse });
-    } else if (currentConfig.times && currentConfig.times.length > 0) {
-        const validTimes = currentConfig.times.filter(time => time && time.trim() !== '');
-        if (validTimes.length > 0) {
-            const timesStr = validTimes.join(', ');
-            const botResponse = `Our tours typically run at: ${timesStr}. For current availability and to book, please speak to someone from our team!`;
+            let botResponse;
+            if (currentConfig.waiverLink && currentConfig.waiverLink.trim() && currentConfig.waiverLink !== "No waiver link provided.") {
+                botResponse = `Here's your waiver: <a href='${currentConfig.waiverLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR};'>Click here to sign</a>`;
+            } else {
+                botResponse = `I'm not sure about waiver requirements. Please speak to someone from our team who can provide you with the most current waiver information.`;
+            }
             conversations[sessionKey].push({ role: 'assistant', content: botResponse });
             await saveMessage(conversation.conversation_id, 'assistant', botResponse);
             return res.json({ success: true, response: botResponse });
         }
-    }
-}
+
+        // Handle pricing questions
+        if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('pricing')) {
+            if (currentConfig.bookingLink && currentConfig.bookingLink.trim()) {
+                const botResponse = `For current pricing and availability, please check our booking system: <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR}; text-decoration: underline;'>View prices and book here</a>`;
+                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+                await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+                return res.json({ success: true, response: botResponse });
+            }
+        }
+
+        // Handle booking requests
+        if (currentConfig.bookingLink && (lowerMessage.includes('book') || lowerMessage.includes('reserve') || lowerMessage.includes('schedule'))) {
+            const botResponse = `Ready to book? <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR}; text-decoration: underline;'>Click here to book online</a>`;
+            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+            return res.json({ success: true, response: botResponse });
+        }
+
+        // Look for phone number patterns in SMS-first mode
+        const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
+        if (phoneRegex.test(message) && currentConfig.smsEnabled === 'sms-first') {
+            const phone = message.match(phoneRegex)[0];
+            
+            // Store the phone number
+            customerContacts[sessionKey] = { ...customerContacts[sessionKey], phone };
+            await updateCustomerContact(sessionKey, null, phone);
+            
+            // Send SMS immediately
+            const businessName = currentConfig.businessName || 'Our Business';
+            const smsFirstMessage = currentConfig.smsFirstMessage || '';
+            const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
+                              `Hi! This is ${businessName}. Thanks for reaching out! How can we help you today?`;
+            
+            const smsResult = await sendSMS(phone, welcomeSMS, conversation.conversation_id);
+            
+            let botResponse;
+            if (smsResult && smsResult.success) {
+                botResponse = `Perfect! 📱 I've sent you a text at ${phone}. Continue our conversation there!`;
+            } else {
+                botResponse = `I have your number (${phone}). Our team will text you shortly!`;
+            }
+            
+            // Send handoff email
+            if (emailTransporter) {
+                await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone }, operatorId);
+            }
+            
+            conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+            await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+            return res.json({ 
+                success: true, 
+                response: botResponse,
+                smsEnabled: true
+            });
+        }
+
+        // Handle location questions
+        if (lowerMessage.includes('meet') || lowerMessage.includes('location') || lowerMessage.includes('where')) {
+            if (currentConfig.location && currentConfig.location.trim()) {
+                const botResponse = `We meet at ${currentConfig.location}. If you need more specific directions or landmarks, please speak to someone from our team!`;
+                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+                await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+                return res.json({ success: true, response: botResponse });
+            }
+        }
+
+        // Handle time questions
+        if (lowerMessage.includes('time') || lowerMessage.includes('schedule') || lowerMessage.includes('when')) {
+            if (currentConfig.bookingLink && currentConfig.bookingLink.trim()) {
+                const botResponse = `For current tour times and availability, please check our booking system: <a href='${currentConfig.bookingLink}' target='_blank' style='color: ${currentConfig.brandColor || CONFIG.DEFAULT_BRAND_COLOR}; text-decoration: underline;'>View schedule and book here</a>`;
+                conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+                await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+                return res.json({ success: true, response: botResponse });
+            } else if (currentConfig.times && currentConfig.times.length > 0) {
+                const validTimes = currentConfig.times.filter(time => time && time.trim() !== '');
+                if (validTimes.length > 0) {
+                    const timesStr = validTimes.join(', ');
+                    const botResponse = `Our tours typically run at: ${timesStr}. For current availability and to book, please speak to someone from our team!`;
+                    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+                    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+                    return res.json({ success: true, response: botResponse });
+                }
+            }
+        }
+        
         // Normal conversation with Claude API
         const SYSTEM_PROMPT = buildEnhancedSystemPrompt(currentConfig);
 
@@ -1715,6 +1689,46 @@ if (lowerMessage.includes('time') || lowerMessage.includes('schedule') || lowerM
         });
     }
 });
+// Test endpoint for weather functionality (add this separately after the chat endpoint)
+app.get('/api/test-weather/:location', async (req, res) => {
+    const { location } = req.params;
+    
+    try {
+        console.log(`🧪 Testing weather for: ${location}`);
+        const weatherData = await getCurrentWeather(location);
+        
+        if (weatherData) {
+            const testConfig = {
+                businessType: 'boat tours',
+                weatherStyle: 'tour-focused'
+            };
+            
+            const response = generateWeatherResponse(weatherData, testConfig);
+            
+            res.json({
+                success: true,
+                location: location,
+                weatherData: weatherData,
+                botResponse: response,
+                apiConfigured: !!process.env.OPENWEATHER_API_KEY
+            });
+        } else {
+            res.json({
+                success: false,
+                error: 'Could not fetch weather data',
+                apiConfigured: !!process.env.OPENWEATHER_API_KEY
+            });
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            apiConfigured: !!process.env.OPENWEATHER_API_KEY
+        });
+    }
+});
+
+// Test by visiting: https://your-app.com/api/test-weather/Key%20West,%20FL
 
 
 
