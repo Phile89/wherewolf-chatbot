@@ -2087,40 +2087,6 @@ if (isAgentRequest && !alreadyHandedOff) {
     const contactMethods = currentConfig.contactMethods || CONFIG.DEFAULT_CONTACT_METHODS;
     const smsEnabled = currentConfig.smsEnabled || 'disabled';
     
-    let botResponse;
-    
-    // 🔧 FIXED: Complete agent handoff logic for server.js
-// Replace the incomplete section around line 1150-1200 in your server.js
-
-// 🆕 ENHANCED: Initial agent request handling with alertPreference check
-if (isAgentRequest && !alreadyHandedOff) {
-    
-    // 🔧 CHECK ALERT PREFERENCE FIRST
-    const alertPreference = currentConfig.alertPreference || 'email'; // default to email if not set
-    
-    if (alertPreference === 'none') {
-        // AI-ONLY MODE: Redirect back to automated help
-        const aiOnlyResponse = `I'm here to help you with any questions about our ${currentConfig.businessType || 'tours'}! I can provide information about pricing, schedules, locations, and policies. What specific information can I help you find?`;
-        
-        conversations[sessionKey].push({ role: 'assistant', content: aiOnlyResponse });
-        await saveMessage(conversation.conversation_id, 'assistant', aiOnlyResponse);
-        
-        return res.json({ 
-            success: true, 
-            response: aiOnlyResponse,
-            aiOnlyMode: true 
-        });
-    }
-    
-    // CONTINUE WITH HUMAN HANDOFF for 'email' and 'dashboard' modes.
-    await markAgentRequested(sessionKey);
-    conversations[handoffKey] = true;
-    
-    const customerContact = customerContacts[sessionKey];
-    const responseTime = currentConfig.responseTime || CONFIG.DEFAULT_RESPONSE_TIME;
-    const contactMethods = currentConfig.contactMethods || CONFIG.DEFAULT_CONTACT_METHODS;
-    const smsEnabled = currentConfig.smsEnabled || 'disabled';
-    
     let botResponse = ''; // 🔧 FIXED: Initialize botResponse
     
     if (smsEnabled === 'hybrid') {
@@ -2183,7 +2149,7 @@ Once I have your number, our team will typically respond within ${responseTime}.
         botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime} via ${contactMethods}. Could I get your contact information?`;
     }
     
-    // 🔧 FIXED: Ensure botResponse is always set before using it
+    // 🔧 FIXED: Safety check - ensure botResponse is always set
     if (!botResponse) {
         botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime}. Please provide your contact information so they can assist you.`;
     }
@@ -2191,38 +2157,23 @@ Once I have your number, our team will typically respond within ${responseTime}.
     conversations[sessionKey].push({ role: 'assistant', content: botResponse });
     await saveMessage(conversation.conversation_id, 'assistant', botResponse);
     
-    // Send handoff email if email mode or if customer chooses chat in hybrid mode
+    // Send handoff email if email mode
     if (alertPreference === 'email' && emailTransporter) {
         try {
             await sendHandoffEmail(currentConfig, conversations[sessionKey], customerContact, operatorId);
             console.log('✅ Handoff email sent successfully');
         } catch (emailError) {
             console.error('❌ Failed to send handoff email:', emailError);
-            // Don't fail the whole request if email fails
         }
     }
-    f
+    
     return res.json({ 
         success: true, 
         response: botResponse,
         agentRequested: true,
         smsMode: smsEnabled,
-        startPolling: alertPreference === 'dashboard', // Start polling for dashboard mode
-        twoWayChat: alertPreference === 'dashboard'     // Enable two-way chat for dashboard mode
-    });
-}
-    
-    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
-    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
-    
-    // 🔧 FIXED: Don't send email immediately - wait for contact info!
-    // Email will be sent when customer provides contact information
-    
-    return res.json({ 
-        success: true, 
-        response: botResponse,
-        agentRequested: true,
-        smsMode: smsEnabled
+        startPolling: alertPreference === 'dashboard',
+        twoWayChat: alertPreference === 'dashboard'
     });
 }
         
