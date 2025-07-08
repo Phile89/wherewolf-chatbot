@@ -1770,7 +1770,39 @@ app.post('/api/chat', validateRequired(['message', 'operatorId']), async functio
             
             const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
             const phoneRegex = /\b\+?1?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b|\b\d{10,}\b/;
-            
+            // 🔧 FIXED: If we have phone and SMS is enabled, use it immediately
+if (hasExistingPhone && smsEnabled === 'hybrid') {
+    const phone = hasExistingPhone;
+    
+    // Send SMS immediately using existing phone
+    const businessName = currentConfig.businessName || 'Our Business';
+    const smsFirstMessage = currentConfig.smsFirstMessage || '';
+    const welcomeSMS = smsFirstMessage.replace('{BUSINESS_NAME}', businessName) ||
+                      `Hi! This is ${businessName}. Thanks for reaching out! How can we help you today?`;
+    
+    const smsResult = await sendSMS(phone, welcomeSMS, conversation.conversation_id);
+    
+    let botResponse;
+    if (smsResult && smsResult.success) {
+        botResponse = `Perfect! 📱 I've sent you a text at ${phone}. Continue our conversation there - our team will join you shortly!`;
+    } else {
+        botResponse = `I have your number (${phone}). Our team will text you shortly!`;
+    }
+    
+    if (emailTransporter) {
+        await sendHandoffEmail(currentConfig, conversations[sessionKey], { phone, email: hasExistingEmail }, operatorId);
+    }
+    
+    conversations[sessionKey].push({ role: 'assistant', content: botResponse });
+    await saveMessage(conversation.conversation_id, 'assistant', botResponse);
+    return res.json({ 
+        success: true, 
+        response: botResponse, 
+        smsEnabled: true,
+        phoneCollected: true
+    });
+}
+
             // Handle "text" or "SMS" choice more clearly
             if ((lowerMessage.includes('text') || lowerMessage.includes('sms')) && smsEnabled === 'hybrid') {
                 // They chose SMS - send immediately
