@@ -512,9 +512,39 @@ let pendingMessage = null;
 let pollingInterval = null;
 let lastMessageCount = 0;
 
+// 🔧 FIXED: Add sessionId initialization
+let sessionId = null;
+
 // Get operator ID from URL
 const urlParams = new URLSearchParams(window.location.search);
 operatorId = urlParams.get('operator');
+
+// 🔧 FIXED: Initialize sessionId properly  
+const urlSessionId = urlParams.get('session');
+if (urlSessionId) {
+    sessionId = urlSessionId;
+    console.log('🔗 Using session from URL:', sessionId);
+} else {
+    // Check for existing session
+    let existingSession = sessionStorage.getItem('wherewolf_session_id');
+    let sessionAge = sessionStorage.getItem('wherewolf_session_age');
+    
+    // Check if session is too old (older than 4 hours = stale)
+    const FOUR_HOURS = 4 * 60 * 60 * 1000;
+    const now = Date.now();
+    
+    if (existingSession && sessionAge && (now - parseInt(sessionAge)) < FOUR_HOURS) {
+        // Use existing session (less than 4 hours old)
+        sessionId = existingSession;
+        console.log('🔄 Using existing session:', sessionId);
+    } else {
+        // Create fresh session
+        sessionId = 'chat_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+        sessionStorage.setItem('wherewolf_session_id', sessionId);
+        sessionStorage.setItem('wherewolf_session_age', now.toString());
+        console.log('🆕 Created new session:', sessionId);
+    }
+}
 
 console.log('Operator ID from URL:', operatorId);
 console.log('Server URL:', serverUrl);
