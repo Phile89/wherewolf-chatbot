@@ -2730,54 +2730,236 @@ app.get('/api/debug/weather-config/:operatorId', async (req, res) => {
     }
 });
 
-// Enhanced weather test endpoint  
-app.get('/api/test-weather/:location', async (req, res) => {
+// Add this enhanced debug endpoint to your server.js
+
+// Enhanced weather debug with detailed error info
+app.get('/api/debug/weather-detailed/:location', async (req, res) => {
     const { location } = req.params;
     
     try {
-        console.log(`🧪 Testing weather for: ${location}`);
+        console.log(`🔍 Detailed weather debug for: ${location}`);
         
-        if (!process.env.OPENWEATHER_API_KEY) {
+        const apiKey = process.env.OPENWEATHER_API_KEY;
+        
+        if (!apiKey) {
             return res.json({
                 success: false,
-                error: 'OpenWeather API key not configured',
-                apiConfigured: false,
-                instructions: 'Get free API key from https://openweathermap.org/api'
+                error: 'API key not configured',
+                step: 'ENV_CHECK'
             });
         }
         
-        const weatherData = await getCurrentWeather(location);
+        console.log(`🔑 API Key first 8 chars: ${apiKey.substring(0, 8)}...`);
+        console.log(`📍 Location: ${location}`);
         
-        if (weatherData) {
-            const testConfig = {
-                businessType: 'boat tours',
-                weatherStyle: 'tour-focused'
-            };
-            
-            const response = generateWeatherResponse(weatherData, testConfig);
-            
-            res.json({
-                success: true,
-                location: location,
-                weatherData: weatherData,
-                botResponse: response,
-                apiConfigured: true
+        // Test the API call with full error details
+        const url = 'https://api.openweathermap.org/data/2.5/weather';
+        const params = {
+            q: location,
+            appid: apiKey,
+            units: 'imperial'
+        };
+        
+        console.log(`🌐 Making request to: ${url}`);
+        console.log(`📋 Params:`, { ...params, appid: params.appid.substring(0, 8) + '...' });
+        
+        try {
+            const response = await axios.get(url, {
+                params: params,
+                timeout: 10000, // 10 second timeout
+                validateStatus: function (status) {
+                    return status < 500; // Don't throw on 4xx errors
+                }
             });
-        } else {
-            res.json({
+            
+            console.log(`📡 Response status: ${response.status}`);
+            console.log(`📊 Response data:`, response.data);
+            
+            if (response.status === 200) {
+                const weather = response.data;
+                
+                const processedData = {
+                    temp: Math.round(weather.main.temp),
+                    feelsLike: Math.round(weather.main.feels_like),
+                    description: weather.weather[0].description,
+                    humidity: weather.main.humidity,
+                    windSpeed: Math.round(weather.wind?.speed || 0),
+                    cloudiness: weather.clouds?.all || 0,
+                    city: weather.name,
+                    country: weather.sys.country
+                };
+                
+                return res.json({
+                    success: true,
+                    location: location,
+                    rawResponse: weather,
+                    processedData: processedData,
+                    apiStatus: 'Working correctly',
+                    requestUrl: `${url}?q=${encodeURIComponent(location)}&appid=${apiKey.substring(0, 8)}...&units=imperial`
+                });
+            } else {
+                // API returned an error
+                return res.json({
+                    success: false,
+                    error: 'API returned error',
+                    status: response.status,
+                    apiResponse: response.data,
+                    possibleCauses: [
+                        response.status === 401 ? 'Invalid API key' : null,
+                        response.status === 404 ? 'Location not found - try "Miami, FL" format' : null,
+                        response.status === 429 ? 'Rate limit exceeded' : null,
+                        'API key might not be activated yet (takes 1-2 hours for new keys)'
+                    ].filter(Boolean)
+                });
+            }
+            
+        } catch (axiosError) {
+            console.error('🚨 Axios error:', axiosError.message);
+            console.error('🚨 Error details:', {
+                code: axiosError.code,
+                status: axiosError.response?.status,
+                statusText: axiosError.response?.statusText,
+                data: axiosError.response?.data
+            });
+            
+            return res.json({
                 success: false,
-                error: 'Could not fetch weather data',
-                apiConfigured: true
+                error: 'Network/Request error',
+                details: {
+                    message: axiosError.message,
+                    code: axiosError.code,
+                    status: axiosError.response?.status,
+                    statusText: axiosError.response?.statusText,
+                    apiResponse: axiosError.response?.data
+                },
+                troubleshooting: [
+                    'Check if API key is valid',
+                    'Verify API key is activated (new keys take 1-2 hours)',
+                    'Try different location format: "Miami, FL" or "London, UK"',
+                    'Check OpenWeatherMap service status'
+                ]
             });
         }
+        
     } catch (error) {
-        res.status(500).json({
+        console.error('💥 Unexpected error:', error);
+        return res.status(500).json({
             success: false,
-            error: error.message,
-            apiConfigured: !!process.env.OPENWEATHER_API_KEY
+            error: 'Unexpected server error',
+            message: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 });
+
+// Simple API key validator
+app.get('/api/debug/weather-key-test', async (req, res) => {
+    const apiKey = process.env.OPENWEATHER_API_KEY;
+    
+    if (!apiKey) {
+        return res.json({
+            success: false,
+            error: 'No API key configured',
+            instructions: 'Set OPENWEATHER_API_KEY environment variable'
+        });
+    }
+    
+    try {
+        // Test with a simple, reliable location
+        const testResponse = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
+            params: {
+                q: 'London,UK',
+                appid: apiKey,
+                units: 'metric'
+            },
+            timeout: 10000
+        });
+        
+        if (testResponse.status === 200) {
+            return res.json({
+                success: true,
+                message: 'API key is working correctly',
+                keyPrefix: apiKey.substring(0, 8) + '...',
+                testLocation: 'London, UK',
+                testResult: {
+                    city: testResponse.data.name,
+                    country: testResponse.data.sys.country,
+                    temp: testResponse.data.main.temp,
+                    description: testResponse.data.weather[0].description
+                }
+            });
+        } else {
+            return res.json({
+                success: false,
+                error: 'API returned error',
+                status: testResponse.status,
+                keyPrefix: apiKey.substring(0, 8) + '...'
+            });
+        }
+        
+    } catch (error) {
+        return res.json({
+            success: false,
+            error: 'API key test failed',
+            message: error.message,
+            keyPrefix: apiKey.substring(0, 8) + '...',
+            details: error.response?.data || 'Network error'
+        });
+    }
+});
+
+// Fix the original getCurrentWeather function to provide better error logging
+async function getCurrentWeatherFixed(location) {
+    if (!process.env.OPENWEATHER_API_KEY) {
+        console.log('⚠️ OpenWeather API key not configured');
+        return null;
+    }
+    
+    try {
+        console.log(`🌤️ Fetching weather for: ${location}`);
+        console.log(`🔑 Using API key: ${process.env.OPENWEATHER_API_KEY.substring(0, 8)}...`);
+        
+        const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather`, {
+            params: {
+                q: location,
+                appid: process.env.OPENWEATHER_API_KEY,
+                units: 'imperial'
+            },
+            timeout: 10000, // Increased timeout
+            validateStatus: function (status) {
+                return status < 500; // Don't throw on 4xx errors
+            }
+        });
+        
+        console.log(`📡 Weather API response status: ${response.status}`);
+        
+        if (response.status !== 200) {
+            console.error(`❌ Weather API error ${response.status}:`, response.data);
+            return null;
+        }
+        
+        const weather = response.data;
+        console.log(`✅ Weather data received for ${weather.name}, ${weather.sys.country}`);
+        
+        return {
+            temp: Math.round(weather.main.temp),
+            feelsLike: Math.round(weather.main.feels_like),
+            description: weather.weather[0].description,
+            humidity: weather.main.humidity,
+            windSpeed: Math.round(weather.wind?.speed || 0),
+            cloudiness: weather.clouds?.all || 0,
+            city: weather.name,
+            country: weather.sys.country
+        };
+    } catch (error) {
+        console.error('❌ Weather API error details:');
+        console.error('  Message:', error.message);
+        console.error('  Code:', error.code);
+        console.error('  Status:', error.response?.status);
+        console.error('  Response:', error.response?.data);
+        return null;
+    }
+}
 
 // ===========================================
 // ERROR HANDLING
