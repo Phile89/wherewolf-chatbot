@@ -2698,6 +2698,88 @@ app.get('/api/db-health', async (req, res) => {
 });
 
 // ===========================================
+// DEBUG ENDPOINTS - Add this section
+// ===========================================
+
+// Weather config debug endpoint
+app.get('/api/debug/weather-config/:operatorId', async (req, res) => {
+    try {
+        const { operatorId } = req.params;
+        console.log(`🔍 Debug: Checking weather config for operator ${operatorId}`);
+        
+        const config = await getOperatorConfig(operatorId);
+        
+        res.json({
+            success: true,
+            operatorId: operatorId,
+            configFound: !!config,
+            weatherEnabled: config?.weatherEnabled,
+            weatherLocation: config?.weatherLocation,
+            weatherStyle: config?.weatherStyle,
+            apiKeyConfigured: !!process.env.OPENWEATHER_API_KEY,
+            apiKeyPreview: process.env.OPENWEATHER_API_KEY ? 
+                process.env.OPENWEATHER_API_KEY.substring(0, 8) + '...' : 
+                'NOT SET'
+        });
+    } catch (error) {
+        console.error('❌ Debug endpoint error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Enhanced weather test endpoint  
+app.get('/api/test-weather/:location', async (req, res) => {
+    const { location } = req.params;
+    
+    try {
+        console.log(`🧪 Testing weather for: ${location}`);
+        
+        if (!process.env.OPENWEATHER_API_KEY) {
+            return res.json({
+                success: false,
+                error: 'OpenWeather API key not configured',
+                apiConfigured: false,
+                instructions: 'Get free API key from https://openweathermap.org/api'
+            });
+        }
+        
+        const weatherData = await getCurrentWeather(location);
+        
+        if (weatherData) {
+            const testConfig = {
+                businessType: 'boat tours',
+                weatherStyle: 'tour-focused'
+            };
+            
+            const response = generateWeatherResponse(weatherData, testConfig);
+            
+            res.json({
+                success: true,
+                location: location,
+                weatherData: weatherData,
+                botResponse: response,
+                apiConfigured: true
+            });
+        } else {
+            res.json({
+                success: false,
+                error: 'Could not fetch weather data',
+                apiConfigured: true
+            });
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            apiConfigured: !!process.env.OPENWEATHER_API_KEY
+        });
+    }
+});
+
+// ===========================================
 // ERROR HANDLING
 // ===========================================
 
