@@ -576,10 +576,10 @@ if (!operatorId) {
             }
         }
 
-        // Load conversation history when chat loads
-        async function loadConversationHistory() {
+        // 2. REPLACE the loadConversationHistory function with this improved version:
+async function loadConversationHistory() {
     try {
-        console.log('📚 Checking for conversation history...');
+        console.log('📜 Loading conversation history for session:', sessionId);
         
         const response = await fetch(`${serverUrl}/api/chat/history`, {
             method: 'POST',
@@ -588,50 +588,58 @@ if (!operatorId) {
             },
             body: JSON.stringify({ 
                 operatorId: operatorId,
-                sessionId: sessionId  // Use our managed sessionId
+                sessionId: sessionId
             })
         });
         
         if (response.ok) {
             const data = await response.json();
-            
-            console.log('📊 History response:', {
-                messageCount: data.messages?.length || 0,
-                hasOperator: data.hasOperator,
-                agentRequested: data.agentRequested
-            });
+            console.log('📜 History response:', data);
             
             if (data.messages && data.messages.length > 0) {
-                console.log('📜 Loading existing conversation history...');
+                console.log(`📚 Found ${data.messages.length} previous messages - restoring conversation`);
                 
                 const messagesContainer = document.getElementById('chatMessages');
                 messagesContainer.innerHTML = '';
                 
-                data.messages.forEach(msg => {
+                // 🔧 FIXED: Properly restore conversation state
+                data.messages.forEach((msg, index) => {
                     displayMessage(msg.content, msg.role);
                 });
+                
+                // 🔧 FIXED: Check if we have any user messages (meaning contact was provided)
+                const userMessages = data.messages.filter(msg => msg.role === 'user');
+                if (userMessages.length > 0) {
+                    hasProvidedContact = true;
+                    isFirstMessage = false;
+                    console.log('✅ Found user messages - contact info was provided previously');
+                }
                 
                 if (data.hasOperator || data.agentRequested) {
                     console.log('🔄 Previous operator involvement detected, starting polling...');
                     startOperatorMessagePolling();
-                    isFirstMessage = false;
                 }
                 
                 lastMessageCount = data.messages.length;
-                
-                // Mark that we loaded history (not a fresh start)
-                isFirstMessage = false;
-                console.log('✅ Conversation history loaded successfully');
+                return true; // Signal that history was loaded
             } else {
-                console.log('🆕 No previous conversation - starting fresh');
-                // Keep isFirstMessage = true for fresh conversations
+                console.log('📭 No previous messages found - this is a fresh conversation');
+                // 🔧 FIXED: Ensure fresh conversation state
+                hasProvidedContact = false;
+                isFirstMessage = true;
+                return false;
             }
         } else {
-            console.log('❌ History not available, starting fresh');
+            console.log('⚠️ Could not load history - treating as new conversation');
+            hasProvidedContact = false;
+            isFirstMessage = true;
+            return false;
         }
     } catch (error) {
         console.error('❌ Error loading conversation history:', error);
-        console.log('🆕 Starting fresh conversation due to error');
+        hasProvidedContact = false;
+        isFirstMessage = true;
+        return false;
     }
 }
 function forceNewSession() {
@@ -879,6 +887,8 @@ async function submitContact() {
     const phone = document.getElementById('contactPhone').value;
     const smsEnabled = businessConfig.smsEnabled || 'disabled';
     
+    console.log('📝 Submitting contact info:', { email, phone, smsEnabled });
+    
     if (smsEnabled === 'sms-first') {
         const phoneRegex = /^\+?[\s\-\(\)]*([0-9][\s\-\(\)]*){10,}$/;
         if (!phone || !phoneRegex.test(phone)) {
@@ -901,10 +911,12 @@ async function submitContact() {
         }
     }
     
+    // 🔧 FIXED: Mark contact as provided BEFORE making the API call
     hasProvidedContact = true;
+    isFirstMessage = false;
     
     try {
-        await fetch(`${serverUrl}/contact-info`, {
+        const response = await fetch(`${serverUrl}/contact-info`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -913,11 +925,16 @@ async function submitContact() {
                 email, 
                 phone, 
                 operatorId: operatorId,
-                sessionId: 'default'
+                sessionId: sessionId
             })
         });
         
-        console.log('📧 Contact info saved:', { email, phone, operatorId });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('📧 Contact info saved successfully:', result);
         
         const lastMessage = document.querySelector('.message:last-child');
         let successMessage = '';
@@ -943,7 +960,7 @@ async function submitContact() {
             </div>
         `;
         
-        // 🔧 FIXED: Now send the pending message to get the actual answer
+        // Send the pending message
         setTimeout(async () => {
             if (pendingMessage) {
                 console.log('📤 Now sending pending message:', pendingMessage);
@@ -953,8 +970,11 @@ async function submitContact() {
         }, 1500);
         
     } catch (error) {
-        console.error('Error saving contact:', error);
-        skipContact();
+        console.error('❌ Error saving contact:', error);
+        // Reset state on error
+        hasProvidedContact = false;
+        isFirstMessage = true;
+        alert('Failed to save contact information. Please try again.');
     }
 }
 
@@ -972,12 +992,14 @@ function skipContact() {
     }
 }
 
-       // 🔧 FIXED: Updated sendMessageToServer function in chat.html
+       // 1. REPLACE the sendMessageToServer function in chat.html with this fixed version:
 async function sendMessageToServer(message) {
     showTyping();
     
     try {
-        console.log('📤 Sending message:', message);
+        console.log('📤 Sending message:', message, 'Session:', sessionId);
+        console.log('🔍 Contact info status:', { hasProvidedContact, isFirstMessage });
+        
         const response = await fetch(`${serverUrl}/api/chat`, {
             method: 'POST',
             headers: {
@@ -985,7 +1007,8 @@ async function sendMessageToServer(message) {
             },
             body: JSON.stringify({ 
                 message: message,
-                operatorId: operatorId 
+                operatorId: operatorId,
+                sessionId: sessionId  // Use proper sessionId
             })
         });
         
@@ -998,11 +1021,17 @@ async function sendMessageToServer(message) {
         hideTyping();
         
         // 🔧 FIXED: Handle contact form request BEFORE answering question
-        if (data.showContactForm) {
+        if (data.showContactForm && !hasProvidedContact) {
             console.log('📝 Server requesting contact form before answering');
             pendingMessage = data.pendingMessage || message;
             showContactForm();
             return; // Don't show any response yet
+        }
+        
+        // 🔧 FIXED: If this was the first message and no contact form, mark as no longer first
+        if (isFirstMessage) {
+            isFirstMessage = false;
+            console.log('✅ First message processed');
         }
         
         if (data.skipBotResponse) {
