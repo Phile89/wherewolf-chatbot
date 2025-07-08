@@ -1927,5 +1927,37 @@ document.addEventListener('DOMContentLoaded', function() {
     updateProgress();
 });
 </script>
+<script>
+// Quick fix for setup form
+document.addEventListener('DOMContentLoaded', function() {
+    // Open the first section by default
+    const firstSection = document.querySelector('.form-section .section-content');
+    const firstHeader = document.querySelector('.form-section .section-header');
+    
+    if (firstSection && firstHeader) {
+        firstSection.classList.add('open');
+        firstSection.style.display = 'block';
+        firstHeader.classList.add('open');
+    }
+    
+    // Fix all section toggles
+    document.querySelectorAll('.section-header').forEach(header => {
+        header.onclick = function() {
+            const content = this.nextElementSibling;
+            const isOpen = content.classList.contains('open');
+            
+            if (isOpen) {
+                content.classList.remove('open');
+                content.style.display = 'none';
+                this.classList.remove('open');
+            } else {
+                content.classList.add('open');
+                content.style.display = 'block';
+                this.classList.add('open');
+            }
+        };
+    });
+});
+</script>
 </body>
 </html>
