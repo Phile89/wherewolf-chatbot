@@ -745,10 +745,10 @@
     <label for="weatherLocation">
         🌤️ City/Region for Weather *
         <span class="info-icon">i
-            <div class="tooltip">City and state/country for weather updates. Examples: "Key West, Florida", "San Diego, California", "Sydney, Australia"</div>
+            <div class="tooltip">City and state/country for weather updates. Examples: "Key West, FL", "San Diego, CA", "Sydney, Australia"</div>
         </span>
     </label>
-    <input type="text" id="weatherLocation" placeholder="Key West, Florida" required>
+    <input type="text" id="weatherLocation" placeholder="Key West, FL" required>
     <p class="help-text">Used for real-time weather responses to customers</p>
 </div>
                 </div>
@@ -801,59 +801,59 @@
             </div>
 
             <!-- Activity Customization -->
-            <div class="form-group">
-    <label>Activity Types (select all that apply)</label>
-    <div class="activity-grid">
-        <label class="activity-option">
-            <input type="checkbox" value="Boat Tours" onchange="updateActivityOption(this)">
-            <span>🚤 Boat Tours</span>
-        </label>
-        <label class="activity-option">
-            <input type="checkbox" value="Fishing" onchange="updateActivityOption(this)">
-            <span>🎣 Fishing</span>
-        </label>
-        <label class="activity-option">
-            <input type="checkbox" value="Snorkeling" onchange="updateActivityOption(this)">
-            <span>🤿 Snorkeling</span>
-        </label>
-        <label class="activity-option">
-            <input type="checkbox" value="Kayaking" onchange="updateActivityOption(this)">
-            <span>🛶 Kayaking</span>
-        </label>
-        <label class="activity-option">
-            <input type="checkbox" value="Hiking" onchange="updateActivityOption(this)">
-            <span>🥾 Hiking</span>
-        </label>
-        <label class="activity-option">
-            <input type="checkbox" value="City Tours" onchange="updateActivityOption(this)">
-            <span>🏛️ City Tours</span>
-        </label>
-        <label class="activity-option">
-            <input type="checkbox" value="Food Tours" onchange="updateActivityOption(this)">
-            <span>🍽️ Food Tours</span>
-        </label>
-        <label class="activity-option">
-            <input type="checkbox" value="Wine Tasting" onchange="updateActivityOption(this)">
-            <span>🍷 Wine Tasting</span>
-        </label>
-        <label class="activity-option">
-            <input type="checkbox" value="Adventure Sports" onchange="updateActivityOption(this)">
-            <span>🏄 Adventure Sports</span>
-        </label>
-        <label class="activity-option">
-            <input type="checkbox" value="Cultural Experiences" onchange="updateActivityOption(this)">
-            <span>🎭 Cultural</span>
-        </label>
-        <label class="activity-option">
-            <input type="checkbox" value="Axe Throwing" onchange="updateActivityOption(this)">
-            <span>🪓 Axe Throwing</span>
-        </label>
-        <label class="activity-option">
-            <input type="checkbox" value="Escape Room" onchange="updateActivityOption(this)">
-            <span>🔐 Escape Room</span>
-        </label>
-    </div>
-</div>
+            <div class="form-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>🎯 Activity Customization</h3>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="section-description">Detailed information about your activities and requirements</div>
+                    
+                    <div class="form-group">
+                        <label>Activity Types (select all that apply)</label>
+                        <div class="activity-grid">
+                            <label class="activity-option">
+                                <input type="checkbox" value="Boat Tours" onchange="updateActivityOption(this)">
+                                <span>🚤 Boat Tours</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Fishing" onchange="updateActivityOption(this)">
+                                <span>🎣 Fishing</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Snorkeling" onchange="updateActivityOption(this)">
+                                <span>🤿 Snorkeling</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Kayaking" onchange="updateActivityOption(this)">
+                                <span>🛶 Kayaking</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Hiking" onchange="updateActivityOption(this)">
+                                <span>🥾 Hiking</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="City Tours" onchange="updateActivityOption(this)">
+                                <span>🏛️ City Tours</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Food Tours" onchange="updateActivityOption(this)">
+                                <span>🍽️ Food Tours</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Wine Tasting" onchange="updateActivityOption(this)">
+                                <span>🍷 Wine Tasting</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Adventure Sports" onchange="updateActivityOption(this)">
+                                <span>🏄 Adventure Sports</span>
+                            </label>
+                            <label class="activity-option">
+                                <input type="checkbox" value="Cultural Experiences" onchange="updateActivityOption(this)">
+                                <span>🎭 Cultural</span>
+                            </label>
+                        </div>
+                    </div>
 
                     <div class="form-row-three">
                         <div class="form-group">
@@ -1925,38 +1925,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // 🔧 ADDITIONAL: Initialize other functions
     generateTimeSlots();
     updateProgress();
-});
-</script>
-<script>
-// Quick fix for setup form
-document.addEventListener('DOMContentLoaded', function() {
-    // Open the first section by default
-    const firstSection = document.querySelector('.form-section .section-content');
-    const firstHeader = document.querySelector('.form-section .section-header');
-    
-    if (firstSection && firstHeader) {
-        firstSection.classList.add('open');
-        firstSection.style.display = 'block';
-        firstHeader.classList.add('open');
-    }
-    
-    // Fix all section toggles
-    document.querySelectorAll('.section-header').forEach(header => {
-        header.onclick = function() {
-            const content = this.nextElementSibling;
-            const isOpen = content.classList.contains('open');
-            
-            if (isOpen) {
-                content.classList.remove('open');
-                content.style.display = 'none';
-                this.classList.remove('open');
-            } else {
-                content.classList.add('open');
-                content.style.display = 'block';
-                this.classList.add('open');
-            }
-        };
-    });
 });
 </script>
 </body>
