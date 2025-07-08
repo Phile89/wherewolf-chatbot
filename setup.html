@@ -744,6 +744,17 @@
                 </div>
             </div>
 
+            <div class="form-group">
+    <label for="weatherLocation">
+        🌤️ City/Region for Weather *
+        <span class="info-icon">i
+            <div class="tooltip">City and state/country for weather updates. Examples: "Key West, FL", "San Diego, CA", "Sydney, Australia"</div>
+        </span>
+    </label>
+    <input type="text" id="weatherLocation" placeholder="Key West, FL" required>
+    <p class="help-text">Used for real-time weather responses to customers</p>
+</div>
+
             <!-- Business Details -->
             <div class="form-section">
                 <div class="section-header" onclick="toggleSection(this)">
@@ -941,7 +952,32 @@
                     </div>
                 </div>
             </div>
+<div class="form-group">
+    <label for="weatherEnabled">
+        🌤️ Real-Time Weather Responses
+        <span class="info-icon">i
+            <div class="tooltip">Enable automatic weather responses when customers ask about conditions. Great for outdoor activities!</div>
+        </span>
+    </label>
+    <select id="weatherEnabled">
+        <option value="true">Enable weather responses</option>
+        <option value="false">Disable weather responses</option>
+    </select>
+</div>
 
+<div class="form-group">
+    <label for="weatherStyle">
+        Weather Response Style
+        <span class="info-icon">i
+            <div class="tooltip">How detailed should weather responses be?</div>
+        </span>
+    </label>
+    <select id="weatherStyle">
+        <option value="simple">Simple ("75°F and sunny!")</option>
+        <option value="detailed">Detailed (temp, conditions, wind, humidity)</option>
+        <option value="tour-focused">Tour-focused ("Perfect weather for kayaking!")</option>
+    </select>
+</div>
             <!-- Tour Schedule (conditional) -->
             <div class="form-section conditional-section" id="scheduleSection">
                 <div class="section-header" onclick="toggleSection(this)">
@@ -1577,12 +1613,16 @@
                 const config = {
                     // Basic Information
                     businessName: document.getElementById('businessName').value,
+                    operatorEmail: document.getElementById('operatorEmail').value,
                     businessType: document.getElementById('businessType').value,
                     location: document.getElementById('location').value,
                     smsEnabled: document.getElementById('smsEnabled').value,
                     businessSmsNumber: document.getElementById('businessSmsNumber').value,
                     smsHandoffMessage: document.getElementById('smsHandoffMessage').value,
                     smsFirstMessage: document.getElementById('smsFirstMessage').value,
+                    weatherLocation: document.getElementById('weatherLocation').value,
+                    weatherEnabled: document.getElementById('weatherEnabled').value === 'true',
+                    weatherStyle: document.getElementById('weatherStyle').value,
                     
                     // Business Details
                     websiteUrl: document.getElementById('websiteUrl').value,
