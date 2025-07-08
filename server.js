@@ -2112,7 +2112,7 @@ if (isAgentRequest && !alreadyHandedOff) {
         });
     }
     
-    // CONTINUE WITH HUMAN HANDOFF for 'email' and 'dashboard' modes
+    // CONTINUE WITH HUMAN HANDOFF for 'email' and 'dashboard' modes.
     await markAgentRequested(sessionKey);
     conversations[handoffKey] = true;
     
