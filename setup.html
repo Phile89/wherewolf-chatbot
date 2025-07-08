@@ -1749,5 +1749,26 @@
             }
         }
     </script>
+<script>
+// Show email field on page load if email option is pre-selected
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔧 Page loaded, checking pre-selected options...');
+    
+    const emailRadio = document.querySelector('input[name="alertPreference"][value="email"]');
+    const emailField = document.getElementById('operatorEmailField');
+    
+    console.log('📻 Email radio found:', emailRadio ? 'YES' : 'NO');
+    console.log('📻 Email radio checked:', emailRadio ? emailRadio.checked : 'N/A');
+    console.log('📧 Email field found:', emailField ? 'YES' : 'NO');
+    
+    if (emailRadio && emailRadio.checked && emailField) {
+        console.log('✅ Email option pre-selected, showing email field');
+        emailField.style.display = 'block';
+        document.getElementById('operatorEmail').setAttribute('required', 'required');
+    } else {
+        console.log('❌ Email option not pre-selected or elements not found');
+    }
+});
+</script>
 </body>
 </html>
