@@ -352,10 +352,34 @@ async function saveMessage(conversationId, role, content) {
     }
 }
 
+// Enhanced updateCustomerContact function with detailed logging
 async function updateCustomerContact(sessionKey, email = null, phone = null, smsNumber = null) {
+    console.log('🔍 UPDATE CUSTOMER CONTACT DEBUG:');
+    console.log('  - Session Key:', sessionKey);
+    console.log('  - Email:', email || 'N/A');
+    console.log('  - Phone:', phone || 'N/A');
+    console.log('  - SMS Number:', smsNumber || 'N/A');
+    
     const client = await pool.connect();
     try {
-        console.log('📝 Updating customer contact:', { sessionKey, email, phone, smsNumber });
+        // First check if conversation exists
+        console.log('🔍 Checking if conversation exists...');
+        const checkResult = await client.query(
+            'SELECT conversation_id, customer_email, customer_phone FROM conversations WHERE session_key = $1',
+            [sessionKey]
+        );
+        
+        console.log('📊 Conversation check result:', {
+            found: checkResult.rows.length > 0,
+            conversationId: checkResult.rows[0]?.conversation_id,
+            existingEmail: checkResult.rows[0]?.customer_email,
+            existingPhone: checkResult.rows[0]?.customer_phone
+        });
+        
+        if (checkResult.rows.length === 0) {
+            console.error('❌ No conversation found for session key:', sessionKey);
+            throw new Error(`No conversation found for session key: ${sessionKey}`);
+        }
         
         const updateFields = [];
         const values = [];
@@ -365,37 +389,59 @@ async function updateCustomerContact(sessionKey, email = null, phone = null, sms
             updateFields.push(`customer_email = $${valueIndex}`);
             values.push(email);
             valueIndex++;
+            console.log('📧 Will update email');
         }
 
         if (phone) {
             updateFields.push(`customer_phone = $${valueIndex}`);
             values.push(phone);
             valueIndex++;
+            console.log('📞 Will update phone');
         }
 
         if (smsNumber) {
             updateFields.push(`customer_sms_number = $${valueIndex}`);
             values.push(smsNumber);
             valueIndex++;
+            console.log('📱 Will update SMS number');
         }
 
         if (updateFields.length > 0) {
             values.push(sessionKey);
             const query = `UPDATE conversations SET ${updateFields.join(', ')} WHERE session_key = $${valueIndex}`;
             
-            console.log('📝 Executing query:', query, 'with values:', values);
+            console.log('📝 Executing SQL query:', query);
+            console.log('📝 With values:', values);
             
             const result = await client.query(query, values);
+            
+            console.log('✅ Update result:', {
+                rowsAffected: result.rowCount,
+                command: result.command
+            });
+            
+            if (result.rowCount === 0) {
+                console.error('❌ No rows were updated');
+                throw new Error('No rows were updated - conversation may not exist');
+            }
             
             console.log(`📧 Customer contact updated for ${sessionKey}, rows affected: ${result.rowCount}`);
         } else {
             console.log('⚠️ No contact info to update');
         }
+        
     } catch (error) {
-        console.error('❌ Error updating customer contact:', error);
+        console.error('💥 DATABASE UPDATE ERROR:');
+        console.error('  - Error message:', error.message);
+        console.error('  - Error code:', error.code);
+        console.error('  - Error detail:', error.detail);
+        console.error('  - Error severity:', error.severity);
+        console.error('  - Error position:', error.position);
+        console.error('  - Full error object:', error);
         throw error;
     } finally {
         client.release();
+        console.log('🔄 Database client released');
     }
 }
 
@@ -774,6 +820,78 @@ app.get('/api/test-weather-fixed/:location', async (req, res) => {
 });
 
 // Add these comprehensive debug endpoints to your server.js
+// Add this test endpoint to your server.js for debugging
+app.post('/api/test-contact', async (req, res) => {
+    console.log('🧪 TESTING CONTACT INFO SAVE...');
+    
+    try {
+        // Test 1: Database connection
+        console.log('🔍 Test 1: Database connection...');
+        const timeResult = await pool.query('SELECT NOW() as current_time');
+        console.log('✅ Database connected:', timeResult.rows[0]);
+        
+        // Test 2: Check conversations table
+        console.log('🔍 Test 2: Conversations table...');
+        const countResult = await pool.query('SELECT COUNT(*) as total FROM conversations');
+        console.log('✅ Total conversations:', countResult.rows[0].total);
+        
+        // Test 3: Test session creation
+        console.log('🔍 Test 3: Creating test conversation...');
+        const testOperatorId = 'test_op';
+        const testSessionKey = `${testOperatorId}_test_${Date.now()}`;
+        
+        const createResult = await pool.query(
+            'INSERT INTO conversations (operator_id, session_key) VALUES ($1, $2) RETURNING conversation_id',
+            [testOperatorId, testSessionKey]
+        );
+        
+        const testConversationId = createResult.rows[0].conversation_id;
+        console.log('✅ Test conversation created:', testConversationId);
+        
+        // Test 4: Test contact update
+        console.log('🔍 Test 4: Testing contact update...');
+        await updateCustomerContact(testSessionKey, 'test@example.com', '+1234567890');
+        console.log('✅ Contact update successful');
+        
+        // Test 5: Verify update
+        console.log('🔍 Test 5: Verifying update...');
+        const verifyResult = await pool.query(
+            'SELECT customer_email, customer_phone FROM conversations WHERE conversation_id = $1',
+            [testConversationId]
+        );
+        console.log('✅ Updated contact info:', verifyResult.rows[0]);
+        
+        // Cleanup
+        console.log('🧹 Cleaning up test data...');
+        await pool.query('DELETE FROM conversations WHERE conversation_id = $1', [testConversationId]);
+        console.log('✅ Test data cleaned up');
+        
+        res.json({
+            success: true,
+            message: 'All contact info tests passed!',
+            tests: {
+                databaseConnection: '✅ Passed',
+                conversationsTable: '✅ Passed',
+                sessionCreation: '✅ Passed',
+                contactUpdate: '✅ Passed',
+                verification: '✅ Passed'
+            }
+        });
+        
+    } catch (error) {
+        console.error('💥 CONTACT TEST FAILED:');
+        console.error('  - Error:', error.message);
+        console.error('  - Code:', error.code);
+        console.error('  - Detail:', error.detail);
+        
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            code: error.code,
+            detail: error.detail
+        });
+    }
+});
 
 // Test the exact same call your server makes
 app.get('/api/debug/server-test/:location', async (req, res) => {
@@ -2356,12 +2474,24 @@ app.post('/api/chat/history', validateRequired(['operatorId']), async (req, res)
 });
 
 // Contact info capture with enhanced validation and database storage
+// Enhanced contact info endpoint with detailed logging
 app.post('/contact-info', validateRequired(['operatorId']), async (req, res) => {
+    console.log('🔍 CONTACT INFO ENDPOINT DEBUG:');
+    console.log('  - Request body:', JSON.stringify(req.body, null, 2));
+    console.log('  - Headers:', JSON.stringify(req.headers, null, 2));
+    
     const { email, phone, operatorId, sessionId = 'default' } = req.body;
     const sessionKey = `${operatorId}_${sessionId}`;
     
+    console.log('📋 Processed values:');
+    console.log('  - Email:', email || 'N/A');
+    console.log('  - Phone:', phone || 'N/A');
+    console.log('  - Operator ID:', operatorId);
+    console.log('  - Session Key:', sessionKey);
+    
     // Validate email format if provided
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        console.error('❌ Email validation failed:', email);
         return res.status(400).json({
             success: false,
             error: 'Invalid email format'
@@ -2370,11 +2500,14 @@ app.post('/contact-info', validateRequired(['operatorId']), async (req, res) => 
     
     // Validate phone format if provided
     if (phone && !/^[\+]?[\s\-\(\)]*([0-9][\s\-\(\)]*){10,}$/.test(phone)) {
+        console.error('❌ Phone validation failed:', phone);
         return res.status(400).json({
             success: false,
             error: 'Invalid phone format'
         });
     }
+    
+    console.log('✅ Validation passed');
     
     try {
         // Store in memory for immediate use
@@ -2382,11 +2515,19 @@ app.post('/contact-info', validateRequired(['operatorId']), async (req, res) => 
             email: email || null, 
             phone: phone || null 
         };
+        console.log('✅ Stored in memory:', customerContacts[sessionKey]);
         
-        // Update database - FIXED VERSION
+        // Test database connection first
+        console.log('🔍 Testing database connection...');
+        await pool.query('SELECT NOW()');
+        console.log('✅ Database connection OK');
+        
+        // Update database
+        console.log('💾 Updating database...');
         await updateCustomerContact(sessionKey, email, phone);
+        console.log('✅ Database update completed');
         
-        console.log('📬 Enhanced contact info saved:', {
+        console.log('📬 Enhanced contact info saved successfully:', {
             email: email || 'N/A',
             phone: phone || 'N/A',
             session: sessionKey
@@ -2400,11 +2541,24 @@ app.post('/contact-info', validateRequired(['operatorId']), async (req, res) => 
                 phone: !!phone
             }
         });
+        
     } catch (error) {
-        console.error('❌ Error saving contact info:', error);
+        console.error('💥 CONTACT SAVE ERROR:');
+        console.error('  - Error message:', error.message);
+        console.error('  - Error code:', error.code);
+        console.error('  - Error detail:', error.detail);
+        console.error('  - Full error:', error);
+        console.error('  - Stack trace:', error.stack);
+        
+        // Check if it's a database error
+        if (error.code && error.code.startsWith('C')) {
+            console.error('🗄️ This appears to be a database connection error');
+        }
+        
         res.status(500).json({
             success: false,
-            error: 'Failed to save contact information'
+            error: 'Failed to save contact information',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 });
