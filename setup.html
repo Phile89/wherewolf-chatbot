@@ -1366,7 +1366,7 @@
                     ⚠️ SMS Mode Active
                 </div>
                 <p style="margin: 0; font-size: 14px; line-height: 1.4;">
-                    <strong>Note:</strong> SMS mode will reduce or replace email alerts. Customers will primarily communicate via text message, and you'll respond through the dashboard or SMS.
+                    <strong>Note:</strong> Turning on SMS mode will reduce or replace email alerts. Customers will primarily communicate via text message, and you'll respond through the dashboard or SMS.
                 </p>
             </div>
             
@@ -1586,10 +1586,10 @@ function toggleSMSFields() {
         
         // Update help text based on mode
         if (smsEnabled === 'hybrid') {
-            helpText.textContent = 'Hybrid mode: Customers can choose between web chat and SMS. Some may prefer SMS over email alerts.';
+            helpText.textContent = 'Hybrid mode: Customers can choose between web chat and SMS.';
             helpText.style.color = '#f59e0b';
         } else if (smsEnabled === 'sms-first') {
-            helpText.textContent = 'SMS-first mode: Primary communication via text message. This will largely replace email alerts.';
+            helpText.textContent = 'SMS-first mode: Primary communication via text message.';
             helpText.style.color = '#dc2626';
         }
         
