@@ -1582,22 +1582,78 @@ function updateAlertOption(label) {
             document.getElementById('progressFill').style.width = progress + '%';
         }
 
-// 🔧 FIXED: Enhanced form submission with proper email field validation
+// 🔧 COMPLETELY FIXED: Enhanced form submission with comprehensive hidden field detection
 document.getElementById('chatbotForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    // 🔧 FIX: Remove 'required' from all hidden fields before validation
-const hiddenRequiredFields = document.querySelectorAll('input[required], select[required], textarea[required]');
-hiddenRequiredFields.forEach(field => {
-    const fieldContainer = field.closest('.form-group, .form-section, div');
-    if (fieldContainer && (
-        fieldContainer.style.display === 'none' || 
-        fieldContainer.offsetParent === null ||
-        field.offsetParent === null
-    )) {
-        console.log('🔧 Removing required from hidden field:', field.id);
-        field.removeAttribute('required');
+
+    // 🎯 SMART VALIDATION: Handle required fields properly
+    console.log('🔧 Starting smart form validation...');
+    
+    // First, remove required from truly conditional fields
+    const emailField = document.getElementById('operatorEmail');
+    const alertPreference = document.querySelector('input[name="alertPreference"]:checked')?.value;
+    
+    if (emailField && alertPreference !== 'email') {
+        emailField.removeAttribute('required');
+        console.log('📧 Email not required for', alertPreference, 'mode');
     }
-});
+    
+    // Remove required from SMS fields when SMS is disabled
+    const smsFields = document.querySelectorAll('#smsFields input, #smsFields textarea, #smsFields select');
+    const smsEnabled = document.getElementById('smsEnabled')?.value;
+    if (smsEnabled === 'disabled') {
+        smsFields.forEach(field => {
+            if (field.hasAttribute('required')) {
+                field.removeAttribute('required');
+                console.log('📱 Removed required from SMS field:', field.id);
+            }
+        });
+    }
+    
+    // Now check for any remaining required fields that are hidden
+    const allRequiredFields = document.querySelectorAll('input[required], select[required], textarea[required]');
+    console.log('🔍 Checking', allRequiredFields.length, 'required fields for visibility');
+    
+    for (const field of allRequiredFields) {
+        const section = field.closest('.form-section');
+        const sectionContent = field.closest('.section-content');
+        const sectionHeader = section?.querySelector('.section-header');
+        
+        // Check if field is in a collapsed section
+        if (sectionContent && !sectionContent.classList.contains('open')) {
+            console.log('📂 Opening collapsed section for required field:', field.id);
+            
+            // Open the section
+            sectionContent.classList.add('open');
+            if (sectionHeader) {
+                sectionHeader.classList.add('open');
+            }
+            
+            // Update progress bar
+            updateProgress();
+            
+            // Focus on the field and show validation message
+            setTimeout(() => {
+                field.focus();
+                field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300);
+            
+            // Show user-friendly message
+            const fieldLabel = field.closest('.form-group')?.querySelector('label')?.textContent?.replace('*', '').trim() || field.id;
+            alert(`Please fill in the required field: "${fieldLabel}"`);
+            return; // Stop form submission
+        }
+        
+        // Check if field is otherwise hidden
+        if (field.offsetParent === null || field.style.display === 'none') {
+            console.log('❌ Required field is hidden and cannot be shown:', field.id);
+            const fieldLabel = field.closest('.form-group')?.querySelector('label')?.textContent?.replace('*', '').trim() || field.id;
+            alert(`Required field "${fieldLabel}" is not accessible. Please check your form settings.`);
+            return; // Stop form submission
+        }
+    }
+    
+    console.log('✅ All required fields are visible and accessible');
 
     try {
         // 🆕 FIXED: Check alert preference and email validation FIRST
@@ -1711,8 +1767,7 @@ hiddenRequiredFields.forEach(field => {
             responseLength: document.getElementById('responseLength').value,
             customGreeting: document.getElementById('customGreeting').value,
             
-            // Knowledge Boundaries
-            weatherInfo: document.getElementById('weatherInfo').value,
+            // Knowledge Boundaries - NOTE: weatherInfo removed as requested
             realTimeInfo: document.getElementById('realTimeInfo').value,
             dontAnswerTopics: document.getElementById('dontAnswerTopics').value,
             additionalKnowledge: document.getElementById('additionalKnowledge').value,
