@@ -2349,7 +2349,7 @@ Once I have your number, our team will typically respond within ${responseTime}.
                 max_tokens: maxTokens,
                 temperature: currentConfig.chatbotTone === 'Enthusiastic' ? 0.7 : 0.5,
                 system: SYSTEM_PROMPT,
-                messages: conversations[sessionKey]
+                messages: conversations[sessionKey].filter(msg => msg.role !== 'system')
             }, {
                 headers: {
                     'Content-Type': 'application/json',
