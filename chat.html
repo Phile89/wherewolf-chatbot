@@ -493,7 +493,7 @@
             onkeypress="handleKeyPress(event)"
             disabled
         >
-        <button class="send-button" id="sendButton" onclick="sendMessage()" disabled>Send</button>
+        <button class="send-button" id="sendButton" onclick="sendMessage(event)" disabled>Send</button>
     </div>
 
     <script>
@@ -850,25 +850,30 @@ function forceNewSession() {
             `;
         }
 
-        async function sendMessage() {
-            const input = document.getElementById('chatInput');
-            const sendButton = document.getElementById('sendButton');
-            const message = input.value.trim();
-            
-            if (!message) return;
-            
-            input.disabled = true;
-            sendButton.disabled = true;
-            
-            displayMessage(message, 'user');
-            input.value = '';
-            
-            await sendMessageToServer(message);
-            
-            input.disabled = false;
-            sendButton.disabled = false;
-            input.focus();
-        }
+        async function sendMessage(event) {
+    // Add event parameter and prevent default
+    if (event) {
+        event.preventDefault();
+    }
+    
+    const input = document.getElementById('chatInput');
+    const sendButton = document.getElementById('sendButton');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    input.disabled = true;
+    sendButton.disabled = true;
+    
+    displayMessage(message, 'user');
+    input.value = '';
+    
+    await sendMessageToServer(message);
+    
+    input.disabled = false;
+    sendButton.disabled = false;
+    input.focus();
+}
 
         // 🔧 FIXED: Updated showContactForm function
 function showContactForm() {
