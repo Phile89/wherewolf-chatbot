@@ -790,10 +790,10 @@
                             onkeypress="handleOperatorKeyPress(event)"
                         ></textarea>
                         <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <button class="send-btn" id="sendOperatorMessage" onclick="sendOperatorMessage()">
+                            <button class="send-btn" id="sendOperatorMessage" onclick="sendOperatorMessage(event)">
                                 Send Chat
                             </button>
-                            <button class="send-btn" id="sendSMSMessage" onclick="sendSMSMessage()" style="display: none; background-color: #3b82f6;">
+                            <button class="send-btn" id="sendSMSMessage" onclick="sendSMSMessage(event)" style="display: none; background-color: #3b82f6;">
                                 Send SMS
                             </button>
                         </div>
@@ -1463,7 +1463,11 @@ async function updateConversationStatus() {
 }
 
 // Enhanced operator message sending with SMS support
-async function sendOperatorMessage() {
+async function sendOperatorMessage(event) {
+    if (event) {
+        event.preventDefault();
+    }
+    
     if (!selectedConversationId) {
         alert('Please select a conversation first');
         return;
@@ -1531,7 +1535,11 @@ async function sendOperatorMessage() {
 }
 
 // Enhanced SMS sending with proper validation and feedback
-async function sendSMSMessage() {
+async function sendSMSMessage(event) {
+    if (event) {
+        event.preventDefault();
+    }
+    
     if (!selectedConversationId) {
         alert('Please select a conversation first');
         return;
@@ -1621,14 +1629,12 @@ async function sendSMSMessage() {
 function handleOperatorKeyPress(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
-        
         const smsButton = document.getElementById('sendSMSMessage');
         const chatButton = document.getElementById('sendOperatorMessage');
-        
         if (event.ctrlKey && smsButton && smsButton.style.display !== 'none') {
-            sendSMSMessage();
+            sendSMSMessage(event);  // ← Added event
         } else {
-            sendOperatorMessage();
+            sendOperatorMessage(event);  // ← Added event
         }
     }
 }
