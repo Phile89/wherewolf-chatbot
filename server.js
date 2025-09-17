@@ -2234,9 +2234,18 @@ Could you please provide your mobile number? We'll send you a quick text to get 
 
 Once I have your number, our team will typically respond within ${responseTime}.`;
     } else {
-        // Regular mode - no SMS
+    // Regular mode - no SMS
+    // Check if using dashboard vs email alerts
+    if (alertPreference === 'dashboard') {
+        // Dashboard mode - no contact info needed upfront
+        botResponse = `Perfect! I'm connecting you with our team now. A team member will join this chat to assist you personally. They typically respond within ${responseTime}.
+
+While you wait, feel free to share more details about what you need help with!`;
+    } else {
+        // Email mode - need contact info
         botResponse = `I'd be happy to connect you with our team! They'll reach out within ${responseTime} via ${contactMethods}. Could I get your contact information?`;
     }
+}
     
     // 🔧 FIXED: Safety check - ensure botResponse is always set
     if (!botResponse) {
