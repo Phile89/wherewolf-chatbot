@@ -1003,7 +1003,7 @@ async function submitContact() {
             email, 
             phone, 
             operatorId: operatorId,
-            sessionId: 'default'
+            sessionId: sessionId
         };
         
         console.log('📋 Request body:', requestBody);
@@ -1298,93 +1298,95 @@ async function sendMessageToServer(message) {
         }
 
         function startOperatorMessagePolling() {
-            if (pollingInterval) {
-                console.log('🔄 Polling already active, skipping...');
-                return;
+    if (pollingInterval) {
+        console.log('🔄 Polling already active, skipping...');
+        return;
+    }
+    
+    console.log('🔄 Starting enhanced operator message polling...');
+    console.log('📍 Using sessionId:', sessionId); // Debug log
+    
+    let consecutiveErrors = 0;
+    let pollCount = 0;
+    
+    pollingInterval = setInterval(async () => {
+        try {
+            pollCount++;
+            console.log(`📡 Polling attempt #${pollCount} (sessionId: ${sessionId}, lastMessageCount: ${lastMessageCount})`);
+            
+            const response = await fetch(`${serverUrl}/api/chat/poll-messages`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    operatorId: operatorId,
+                    sessionId: sessionId,  // ← USE THE ACTUAL sessionId!
+                    lastMessageCount: lastMessageCount
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
-            console.log('🔄 Starting enhanced operator message polling...');
-            let consecutiveErrors = 0;
-            let pollCount = 0;
+            const data = await response.json();
+            console.log('📬 Poll response:', data);
             
-            pollingInterval = setInterval(async () => {
-                try {
-                    pollCount++;
-                    console.log(`📡 Polling attempt #${pollCount} (lastMessageCount: ${lastMessageCount})`);
+            if (data.success && data.newMessages && data.newMessages.length > 0) {
+                console.log(`📥 Received ${data.newMessages.length} new messages`);
+                
+                data.newMessages.forEach(msg => {
+                    console.log('📨 Processing message:', msg);
                     
-                    const response = await fetch(`${serverUrl}/api/chat/poll-messages`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ 
-                            operatorId: operatorId,
-                            sessionId: 'default',
-                            lastMessageCount: lastMessageCount
-                        })
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-                    
-                    const data = await response.json();
-                    console.log('📬 Poll response:', data);
-                    
-                    if (data.success && data.newMessages && data.newMessages.length > 0) {
-                        console.log(`📥 Received ${data.newMessages.length} new messages`);
+                    if (msg.role === 'operator') {
+                        displayMessage(msg.content, 'operator');
                         
-                        data.newMessages.forEach(msg => {
-                            console.log('📨 Processing message:', msg);
-                            
-                            if (msg.role === 'operator') {
-                                displayMessage(msg.content, 'operator');
-                                
-                                if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-                                    new Notification('Team Member Responded!', {
-                                        body: msg.content.substring(0, 100),
-                                        icon: '/favicon.ico'
-                                    });
-                                }
-                                
-                                const typingIndicator = document.getElementById('typingIndicator');
-                                if (typingIndicator.classList.contains('operator-typing')) {
-                                    hideTyping();
-                                }
-                                
-                            } else if (msg.role === 'system') {
-                                displayMessage(msg.content, 'system');
-                            }
-                        });
+                        if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+                            new Notification('Team Member Responded!', {
+                                body: msg.content.substring(0, 100),
+                                icon: '/favicon.ico'
+                            });
+                        }
                         
-                        lastMessageCount = data.totalMessages;
-                        consecutiveErrors = 0;
-                    }
-                    
-                    if (data.operatorTyping) {
-                        showOperatorTyping();
-                    }
-                    
-                } catch (error) {
-                    consecutiveErrors++;
-                    console.error(`❌ Polling error #${consecutiveErrors}:`, error);
-                    
-                    if (consecutiveErrors >= 3) {
-                        console.log('🔄 Too many errors, restarting polling...');
-                        clearInterval(pollingInterval);
-                        pollingInterval = null;
+                        const typingIndicator = document.getElementById('typingIndicator');
+                        if (typingIndicator.classList.contains('operator-typing')) {
+                            hideTyping();
+                        }
                         
-                        const backoffTime = Math.min(1000 * Math.pow(2, consecutiveErrors - 3), 30000);
-                        setTimeout(() => {
-                            if (!pollingInterval) {
-                                startOperatorMessagePolling();
-                            }
-                        }, backoffTime);
-                        return;
+                    } else if (msg.role === 'system') {
+                        displayMessage(msg.content, 'system');
                     }
-                }
-            }, 1000);
+                });
+                
+                lastMessageCount = data.totalMessages || (lastMessageCount + data.newMessages.length);
+                consecutiveErrors = 0;
+            }
+            
+            if (data.operatorTyping) {
+                showOperatorTyping();
+            }
+            
+        } catch (error) {
+            consecutiveErrors++;
+            console.error(`❌ Polling error #${consecutiveErrors}:`, error);
+            
+            if (consecutiveErrors >= 3) {
+                console.log('🔄 Too many errors, restarting polling...');
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+                
+                const backoffTime = Math.min(1000 * Math.pow(2, consecutiveErrors - 3), 30000);
+                setTimeout(() => {
+                    if (!pollingInterval) {
+                        startOperatorMessagePolling();
+                    }
+                }, backoffTime);
+                return;
+            }
         }
+    }, 1000);
+}
 
         function showOperatorTyping() {
             const typingIndicator = document.getElementById('typingIndicator');
