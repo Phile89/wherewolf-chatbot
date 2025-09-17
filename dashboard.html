@@ -1293,7 +1293,45 @@ async function selectConversation(conversationId) {
     if (!conversation) {
         console.error('Conversation not found:', conversationId);
         return;
-        // START AUTO-REFRESH FOR THIS CONVERSATION
+    }  // ← MOVED THIS BRACE HERE
+    
+    // REST OF YOUR EXISTING CODE HERE (the part that updates title, subtitle, etc.)
+    document.getElementById('chatTitle').textContent = conversation.business_name || 'Unknown Business';
+    document.getElementById('chatSubtitle').innerHTML = `
+        <strong>Operator:</strong> ${conversation.operator_id} • 
+        <strong>Status:</strong> ${(conversation.status || 'new').replace('_', ' ').toUpperCase()} •
+        <strong>Contact:</strong> ${conversation.customer_email || conversation.customer_phone || conversation.customer_sms_number || 'No contact info'}
+    `;
+    
+    document.getElementById('chatActions').style.display = 'flex';
+    document.getElementById('statusSelect').value = conversation.status || 'new';
+    document.getElementById('chatInputContainer').classList.add('active');
+    
+    // Your existing SMS button code...
+    const responseMethod = document.getElementById('responseMethod');
+    const smsButton = document.getElementById('sendSMSMessage');
+    const chatButton = document.getElementById('sendOperatorMessage');
+    
+    const hasSMSNumber = conversation.customer_sms_number || conversation.sms_enabled;
+    
+    if (hasSMSNumber) {
+        responseMethod.textContent = ' (SMS available - Ctrl+Enter for SMS)';
+        responseMethod.style.color = '#10b981';
+        smsButton.style.display = 'block';
+        chatButton.textContent = 'Send Chat';
+        smsButton.textContent = 'Send SMS';
+        console.log('📱 SMS enabled for conversation:', conversationId);
+    } else {
+        responseMethod.textContent = ' (Chat only)';
+        responseMethod.style.color = '#6b7280';
+        smsButton.style.display = 'none';
+        chatButton.textContent = 'Send Message';
+        console.log('💬 Chat only for conversation:', conversationId);
+    }
+    
+    await loadMessages(conversationId);
+    
+    // START AUTO-REFRESH FOR THIS CONVERSATION - NOW AT THE END
     if (window.messageRefreshInterval) {
         clearInterval(window.messageRefreshInterval);
     }
@@ -1302,7 +1340,6 @@ async function selectConversation(conversationId) {
         loadMessages(conversationId);
     }, 2000); // Refresh every 2 seconds
 }
-    }
     
     document.getElementById('chatTitle').textContent = conversation.business_name || 'Unknown Business';
     document.getElementById('chatSubtitle').innerHTML = `
