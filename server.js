@@ -1770,8 +1770,29 @@ app.post('/api/chat', validateRequired(['message', 'operatorId']), async functio
             });
         }
 
-        // Save user message to database
-        await saveMessage(conversation.conversation_id, 'user', message);
+// Save user message to database
+await saveMessage(conversation.conversation_id, 'user', message);
+
+// 🔧 FIX: Check if operator is already active in this conversation
+const operatorCheckResult = await pool.query(
+    'SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND role = $2',
+    [conversation.conversation_id, 'operator']
+);
+
+const hasActiveOperator = parseInt(operatorCheckResult.rows[0].count) > 0;
+
+// If operator is active, just save the message and skip bot response
+if (hasActiveOperator) {
+    console.log('👨‍💼 Operator is active - routing message to operator, skipping bot');
+    
+    // Message already saved above, just return success
+    return res.json({ 
+        success: true,
+        skipBotResponse: true,
+        operatorActive: true,
+        continuePolling: true
+    });
+}
 
         // Check for contact form requirement
         try {

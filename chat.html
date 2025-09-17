@@ -1120,8 +1120,7 @@ function skipContact() {
     }
 }
 
-       // 1. REPLACE the sendMessageToServer function in chat.html with this fixed version:
-async function sendMessageToServer(message) {
+      async function sendMessageToServer(message) {
     showTyping();
     
     try {
@@ -1136,7 +1135,7 @@ async function sendMessageToServer(message) {
             body: JSON.stringify({ 
                 message: message,
                 operatorId: operatorId,
-                sessionId: sessionId  // Use proper sessionId
+                sessionId: sessionId
             })
         });
         
@@ -1148,71 +1147,63 @@ async function sendMessageToServer(message) {
         console.log('📨 Server response:', data);
         hideTyping();
         
-        // 🔧 FIXED: Handle contact form request BEFORE answering question
+        // Handle contact form request
         if (data.showContactForm && !hasProvidedContact) {
             console.log('📝 Server requesting contact form before answering');
             pendingMessage = data.pendingMessage || message;
             showContactForm();
-            return; // Don't show any response yet
+            return;
         }
         
-        // 🔧 FIXED: If this was the first message and no contact form, mark as no longer first
         if (isFirstMessage) {
             isFirstMessage = false;
             console.log('✅ First message processed');
         }
         
-        if (data.skipBotResponse) {
-            console.log('💬 Operator is active - no bot response needed');
+        // FIX: Handle operator active scenarios better
+        if (data.skipBotResponse || data.operatorActive) {
+            console.log('💬 Operator is active - message sent to operator');
+            hideTyping();
+            
+            // Don't show error, just continue polling
+            if (!pollingInterval) {
+                startOperatorMessagePolling();
+            }
             return;
         }
         
-        if (data.operatorJoined) {
+        // Only show operator joined message once
+        if (data.operatorJoined && !document.querySelector('.system-message:last-child')?.textContent?.includes('team member has joined')) {
             displayMessage('👨‍💼 A team member has joined the chat to assist you personally!', 'system');
         }
         
-        if (data.response) {
+        // Only show bot response if there is one and operator isn't active
+        if (data.response && !data.skipBotResponse) {
             displayMessage(data.response, data.fromOperator ? 'operator' : 'bot');
-            
-            // Execute any JavaScript that might be in the response!
-            setTimeout(() => {
-                const scripts = document.querySelectorAll('.bot-message script');
-                scripts.forEach(script => {
-                    try {
-                        eval(script.innerHTML);
-                    } catch (e) {
-                        console.log('Script execution skipped:', e);
-                    }
-                });
-            }, 100);
         }
         
+        // Start polling if needed
         if (data.agentRequested || data.operatorJoined || data.startPolling || data.twoWayChat || data.continuePolling) {
             console.log('🔄 Starting/continuing message polling...');
-            startOperatorMessagePolling();
-            
-            if (data.smsEnabled && data.smsMode === 'hybrid') {
-                setTimeout(() => {
-                    showSMSNotification('💬 Choose your preferred way to continue the conversation!', '#8B5CF6');
-                }, 2000);
-            } else if (data.smsEnabled && data.smsMode === 'sms-first') {
-                setTimeout(() => {
-                    showSMSNotification('📱 SMS conversation starting!', '#10b981');
-                }, 2000);
-            } else if (data.twoWayChat) {
-                setTimeout(() => {
-                    showSMSNotification('💬 Two-way chat active - team member will respond here!', '#8B5CF6');
-                }, 2000);
-            } else if (data.agentRequested) {
-                setTimeout(() => {
-                    showSMSNotification('👨‍💼 Team member will contact you soon...', '#10b981');
-                }, 2000);
+            if (!pollingInterval) {
+                startOperatorMessagePolling();
             }
         }
         
     } catch (error) {
         console.error('💥 Chat error:', error);
         hideTyping();
+        
+        // FIX: Don't show connection error if it's just an operator scenario
+        console.log('Checking error context...');
+        
+        // Check if operator might be active
+        if (pollingInterval) {
+            console.log('Operator likely active, suppressing error message');
+            return;
+        }
+        
+        // Only show error for actual connection issues
         displayMessage('Sorry, I\'m having connection issues. Please try again or contact us directly.', 'bot');
     }
 }
