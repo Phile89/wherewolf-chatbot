@@ -1172,7 +1172,7 @@ async function sendMessageToServer(message) {
         if (data.response) {
             displayMessage(data.response, data.fromOperator ? 'operator' : 'bot');
             
-            // Execute any JavaScript that might be in the response
+            // Execute any JavaScript that might be in the response!
             setTimeout(() => {
                 const scripts = document.querySelectorAll('.bot-message script');
                 scripts.forEach(script => {
