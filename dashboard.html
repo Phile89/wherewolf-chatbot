@@ -1328,7 +1328,7 @@ async function selectConversation(conversationId) {
     }
     
     // Load messages
-    await loadMessages(conversationId);
+    await loadMessages(conversationId, true); // true = initial load, show spinner
     
     // START AUTO-REFRESH FOR THIS CONVERSATION
     if (window.messageRefreshInterval) {
@@ -1340,17 +1340,21 @@ async function selectConversation(conversationId) {
     }, 2000); // Refresh every 2 seconds
 }
 
-// Load messages - This stays as a separate function
-async function loadMessages(conversationId) {
+// Load messages - seamless version
+async function loadMessages(conversationId, isInitialLoad = false) {
     console.log('📨 Loading messages for conversation:', conversationId);
     
     const chatContainer = document.getElementById('chatMessages');
-    chatContainer.innerHTML = `
-        <div class="loading">
-            <div class="loading-spinner"></div>
-            Loading messages...
-        </div>
-    `;
+    
+    // Only show loading spinner on FIRST load
+    if (isInitialLoad || chatContainer.children.length === 0) {
+        chatContainer.innerHTML = `
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                Loading messages...
+            </div>
+        `;
+    }
     
     try {
         const response = await fetch(`/api/dashboard/conversations/${conversationId}/messages`);
@@ -1363,20 +1367,38 @@ async function loadMessages(conversationId) {
         console.log('📨 Messages loaded:', data);
         
         if (data.success) {
-            renderMessages(data.messages || []);
+            // Store current scroll position
+            const wasAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop <= chatContainer.clientHeight + 50;
+            
+            // Only update if there are new messages
+            const currentMessageCount = chatContainer.querySelectorAll('.message').length;
+            const newMessageCount = (data.messages || []).length;
+            
+            if (currentMessageCount !== newMessageCount || isInitialLoad) {
+                renderMessages(data.messages || []);
+                
+                // Auto-scroll only if user was already at bottom
+                if (wasAtBottom) {
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+            }
         } else {
             throw new Error(data.error || 'Failed to load messages');
         }
     } catch (error) {
         console.error('❌ Error loading messages:', error);
-        chatContainer.innerHTML = `
-            <div style="padding: 20px; text-align: center; color: #dc2626;">
-                <p>❌ Failed to load messages</p>
-                <button onclick="loadMessages(${conversationId})" style="background: #8B5CF6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 8px;">
-                    🔄 Retry
-                </button>
-            </div>
-        `;
+        
+        // Only show error if container is empty
+        if (chatContainer.children.length === 0) {
+            chatContainer.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: #dc2626;">
+                    <p>❌ Failed to load messages</p>
+                    <button onclick="loadMessages(${conversationId}, true)" style="background: #8B5CF6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 8px;">
+                        🔄 Retry
+                    </button>
+                </div>
+            `;
+        }
     }
 }
 
