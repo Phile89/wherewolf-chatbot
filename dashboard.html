@@ -1293,6 +1293,15 @@ async function selectConversation(conversationId) {
     if (!conversation) {
         console.error('Conversation not found:', conversationId);
         return;
+        // START AUTO-REFRESH FOR THIS CONVERSATION
+    if (window.messageRefreshInterval) {
+        clearInterval(window.messageRefreshInterval);
+    }
+    
+    window.messageRefreshInterval = setInterval(() => {
+        loadMessages(conversationId);
+    }, 2000); // Refresh every 2 seconds
+}
     }
     
     document.getElementById('chatTitle').textContent = conversation.business_name || 'Unknown Business';
