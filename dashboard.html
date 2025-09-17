@@ -1293,9 +1293,9 @@ async function selectConversation(conversationId) {
     if (!conversation) {
         console.error('Conversation not found:', conversationId);
         return;
-    }  // ← MOVED THIS BRACE HERE
+    }
     
-    // REST OF YOUR EXISTING CODE HERE (the part that updates title, subtitle, etc.)
+    // UPDATE UI - This should be INSIDE the function!
     document.getElementById('chatTitle').textContent = conversation.business_name || 'Unknown Business';
     document.getElementById('chatSubtitle').innerHTML = `
         <strong>Operator:</strong> ${conversation.operator_id} • 
@@ -1307,7 +1307,6 @@ async function selectConversation(conversationId) {
     document.getElementById('statusSelect').value = conversation.status || 'new';
     document.getElementById('chatInputContainer').classList.add('active');
     
-    // Your existing SMS button code...
     const responseMethod = document.getElementById('responseMethod');
     const smsButton = document.getElementById('sendSMSMessage');
     const chatButton = document.getElementById('sendOperatorMessage');
@@ -1329,9 +1328,10 @@ async function selectConversation(conversationId) {
         console.log('💬 Chat only for conversation:', conversationId);
     }
     
+    // Load messages
     await loadMessages(conversationId);
     
-    // START AUTO-REFRESH FOR THIS CONVERSATION - NOW AT THE END
+    // START AUTO-REFRESH FOR THIS CONVERSATION
     if (window.messageRefreshInterval) {
         clearInterval(window.messageRefreshInterval);
     }
@@ -1339,7 +1339,8 @@ async function selectConversation(conversationId) {
     window.messageRefreshInterval = setInterval(() => {
         loadMessages(conversationId);
     }, 2000); // Refresh every 2 seconds
-}
+    
+} // ← THIS IS THE ONLY CLOSING BRACE FOR selectConversation
     
     document.getElementById('chatTitle').textContent = conversation.business_name || 'Unknown Business';
     document.getElementById('chatSubtitle').innerHTML = `
